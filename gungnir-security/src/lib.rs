@@ -45,7 +45,7 @@ pub use keystore::{PersistentKeyProvider, KEYSTORE_FILE};
 // which is underneath.
 pub use managed_service::{
     AwsKmsKeyService, AzureKeyVaultKeyService, CloudKeyService, ManagedServiceKeyProvider,
-    WRAPPED_SECRET_FILE,
+    UnwrappedSecret, WrappedSecret, WRAPPED_SECRET_FILE, WRAPPED_SECRET_HEADER,
 };
 // `os_keystore` itself stays private; this one name is public because
 // `PersistentKeyProvider::open_or_create_via_os_keystore` takes `service` as a

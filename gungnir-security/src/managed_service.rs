@@ -57,6 +57,20 @@
 //! deployment would have hit that ceiling silently, years in, holding a keystore it could
 //! no longer open.
 //!
+//! # The wrapped secret records the master-key version
+//!
+//! D-48 (2026-09-15), amendment 5 (e) built. Azure Key Vault rotates a key by minting a
+//! new version, and an unwrap that asks for the latest cannot open a secret wrapped under
+//! an earlier one, so a routine rotation would have left the node unable to open its own
+//! keystore at its next start. [`CloudKeyService::wrap`] now returns the version with the
+//! wrapped bytes, [`WRAPPED_SECRET_FILE`] begins with [`WRAPPED_SECRET_HEADER`] and a
+//! `key-version:` line, and every unwrap asks for exactly the recorded version. AWS KMS
+//! names no version, because its ciphertext already identifies the backing key, so its
+//! line is empty. A file written before D-48 has no header: it opens under the latest
+//! version, as it always did, and is rewritten to record the version that opened it.
+//! Tested against the fake, which versions its master key as Key Vault does; **no
+//! rotation of a real vault's key has been made.**
+//!
 //! # Signing is the exception
 //!
 //! Amendment 5 (b): `sign` is not on a per-frame path -- once per TLS handshake, once per
@@ -88,6 +102,104 @@ use crate::SecurityError;
 /// never a path (DN-22 §6).
 pub const WRAPPED_SECRET_FILE: &str = "keystore.kms-wrapped";
 
+/// The first line of a [`WRAPPED_SECRET_FILE`] that records the master-key version it was
+/// wrapped under (D-48; DN-22 amendment 5 e). A file without it was written before D-48
+/// and is read as a bare wrapped blob.
+pub const WRAPPED_SECRET_HEADER: &[u8] = b"GUNGNIR-KMS-WRAPPED/1\n";
+
+/// The header's second line, before the version. An empty version is a service that
+/// names none: AWS KMS rotates a key's backing material under one key identifier, and
+/// its ciphertext records which backing key it needs, so there is nothing to record.
+const KEY_VERSION_FIELD: &[u8] = b"key-version: ";
+
+/// What a wrap returned: the wrapped bytes, and the master-key version that wrapped them,
+/// where the service names one (D-48).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WrappedSecret {
+    pub blob: Vec<u8>,
+    /// Azure Key Vault's key version; `None` for AWS KMS, which names none.
+    pub key_version: Option<String>,
+}
+
+/// What an unwrap returned: the secret, and the master-key version that opened it.
+///
+/// **No `Debug`**: the secret is the string that unlocks the keystore.
+pub struct UnwrappedSecret {
+    pub secret: Vec<u8>,
+    /// The version that opened it, where the service names one: what a file written
+    /// before D-48 is upgraded to record.
+    pub key_version: Option<String>,
+}
+
+/// A [`WRAPPED_SECRET_FILE`]'s contents, as written since D-48.
+fn encode_wrapped_file(wrapped: &WrappedSecret) -> Result<Vec<u8>, SecurityError> {
+    let version = wrapped.key_version.as_deref().unwrap_or("");
+    if version.contains(['\n', '\r']) {
+        return Err(SecurityError::KeyProviderUnavailable(format!(
+            "the key service named a key version that cannot be recorded: {version:?}"
+        )));
+    }
+    let mut out = WRAPPED_SECRET_HEADER.to_vec();
+    out.extend_from_slice(KEY_VERSION_FIELD);
+    out.extend_from_slice(version.as_bytes());
+    out.push(b'\n');
+    out.extend_from_slice(&wrapped.blob);
+    Ok(out)
+}
+
+/// A [`WRAPPED_SECRET_FILE`]'s contents read back: the blob, the version it records, and
+/// whether it was written before D-48 and so records none.
+///
+/// # Errors
+///
+/// A file that begins with the header but does not continue as one -- a version line
+/// missing, unterminated, not UTF-8, or no blob after it. **Not read as a pre-D-48 file**:
+/// a header that does not parse is damage, and guessing would hand the service a blob
+/// with the header still on it.
+fn decode_wrapped_file(bytes: &[u8]) -> Result<(WrappedSecret, bool), String> {
+    let Some(rest) = bytes.strip_prefix(WRAPPED_SECRET_HEADER) else {
+        return Ok((
+            WrappedSecret {
+                blob: bytes.to_vec(),
+                key_version: None,
+            },
+            true,
+        ));
+    };
+    let rest = rest
+        .strip_prefix(KEY_VERSION_FIELD)
+        .ok_or("its header has no key-version line")?;
+    let end = rest
+        .iter()
+        .position(|b| *b == b'\n')
+        .ok_or("its key-version line is not terminated")?;
+    let version =
+        std::str::from_utf8(&rest[..end]).map_err(|_| "its key version is not text".to_string())?;
+    let blob = rest[end + 1..].to_vec();
+    if blob.is_empty() {
+        return Err("it holds a header and no wrapped secret".into());
+    }
+    Ok((
+        WrappedSecret {
+            blob,
+            key_version: (!version.is_empty()).then(|| version.to_owned()),
+        },
+        false,
+    ))
+}
+
+/// Write `wrapped` to `path` beside, then rename, so a crash mid-write never leaves half a
+/// wrapped secret (the same rule as `keystore.rs::persist`).
+fn write_wrapped_file(path: &Path, wrapped: &WrappedSecret) -> Result<(), SecurityError> {
+    let bytes = encode_wrapped_file(wrapped)?;
+    let tmp = path.with_extension("kms-wrapped.tmp");
+    std::fs::write(&tmp, &bytes)
+        .and_then(|()| std::fs::rename(&tmp, path))
+        .map_err(|e| {
+            SecurityError::KeyProviderUnavailable(format!("writing {}: {e}", path.display()))
+        })
+}
+
 /// What this profile needs from a cloud key service, and nothing more.
 ///
 /// Three operations, because three are all the design uses. Deliberately **not** an
@@ -99,21 +211,28 @@ pub const WRAPPED_SECRET_FILE: &str = "keystore.kms-wrapped";
 /// caller already generated, and `sign` does the work; the master key never crosses this
 /// boundary in either direction, which is DN-22 §3's rule applied one level down.
 pub trait CloudKeyService: Send + Sync + std::fmt::Debug {
-    /// Wrap a locally generated data key under the service's master key.
+    /// Wrap a locally generated data key under the service's master key, and say which
+    /// version of it, where the service names versions (D-48).
     ///
     /// # Errors
     ///
     /// `KeyProviderUnavailable` when the service cannot be reached or refuses.
-    fn wrap(&self, plaintext: &[u8]) -> Result<Vec<u8>, SecurityError>;
+    fn wrap(&self, plaintext: &[u8]) -> Result<WrappedSecret, SecurityError>;
 
-    /// Open what [`CloudKeyService::wrap`] produced.
+    /// Open what [`CloudKeyService::wrap`] produced, under `key_version` -- the version it
+    /// recorded -- or the latest when it recorded none (D-48). Opening under the latest
+    /// is what stranded a keystore after a master-key rotation before D-48.
     ///
     /// # Errors
     ///
     /// As above. A wrapped secret that does not open is **not** a first run: the caller
     /// must refuse rather than generate a replacement, because the keystore it protects
     /// may be the only way to read a year of journals.
-    fn unwrap_key(&self, wrapped: &[u8]) -> Result<Vec<u8>, SecurityError>;
+    fn unwrap_key(
+        &self,
+        wrapped: &[u8],
+        key_version: Option<&str>,
+    ) -> Result<UnwrappedSecret, SecurityError>;
 
     /// Sign with a private half that never leaves the service (amendment 5 b).
     ///
@@ -158,14 +277,42 @@ fn hex(bytes: &[u8]) -> String {
 /// be read or written, or when it does not open -- **which is never treated as a first
 /// run**. Generating a replacement then would orphan the keystore the existing one
 /// protects, the same failure `open_or_create` refuses for a file that will not decrypt.
+///
+/// **The master-key version travels with the blob** (D-48): the file records the version
+/// that wrapped it and the service is asked for exactly that one, so a rotation of the
+/// master key -- a new version in Azure Key Vault -- does not strand the keystore. A file
+/// written before D-48 records none; it is opened under the latest version, as it always
+/// was, and rewritten to record the version that opened it, so the next rotation does not
+/// strand it either.
 fn wrapping_secret(dir: &Path, cloud: &dyn CloudKeyService) -> Result<String, SecurityError> {
     let path = dir.join(WRAPPED_SECRET_FILE);
     let unavailable = SecurityError::KeyProviderUnavailable;
     if path.is_file() {
-        let wrapped = std::fs::read(&path)
+        let bytes = std::fs::read(&path)
             .map_err(|e| unavailable(format!("reading {}: {e}", path.display())))?;
-        let secret = cloud.unwrap_key(&wrapped)?;
-        return Ok(hex(&secret));
+        let (wrapped, before_d48) = decode_wrapped_file(&bytes)
+            .map_err(|why| unavailable(format!("{} is damaged: {why}", path.display())))?;
+        let opened = cloud.unwrap_key(&wrapped.blob, wrapped.key_version.as_deref())?;
+        if before_d48 {
+            let upgraded = WrappedSecret {
+                blob: wrapped.blob,
+                key_version: opened.key_version.clone(),
+            };
+            // The secret is already open, so a file that cannot be rewritten costs the
+            // record of its version and not this start; said, and tried again next start.
+            match write_wrapped_file(&path, &upgraded) {
+                Ok(()) => tracing::info!(
+                    path = %path.display(),
+                    key_version = upgraded.key_version.as_deref().unwrap_or("none named"),
+                    "the wrapped keystore secret now records the master-key version that opened it"
+                ),
+                Err(err) => tracing::warn!(
+                    %err,
+                    "the wrapped keystore secret could not be rewritten to record its master-key version"
+                ),
+            }
+        }
+        return Ok(hex(&opened.secret));
     }
     // **A keystore with no wrapped secret beside it is not a first run**, and generating
     // one here would be the same mistake as treating a file that will not open as an
@@ -190,11 +337,8 @@ fn wrapping_secret(dir: &Path, cloud: &dyn CloudKeyService) -> Result<String, Se
         .map_err(|e| unavailable(format!("creating {}: {e}", dir.display())))?;
     // Write beside, then rename: a crash mid-write must not leave half a wrapped secret,
     // which on the next start would read as a file that does not open and stop the node
-    // from ever opening its own keystore. Same rule as `keystore.rs::persist`.
-    let tmp = path.with_extension("kms-wrapped.tmp");
-    std::fs::write(&tmp, &wrapped)
-        .and_then(|()| std::fs::rename(&tmp, &path))
-        .map_err(|e| unavailable(format!("writing {}: {e}", path.display())))?;
+    // from ever opening its own keystore.
+    write_wrapped_file(&path, &wrapped)?;
     Ok(hex(&secret))
 }
 
@@ -329,11 +473,30 @@ impl KeyProvider for ManagedServiceKeyProvider {
 /// One call to a cloud key service, sent to the worker thread.
 enum Job {
     Wrap(Vec<u8>),
-    Unwrap(Vec<u8>),
+    /// The wrapped bytes, and the master-key version to open them under (D-48).
+    Unwrap(Vec<u8>, Option<String>),
     Sign(Vec<u8>, SignatureScheme),
 }
 
-type Reply = std::sync::mpsc::Sender<Result<Vec<u8>, SecurityError>>;
+/// What the worker answers: the bytes, and the master-key version a wrap or an unwrap
+/// used where the service names one (D-48). A signature names none.
+///
+/// **No `Debug`**: an unwrap's bytes are the keystore secret.
+struct Answer {
+    bytes: Vec<u8>,
+    key_version: Option<String>,
+}
+
+impl Answer {
+    fn unversioned(bytes: Vec<u8>) -> Self {
+        Self {
+            bytes,
+            key_version: None,
+        }
+    }
+}
+
+type Reply = std::sync::mpsc::Sender<Result<Answer, SecurityError>>;
 
 /// A cloud client running on its own thread, with its own runtime.
 ///
@@ -377,7 +540,7 @@ impl Worker {
         Self { calls, describe }
     }
 
-    fn dispatch(&self, job: Job) -> Result<Vec<u8>, SecurityError> {
+    fn dispatch(&self, job: Job) -> Result<Answer, SecurityError> {
         let (reply, answers) = std::sync::mpsc::channel();
         self.calls.send((job, reply)).map_err(|_| {
             SecurityError::KeyProviderUnavailable(format!(
@@ -469,9 +632,13 @@ impl AwsKmsKeyService {
 
 /// One KMS call. Split out so the worker loop stays readable and so the error mapping
 /// happens in exactly one place.
-async fn aws_call(client: &aws_sdk_kms::Client, key_id: &str, job: Job) -> Result<Vec<u8>, String> {
+///
+/// **No key version, either way** (D-48). KMS rotates a key's backing material under the
+/// one key identifier, and its ciphertext already names the backing key that opens it,
+/// so `Decrypt` needs nothing recorded beside it and a rotation strands nothing.
+async fn aws_call(client: &aws_sdk_kms::Client, key_id: &str, job: Job) -> Result<Answer, String> {
     use aws_sdk_kms::primitives::Blob;
-    match job {
+    let bytes = match job {
         Job::Wrap(plaintext) => client
             .encrypt()
             .key_id(key_id)
@@ -482,7 +649,7 @@ async fn aws_call(client: &aws_sdk_kms::Client, key_id: &str, job: Job) -> Resul
             .ciphertext_blob()
             .map(|b| b.as_ref().to_vec())
             .ok_or_else(|| "KMS returned no ciphertext for the keystore secret".to_string()),
-        Job::Unwrap(wrapped) => client
+        Job::Unwrap(wrapped, _) => client
             .decrypt()
             .key_id(key_id)
             .ciphertext_blob(Blob::new(wrapped))
@@ -512,7 +679,8 @@ async fn aws_call(client: &aws_sdk_kms::Client, key_id: &str, job: Job) -> Resul
                 .map(|b| b.as_ref().to_vec())
                 .ok_or_else(|| "KMS returned no signature".to_string())
         }
-    }
+    }?;
+    Ok(Answer::unversioned(bytes))
 }
 
 fn aws_signing_algorithm(
@@ -542,16 +710,34 @@ fn sha256(message: &[u8]) -> Vec<u8> {
 }
 
 impl CloudKeyService for AwsKmsKeyService {
-    fn wrap(&self, plaintext: &[u8]) -> Result<Vec<u8>, SecurityError> {
-        self.worker.dispatch(Job::Wrap(plaintext.to_vec()))
+    fn wrap(&self, plaintext: &[u8]) -> Result<WrappedSecret, SecurityError> {
+        let answer = self.worker.dispatch(Job::Wrap(plaintext.to_vec()))?;
+        Ok(WrappedSecret {
+            blob: answer.bytes,
+            key_version: answer.key_version,
+        })
     }
 
-    fn unwrap_key(&self, wrapped: &[u8]) -> Result<Vec<u8>, SecurityError> {
-        self.worker.dispatch(Job::Unwrap(wrapped.to_vec()))
+    fn unwrap_key(
+        &self,
+        wrapped: &[u8],
+        key_version: Option<&str>,
+    ) -> Result<UnwrappedSecret, SecurityError> {
+        let answer = self.worker.dispatch(Job::Unwrap(
+            wrapped.to_vec(),
+            key_version.map(str::to_owned),
+        ))?;
+        Ok(UnwrappedSecret {
+            secret: answer.bytes,
+            key_version: answer.key_version,
+        })
     }
 
     fn sign(&self, message: &[u8], scheme: SignatureScheme) -> Result<Vec<u8>, SecurityError> {
-        self.worker.dispatch(Job::Sign(message.to_vec(), scheme))
+        Ok(self
+            .worker
+            .dispatch(Job::Sign(message.to_vec(), scheme))?
+            .bytes)
     }
 
     fn describe(&self) -> String {
@@ -615,7 +801,7 @@ async fn azure_call(
     client: &azure_security_keyvault_keys::KeyClient,
     key_name: &str,
     job: Job,
-) -> Result<Vec<u8>, String> {
+) -> Result<Answer, String> {
     use azure_security_keyvault_keys::models::{
         EncryptionAlgorithm, KeyOperationParameters, SignParameters,
     };
@@ -626,7 +812,7 @@ async fn azure_call(
                 value: Some(plaintext),
                 ..Default::default()
             };
-            client
+            let result = client
                 .wrap_key(
                     key_name,
                     parameters
@@ -637,24 +823,34 @@ async fn azure_call(
                 .await
                 .map_err(|e| format!("wrapping the keystore secret: {e}"))?
                 .into_model()
-                .map_err(|e| format!("reading the wrap response: {e}"))?
-                .result
-                .ok_or_else(|| "the vault returned no wrapped secret".to_string())
+                .map_err(|e| format!("reading the wrap response: {e}"))?;
+            // **Refused, not recorded as no version** (D-48): a secret wrapped under a
+            // version nobody wrote down is the one a later rotation strands, which is
+            // the exposure this record exists to close.
+            let key_version = azure_key_version(result.kid.as_deref()).ok_or_else(|| {
+                "the vault did not say which key version wrapped the keystore secret".to_string()
+            })?;
+            Ok(Answer {
+                bytes: result
+                    .result
+                    .ok_or_else(|| "the vault returned no wrapped secret".to_string())?,
+                key_version: Some(key_version),
+            })
         }
-        Job::Unwrap(wrapped) => {
+        Job::Unwrap(wrapped, recorded) => {
             let parameters = KeyOperationParameters {
                 algorithm: Some(EncryptionAlgorithm::RsaOaep256),
                 value: Some(wrapped),
                 ..Default::default()
             };
-            // The empty version selects the latest, which is what a deployment that has
-            // never rotated its master key has. A deployment that rotates one must record
-            // the version the secret was wrapped under (amendment 5 e); carrying it in
-            // the wrapped file is the open item that leaves.
-            client
+            // Exactly the version the wrapped file recorded (D-48; amendment 5 e). The
+            // empty version selects the latest, which is only ever asked for a file
+            // written before D-48, and whose answer names the version so the file can
+            // be rewritten to record it.
+            let result = client
                 .unwrap_key(
                     key_name,
-                    "",
+                    recorded.as_deref().unwrap_or(""),
                     parameters
                         .try_into()
                         .map_err(|e| format!("encoding the unwrap request: {e}"))?,
@@ -663,9 +859,13 @@ async fn azure_call(
                 .await
                 .map_err(|e| format!("unwrapping the keystore secret: {e}"))?
                 .into_model()
-                .map_err(|e| format!("reading the unwrap response: {e}"))?
-                .result
-                .ok_or_else(|| "the vault returned no unwrapped secret".to_string())
+                .map_err(|e| format!("reading the unwrap response: {e}"))?;
+            Ok(Answer {
+                key_version: azure_key_version(result.kid.as_deref()).or(recorded),
+                bytes: result
+                    .result
+                    .ok_or_else(|| "the vault returned no unwrapped secret".to_string())?,
+            })
         }
         Job::Sign(message, scheme) => {
             let parameters = SignParameters {
@@ -688,9 +888,21 @@ async fn azure_call(
                 .map_err(|e| format!("reading the sign response: {e}"))?
                 .result
                 .ok_or_else(|| "the vault returned no signature".to_string())?;
-            azure_signature_to_provider_format(scheme, raw)
+            azure_signature_to_provider_format(scheme, raw).map(Answer::unversioned)
         }
     }
+}
+
+/// The key version a Key Vault key identifier names: the last path segment of
+/// `https://<vault>/keys/<name>/<version>`, which the SDK's own [`ResourceId`] parses.
+/// `None` for an identifier that is missing, does not parse, or names no version.
+///
+/// [`ResourceId`]: azure_security_keyvault_keys::ResourceId
+fn azure_key_version(kid: Option<&str>) -> Option<String> {
+    kid?.parse::<azure_security_keyvault_keys::ResourceId>()
+        .ok()?
+        .version
+        .filter(|v| !v.is_empty())
 }
 
 /// Key Vault's `sign` operation returns ES256 as the raw 64-byte `r || s` concatenation
@@ -741,16 +953,34 @@ fn azure_signing_algorithm(
 }
 
 impl CloudKeyService for AzureKeyVaultKeyService {
-    fn wrap(&self, plaintext: &[u8]) -> Result<Vec<u8>, SecurityError> {
-        self.worker.dispatch(Job::Wrap(plaintext.to_vec()))
+    fn wrap(&self, plaintext: &[u8]) -> Result<WrappedSecret, SecurityError> {
+        let answer = self.worker.dispatch(Job::Wrap(plaintext.to_vec()))?;
+        Ok(WrappedSecret {
+            blob: answer.bytes,
+            key_version: answer.key_version,
+        })
     }
 
-    fn unwrap_key(&self, wrapped: &[u8]) -> Result<Vec<u8>, SecurityError> {
-        self.worker.dispatch(Job::Unwrap(wrapped.to_vec()))
+    fn unwrap_key(
+        &self,
+        wrapped: &[u8],
+        key_version: Option<&str>,
+    ) -> Result<UnwrappedSecret, SecurityError> {
+        let answer = self.worker.dispatch(Job::Unwrap(
+            wrapped.to_vec(),
+            key_version.map(str::to_owned),
+        ))?;
+        Ok(UnwrappedSecret {
+            secret: answer.bytes,
+            key_version: answer.key_version,
+        })
     }
 
     fn sign(&self, message: &[u8], scheme: SignatureScheme) -> Result<Vec<u8>, SecurityError> {
-        self.worker.dispatch(Job::Sign(message.to_vec(), scheme))
+        Ok(self
+            .worker
+            .dispatch(Job::Sign(message.to_vec(), scheme))?
+            .bytes)
     }
 
     fn describe(&self) -> String {
@@ -769,8 +999,13 @@ mod tests {
     /// **Wrapping is real AES-256-GCM under a key held here**, not an identity function:
     /// a fake that returned its input would let a bug that never wrapped at all pass
     /// every test below.
+    ///
+    /// **Its master key has versions, as Azure Key Vault's does** (D-48): a wrap uses the
+    /// latest and names it, an unwrap uses the version it is given or the latest when
+    /// given none, and [`FakeCloud::rotate_master`] adds a version. Opening under the
+    /// latest after a rotation fails here exactly as it would against a real vault.
     struct FakeCloud {
-        key: [u8; 32],
+        keys: std::sync::Mutex<Vec<[u8; 32]>>,
         calls: AtomicUsize,
         reachable: AtomicBool,
     }
@@ -791,10 +1026,18 @@ mod tests {
     impl FakeCloud {
         fn new() -> Arc<Self> {
             Arc::new(Self {
-                key: [7u8; 32],
+                keys: std::sync::Mutex::new(vec![[7u8; 32]]),
                 calls: AtomicUsize::new(0),
                 reachable: AtomicBool::new(true),
             })
+        }
+
+        /// A new master-key version, which becomes the latest: what rotating a key in
+        /// Azure Key Vault does. Not a call to the service as this crate sees it.
+        fn rotate_master(&self) {
+            let mut keys = self.keys.lock().expect("fake keys");
+            let next = u8::try_from(keys.len() + 7).expect("a handful of versions");
+            keys.push([next; 32]);
         }
 
         fn calls(&self) -> usize {
@@ -805,7 +1048,9 @@ mod tests {
             self.reachable.store(false, Ordering::SeqCst);
         }
 
-        fn check(&self) -> Result<Aes, SecurityError> {
+        /// Count the call, refuse it when offline, and return the cipher for `version`
+        /// (`v1`, `v2`, ...) or the latest, with the version it is.
+        fn check(&self, version: Option<&str>) -> Result<(Aes, String), SecurityError> {
             use aes_gcm::KeyInit;
             self.calls.fetch_add(1, Ordering::SeqCst);
             if !self.reachable.load(Ordering::SeqCst) {
@@ -813,43 +1058,71 @@ mod tests {
                     "the key service is unreachable: no route to host".into(),
                 ));
             }
-            Ok(Aes::new(aes_gcm::Key::<Aes>::from_slice(&self.key)))
+            let keys = self.keys.lock().expect("fake keys");
+            let index = match version {
+                None => keys.len() - 1,
+                Some(v) => v
+                    .strip_prefix('v')
+                    .and_then(|n| n.parse::<usize>().ok())
+                    .and_then(|n| n.checked_sub(1))
+                    .filter(|i| *i < keys.len())
+                    .ok_or_else(|| {
+                        SecurityError::KeyProviderUnavailable(format!(
+                            "the key service has no key version {v:?}"
+                        ))
+                    })?,
+            };
+            Ok((
+                Aes::new(aes_gcm::Key::<Aes>::from_slice(&keys[index])),
+                format!("v{}", index + 1),
+            ))
         }
     }
 
     type Aes = aes_gcm::Aes256Gcm;
 
     impl CloudKeyService for FakeCloud {
-        fn wrap(&self, plaintext: &[u8]) -> Result<Vec<u8>, SecurityError> {
+        fn wrap(&self, plaintext: &[u8]) -> Result<WrappedSecret, SecurityError> {
             use aes_gcm::aead::Aead;
             use aes_gcm::AeadCore;
-            let cipher = self.check()?;
+            let (cipher, version) = self.check(None)?;
             let nonce = Aes::generate_nonce(&mut aes_gcm::aead::OsRng);
-            let mut out = nonce.to_vec();
-            out.extend_from_slice(
+            let mut blob = nonce.to_vec();
+            blob.extend_from_slice(
                 &cipher
                     .encrypt(&nonce, plaintext)
                     .map_err(|_| SecurityError::KeyProviderUnavailable("wrap failed".into()))?,
             );
-            Ok(out)
+            Ok(WrappedSecret {
+                blob,
+                key_version: Some(version),
+            })
         }
 
-        fn unwrap_key(&self, wrapped: &[u8]) -> Result<Vec<u8>, SecurityError> {
+        fn unwrap_key(
+            &self,
+            wrapped: &[u8],
+            key_version: Option<&str>,
+        ) -> Result<UnwrappedSecret, SecurityError> {
             use aes_gcm::aead::Aead;
-            let cipher = self.check()?;
+            let (cipher, version) = self.check(key_version)?;
             if wrapped.len() < 12 {
                 return Err(SecurityError::KeyProviderUnavailable("too short".into()));
             }
             let (nonce, body) = wrapped.split_at(12);
-            cipher
+            let secret = cipher
                 .decrypt(aes_gcm::Nonce::from_slice(nonce), body)
                 .map_err(|_| {
                     SecurityError::KeyProviderUnavailable("the wrapped secret did not open".into())
-                })
+                })?;
+            Ok(UnwrappedSecret {
+                secret,
+                key_version: Some(version),
+            })
         }
 
         fn sign(&self, message: &[u8], _scheme: SignatureScheme) -> Result<Vec<u8>, SecurityError> {
-            self.check()?;
+            self.check(None)?;
             Ok(sha256(message))
         }
 
@@ -1052,6 +1325,193 @@ mod tests {
             "a replacement wrapped secret was written"
         );
         let _ = std::fs::remove_dir_all(path);
+    }
+
+    /// The header a fresh keystore's wrapped secret is written with, read back.
+    fn recorded_version(path: &Path) -> (Option<String>, bool) {
+        let bytes = std::fs::read(path.join(WRAPPED_SECRET_FILE)).expect("wrapped secret");
+        let (wrapped, before_d48) = decode_wrapped_file(&bytes).expect("a readable file");
+        (wrapped.key_version, before_d48)
+    }
+
+    /// **D-48's whole point.** A keystore wrapped under one master-key version still
+    /// opens after the master key is rotated, because the file records the version and
+    /// the service is asked for exactly that one. Before D-48 every unwrap asked for the
+    /// latest, and this restart was where a rotated deployment lost its keystore.
+    #[test]
+    fn a_keystore_wrapped_before_a_master_key_rotation_still_opens_after_it() {
+        let path = dir("master-rotation");
+        let cloud = FakeCloud::new();
+        let sealed = {
+            let provider = ManagedServiceKeyProvider::open_or_create(
+                &path,
+                Arc::clone(&cloud) as Arc<_>,
+                None,
+            )
+            .expect("first run");
+            let key = provider
+                .active_or_generate(KeyPurpose::JournalAtRest)
+                .expect("key");
+            provider.seal(&key, b"written under v1").expect("sealed")
+        };
+        assert_eq!(recorded_version(&path), (Some("v1".into()), false));
+
+        cloud.rotate_master();
+        // The exposure, shown rather than described: under the latest version the
+        // wrapped secret no longer opens.
+        let bytes = std::fs::read(path.join(WRAPPED_SECRET_FILE)).expect("wrapped secret");
+        let (wrapped, _) = decode_wrapped_file(&bytes).expect("readable");
+        assert!(
+            cloud.unwrap_key(&wrapped.blob, None).is_err(),
+            "the fake must model a rotation that strands an unversioned unwrap"
+        );
+
+        let before = cloud.calls();
+        let provider =
+            ManagedServiceKeyProvider::open_or_create(&path, Arc::clone(&cloud) as Arc<_>, None)
+                .expect("the recorded version opens it after the rotation");
+        assert_eq!(cloud.calls(), before + 1, "one unwrap, and no rewrap");
+        let key = provider
+            .active(KeyPurpose::JournalAtRest)
+            .expect("same key");
+        assert_eq!(
+            provider.unseal(&key, &sealed).expect("still opens"),
+            b"written under v1"
+        );
+        assert_eq!(
+            recorded_version(&path),
+            (Some("v1".into()), false),
+            "a file that already records its version is left alone"
+        );
+        let _ = std::fs::remove_dir_all(path);
+    }
+
+    /// A wrapped secret written before D-48 is a bare blob with no header. It opens as it
+    /// always did, under the latest version, and is rewritten to record the version that
+    /// opened it, so the deployment's next master-key rotation does not strand it.
+    #[test]
+    fn a_wrapped_secret_from_before_d48_opens_and_is_upgraded_to_record_its_version() {
+        let path = dir("pre-d48-file");
+        let cloud = FakeCloud::new();
+        let sealed = {
+            let provider = ManagedServiceKeyProvider::open_or_create(
+                &path,
+                Arc::clone(&cloud) as Arc<_>,
+                None,
+            )
+            .expect("first run");
+            let key = provider
+                .active_or_generate(KeyPurpose::JournalAtRest)
+                .expect("key");
+            provider.seal(&key, b"written before D-48").expect("sealed")
+        };
+        // What a pre-D-48 build wrote: the blob alone.
+        let wrapped_path = path.join(WRAPPED_SECRET_FILE);
+        let bytes = std::fs::read(&wrapped_path).expect("wrapped secret");
+        let (wrapped, _) = decode_wrapped_file(&bytes).expect("readable");
+        std::fs::write(&wrapped_path, &wrapped.blob).expect("write it the old way");
+        assert_eq!(recorded_version(&path), (None, true));
+
+        let provider =
+            ManagedServiceKeyProvider::open_or_create(&path, Arc::clone(&cloud) as Arc<_>, None)
+                .expect("a pre-D-48 file still opens");
+        let key = provider
+            .active(KeyPurpose::JournalAtRest)
+            .expect("same key");
+        assert_eq!(
+            provider.unseal(&key, &sealed).expect("still opens"),
+            b"written before D-48"
+        );
+        assert_eq!(
+            recorded_version(&path),
+            (Some("v1".into()), false),
+            "the file must now record the version that opened it"
+        );
+
+        // And so the upgrade is worth something: it survives a rotation now.
+        cloud.rotate_master();
+        ManagedServiceKeyProvider::open_or_create(&path, Arc::clone(&cloud) as Arc<_>, None)
+            .expect("the upgraded file opens after a rotation");
+        let _ = std::fs::remove_dir_all(path);
+    }
+
+    /// A file that begins with the header and does not continue as one is damage, not a
+    /// pre-D-48 file: guessing would hand the service a blob with the header still on it
+    /// and turn a nameable fault into "did not open". Refused by name, never replaced,
+    /// and the service is not called.
+    #[test]
+    fn a_damaged_header_is_refused_by_name_and_never_replaced() {
+        let path = dir("damaged-header");
+        let cloud = FakeCloud::new();
+        ManagedServiceKeyProvider::open_or_create(&path, Arc::clone(&cloud) as Arc<_>, None)
+            .expect("first run");
+        let wrapped_path = path.join(WRAPPED_SECRET_FILE);
+        let mut damaged = WRAPPED_SECRET_HEADER.to_vec();
+        damaged.extend_from_slice(b"key-version v1 with no colon and no newline");
+        std::fs::write(&wrapped_path, &damaged).expect("damage it");
+        let before = cloud.calls();
+
+        let err =
+            ManagedServiceKeyProvider::open_or_create(&path, Arc::clone(&cloud) as Arc<_>, None)
+                .expect_err("must refuse");
+        assert!(err.to_string().contains("damaged"), "{err}");
+        assert_eq!(
+            cloud.calls(),
+            before,
+            "the service was asked to open damage"
+        );
+        assert_eq!(
+            std::fs::read(&wrapped_path).expect("still there"),
+            damaged,
+            "the damaged file was overwritten"
+        );
+        let _ = std::fs::remove_dir_all(path);
+    }
+
+    /// The file format, round trip and edges: a service that names no version (AWS KMS)
+    /// records an empty one and reads back as none, and a version that would break the
+    /// header is refused rather than written.
+    #[test]
+    fn the_wrapped_file_records_a_version_or_none_and_refuses_one_it_cannot() {
+        for key_version in [Some("0123abcd".to_string()), None] {
+            let wrapped = WrappedSecret {
+                blob: vec![1, 2, 3, b'\n', 0],
+                key_version,
+            };
+            let bytes = encode_wrapped_file(&wrapped).expect("encodes");
+            assert!(bytes.starts_with(WRAPPED_SECRET_HEADER));
+            assert_eq!(
+                decode_wrapped_file(&bytes).expect("decodes"),
+                (wrapped, false)
+            );
+        }
+        assert!(encode_wrapped_file(&WrappedSecret {
+            blob: vec![1],
+            key_version: Some("v1\nkey-version: v2".into()),
+        })
+        .is_err());
+        let mut no_blob = WRAPPED_SECRET_HEADER.to_vec();
+        no_blob.extend_from_slice(b"key-version: v1\n");
+        assert!(decode_wrapped_file(&no_blob).is_err());
+    }
+
+    /// The version Azure's key identifier names, read with the SDK's own parser: the form
+    /// Key Vault documents for a `kid`, with and without a version.
+    #[test]
+    fn an_azure_key_identifier_yields_its_version_or_none() {
+        assert_eq!(
+            azure_key_version(Some(
+                "https://my-vault.vault.azure.net/keys/journal/0123456789abcdef0123456789abcdef"
+            ))
+            .as_deref(),
+            Some("0123456789abcdef0123456789abcdef")
+        );
+        assert_eq!(
+            azure_key_version(Some("https://my-vault.vault.azure.net/keys/journal")),
+            None
+        );
+        assert_eq!(azure_key_version(Some("not a url")), None);
+        assert_eq!(azure_key_version(None), None);
     }
 
     /// Rotation is local and leaves earlier material readable, exactly as it does for
