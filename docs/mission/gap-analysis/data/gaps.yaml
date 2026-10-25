@@ -4990,7 +4990,7 @@
   effort: L
   target: I4
   owner: Security engineer (human-owned crate)
-  deps: [D-10]
+  deps: [D-10, D-135]
   impact: >-
     A node's journal was plaintext whatever the baseline said; the transport's identity
     comes from files, not custody.
@@ -5006,21 +5006,10 @@
     identity and the desktop's outbound identity both now issue from a persistent,
     operating-system-keystore-backed provider first and an ephemeral one as an honest
     fallback; `open_or_create_via_os_keystore` is generalised the way `wrapping_secret`
-    already was. This entry's own remaining engineering item is done. Remaining,
-    recorded rather than tracked as a task: the standing design question of whether the
-    node's own outbound (peer-link) identity should ever persist too or share the
-    serving identity above -- undecided, and `host_tls` stays ephemeral until somebody
-    decides it (ARCHITECTURE.md item 105). **D-47 (2026-09-15) settles the standing
-    question this entry recorded rather than tracked**: a node holds **one persisted
-    identity used by both roles**, serving and outbound, rather than two or the
-    ephemeral pair it has today -- one machine identity per node is what D-02's
-    mutual-TLS model assumes and what a peer's trust store can pin across a restart. The
-    engineering it needs is the generalisation `../../../ARCHITECTURE.md` §10 item 105
-    named: the desktop service name in
-    `PersistentKeyProvider::open_or_create_via_os_keystore` becomes a parameter, as item
-    104 already did for `wrapping_secret`, and `host_tls` and `spawn_tls_from_provider`
-    then issue from the same persisted provider. Human-owned crate, so it comes back for
-    review.
+    already was. This entry's own remaining engineering item is done. Remaining, decided 2026-10-25 (D-135) and built: the node's peer-link identity is
+    its own persisted key, every node identity is named from its key, every
+    certificate states its one role, and a configured certificate is what the node
+    presents on its peer links.
   ref: "`ARCHITECTURE.md` §8.5; `docs/design/DN-22-key-management.md`"
   history:
   - date: 2026-09-15
@@ -5208,6 +5197,20 @@
       open**: the OS keystore and asymmetric providers (GAP-084), a TLS identity issued
       from them rather than from files in the environment, and the desktop's client-side
       trust configuration.
+  - date: 2026-10-25
+    status: Closed
+    note: >-
+      **Closed 2026-10-25 (D-135).** The node's peer-link identity is its own key,
+      persisted in the operating-system keystore under its own service and file when the
+      baseline uses it (`issue_node_peer_identity`) and written beside the journal as
+      `node-peer-identity.pem` to pin. Every node identity is named from its key
+      (`node-<fingerprint>`, `node-peer-<fingerprint>`), where both used to be
+      `gungnir-node`; every certificate states serverAuth or clientAuth; and a configured
+      `GUNGNIR_TLS_CERT`/`GUNGNIR_TLS_KEY` is what the node presents on its peer links.
+      Building it found that `start_as_machine` read only the configured PEM, so a node's
+      issued identity never started a peer link: fixed; a two-node mutual-TLS test now
+      links under a pinned peer identity and refuses a serving certificate as a client. `gungnir-remote/src/identity.rs` is human-owned; see docs/signatures.md. See
+      `../../record/2026-10-25/a-node-presents-its-own-persisted-peer-identity.md`.
 
 - id: GAP-084
   name: Key custody, rotation, and escrow

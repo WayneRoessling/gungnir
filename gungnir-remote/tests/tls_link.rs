@@ -292,3 +292,149 @@ fn a_machine_link_needs_an_identity() {
     let err = PeerLink::connect(&endpoint, runtime.handle()).expect_err("refused");
     assert!(err.to_string().contains("client certificate"), "{err}");
 }
+
+/// A node with one exchange agreement, for `party`, and no operator accounts: what a peer
+/// node serves another node it has an agreement with.
+fn api_for(party: &str) -> Arc<NodeApi> {
+    let healthy = SystemHealth {
+        tracking_healthy: true,
+        intercept_healthy: true,
+        ingest_healthy: true,
+    };
+    Arc::new(
+        NodeApi::new(SnapshotResponse::new(
+            vec![track(1)],
+            None,
+            healthy,
+            Vec::new(),
+        ))
+        .with_exchange(ExchangeSet {
+            agreements: vec![ExchangeAgreement {
+                party: party.to_owned(),
+                inbound: Vec::new(),
+                outbound: vec![ExchangeItem::Tracks],
+                format: ExchangeFormat::Canonical,
+            }],
+        }),
+    )
+}
+
+/// A peer node serving under its own serving identity, trusting exactly `pinned` as its
+/// clients -- the way a deployment pins a node's peer identity (D-135). Returns its URL and
+/// its serving certificate, which the connecting node pins in turn.
+async fn serve_as_a_node(api: Arc<NodeApi>, pinned: &str) -> (String, String) {
+    let dir = std::env::temp_dir().join(format!(
+        "gungnir-tls-link-node-{}-{}",
+        std::process::id(),
+        scratch_id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("dir");
+    // A file where the keystore's directory would go: the serving identity is issued from
+    // the ephemeral fallback, so the test touches no real operating-system keystore.
+    let blocked = dir.join("no-keystore");
+    std::fs::write(&blocked, b"not a directory").expect("written");
+    let serving =
+        gungnir_remote::identity::issue_node_serving_identity(&blocked, vec!["localhost".into()])
+            .expect("issued");
+    assert!(
+        serving.common_name.starts_with("node-"),
+        "{}",
+        serving.common_name
+    );
+    let client_ca = dir.join("pinned-peers.pem");
+    std::fs::write(&client_ca, pinned).expect("pinned");
+    let acceptor = tls::acceptor_with_key(
+        serving.certificate_der.clone(),
+        Arc::clone(&serving.key),
+        &client_ca.to_string_lossy(),
+    )
+    .expect("acceptor");
+    let tcp = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let port = tcp.local_addr().expect("addr").port();
+    tokio::spawn(async move {
+        let _ = serve_on_listener(TlsListener::new(tcp, acceptor), api).await;
+    });
+    (format!("https://localhost:{port}"), serving.certificate_pem)
+}
+
+/// **D-135: a node links to a peer node under its own peer identity.** Its outbound
+/// certificate -- its own key, self-signed, limited to client authentication, named from
+/// the key -- is pinned at the peer, verifies there, and is the party the peer's agreement
+/// names, so the link comes up and the agreed tracks arrive. Before D-135 the node
+/// presented a certificate made fresh at every start and named `gungnir-node`, which no
+/// peer could pin and no agreement could tell from another node's.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_node_links_to_a_peer_under_its_own_pinned_peer_identity() {
+    let own = gungnir_remote::identity::issue_node_peer_identity_ephemeral().expect("issued");
+    assert!(own.name.starts_with("node-peer-"), "{}", own.name);
+    let (url, serving_pem) = serve_as_a_node(api_for(&own.name), &own.certificate_pem).await;
+    let endpoint = RemoteEndpoint {
+        url,
+        tls: LinkTls {
+            trust_roots_pem: vec![serving_pem],
+            issued: Some(own.key),
+            identity_pem: None,
+        },
+    };
+    let handle = tokio::runtime::Handle::current();
+    let peer = PeerLink::connect(&endpoint, &handle).expect("the peer link starts");
+    until(|| peer.connected(), "the node's peer link to come up").await;
+    let mut got = peer.take_tracks();
+    for _ in 0..PATIENCE {
+        if !got.is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        got = peer.take_tracks();
+    }
+    assert_eq!(got.len(), 1, "the agreed track reaches the node");
+}
+
+/// **D-135: a certificate is used for its one role.** A serving certificate states only
+/// serverAuth, so even pinned at the peer it does not authenticate a client: the handshake
+/// is refused and the link says so rather than reporting connected.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_serving_certificate_does_not_authenticate_a_client() {
+    let blocked = std::env::temp_dir().join(format!(
+        "gungnir-tls-link-misused-{}-{}",
+        std::process::id(),
+        scratch_id()
+    ));
+    let _ = std::fs::remove_file(&blocked);
+    std::fs::write(&blocked, b"not a directory").expect("forces the ephemeral path");
+    let misused =
+        gungnir_remote::identity::issue_node_serving_identity(&blocked, vec!["localhost".into()])
+            .expect("issued");
+    let serving_only = Arc::new(rustls::sign::CertifiedKey::new(
+        vec![rustls::pki_types::CertificateDer::from(
+            misused.certificate_der.clone(),
+        )],
+        Arc::clone(&misused.key),
+    ));
+    let (url, serving_pem) =
+        serve_as_a_node(api_for(&misused.common_name), &misused.certificate_pem).await;
+    let endpoint = RemoteEndpoint {
+        url,
+        tls: LinkTls {
+            trust_roots_pem: vec![serving_pem],
+            issued: Some(serving_only),
+            identity_pem: None,
+        },
+    };
+    let handle = tokio::runtime::Handle::current();
+    let peer = PeerLink::connect(&endpoint, &handle).expect("the peer link starts");
+    until(
+        || peer.last_error().is_some(),
+        "the serving certificate to be refused as a client's",
+    )
+    .await;
+    assert!(!peer.connected());
+    let reason = peer.last_error().unwrap_or_default();
+    assert!(
+        !reason.contains("403"),
+        "refused at the handshake, not by the agreement: {reason}"
+    );
+}

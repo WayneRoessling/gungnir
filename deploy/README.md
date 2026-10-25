@@ -79,6 +79,31 @@ When the node answers again the desktop reconciles the outage on PN-18 -- two en
 of one track on the two sides are shown first, for a person -- and forwards every decision
 it took while cut off to the node, which puts each on its record once.
 
+## Machine identities
+
+Every node and desktop presents its own certificate, named from a fingerprint of its own
+key, and each certificate is limited to one role (D-135):
+
+| Machine and role | Name | Key usage | Pin it from |
+|---|---|---|---|
+| A node serving | `node-<fingerprint>` | serverAuth | `node-identity.pem` beside the node's journal |
+| A node on its peer links | `node-peer-<fingerprint>` | clientAuth | `node-peer-identity.pem` beside the node's journal |
+| A desktop | `desktop-<fingerprint>` | clientAuth | the desktop's certificate (GAP-141) |
+
+A name with `-ephemeral-` in it belongs to a key that does not survive a restart, because
+the machine's baseline does not use the operating system's keystore
+(`security.key_provider`) or the keystore was unreachable. Pin only the others.
+
+A node's peer identity is a key of its own, never its serving key. Pin it in the
+client-authority file of each peer that accepts it, and name it in that peer's agreement
+and `machine_identities` by its `node-peer-` name. A deployment that runs its own
+certificate authority sets `GUNGNIR_TLS_CERT` and `GUNGNIR_TLS_KEY` on the node instead,
+and that certificate is what its peers see.
+
+**Upgrading from before D-135:** a node's serving certificate was named `gungnir-node`, and
+its peer-link certificate was made fresh at every start, so no peer could pin it. Re-pin
+each node's serving certificate once, and pin its peer certificate for the first time.
+
 ## The geoid grids
 
 A DEM or point cloud in a real-world coordinate reference system has its heights made

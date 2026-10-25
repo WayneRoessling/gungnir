@@ -3328,3 +3328,38 @@
     re-opens on the desktop with the node's reason, journaled and audited, so no console
     shows an acceptance the node does not hold. (4) Two pull requests, the node first.
     See `../../record/2026-10-24/the-node-holds-coverage-gap-acceptances.md`.
+- id: D-135
+  decision: What the node presents when it connects out, and how every node identity is named
+  question: >-
+    GAP-060 left one question standing since 2026-09-08 (record items 105 and 111): the
+    node's outbound, peer-link identity is issued fresh at every start, self-signed and
+    named `gungnir-node`, while its serving identity persists. A peer pins a client
+    certificate in its client-authority file, so it cannot pin one that changes at every
+    start; every node's outbound and serving certificates carry the same name, so a peer's
+    `machine_identities` cannot tell nodes apart; no certificate states the role it is for;
+    and an operator's `GUNGNIR_TLS_CERT`/`GUNGNIR_TLS_KEY` is never presented on a peer
+    link, because the issued identity always wins. Should the outbound identity persist,
+    and if so share the serving identity or hold its own; and how should node identities
+    be named and limited?
+  raised_in: "GAP-060; record items 105 and 111; D-02; D-29"
+  decider: Owner
+  unblocks: "GAP-060"
+  resolved: 2026-10-25
+  outcome: >-
+    **Taken by the owner, 2026-10-25: a separate persisted outbound identity per node;
+    key-derived unique names for every node identity; explicit serverAuth and clientAuth
+    extended key usages; and a configured certificate winning over the issued one.** The
+    outbound identity is its own key, persisted in the operating system's keystore under
+    its own service beside the serving one, so a peer pins it once and a compromise of one
+    role's key is not a compromise of the other (one key per purpose, NIST SP 800-57 Part
+    1). Each node identity is named from a digest of its own key, as desktops have been
+    since GAP-141 -- `node-<digest>` serving, `node-peer-<digest>` outbound, with an
+    `-ephemeral-` marker when the keystore is unreachable -- so no two nodes share a name.
+    A serving certificate states serverAuth, and an outbound one, the node's or a
+    desktop's, clientAuth (RFC 5280). When the operator configures `GUNGNIR_TLS_CERT` and
+    `GUNGNIR_TLS_KEY`, that certificate is what the node presents on its peer links.
+    Rejected: sharing the serving identity (one key for two purposes); keeping the
+    outbound identity ephemeral (nothing a peer can pin). A deployment certificate
+    authority issuing every certificate is the fuller pattern and is not decided here; the
+    configured certificate's precedence keeps that path open. See
+    `../../record/2026-10-25/a-node-presents-its-own-persisted-peer-identity.md`.

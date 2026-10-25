@@ -225,6 +225,7 @@ impl NodeListener {
             spki,
             vec!["127.0.0.1".to_owned(), "localhost".to_owned()],
             "gungnir-node",
+            gungnir_remote::identity::Usage::Server,
         )
         .expect("the node's identity is issued");
         Self {

@@ -7,8 +7,8 @@
 //!
 //! **Human-owned (the certificate and key-custody path, added to
 //! `docs/agentic-workflow.md`'s low-trust list by name on 2026-09-06): the issuance code
-//! below -- `ProviderKey`, `issue`, `issue_for_client`, and the invariant they exist
-//! for** (signatures: docs/signatures.md).
+//! below -- `ProviderKey`, `issue`, `issue_for_client`, the persistent issuers, and the
+//! invariant they exist for** (signatures: docs/signatures.md).
 //!
 //! **What the review checked.** The invariant this module's own heading states --
 //! `der_bytes()`'s slice of `spki_der` is what actually ends up embedded in the issued
@@ -64,12 +64,23 @@
 //! each other as they are from `gungnir-node-accounts` (GAP-057) and
 //! `gungnir-desktop-keystore` (GAP-084/D-39) -- four purposes, four names, one
 //! mechanism. **What this deliberately does not do**: the node's own outbound
-//! (peer-link) identity, `host_tls`'s call to [`issue_for_client`], is untouched and
-//! stays ephemeral. Whether that identity should ever persist too, and whether it
-//! should then be the *same* identity as the node's serving one or a third, separately
-//! named entry, is real design surface the register leaves open; this module answers
-//! neither question, because ARCHITECTURE.md item 105 already named it as deliberately
-//! not taken and it is not this change's to decide either.
+//! (peer-link) identity stayed ephemeral, and whether it should persist, and as which
+//! identity, was left open (record items 105 and 111).
+//!
+//! # Every identity its own, named by its key, limited to its role (D-135, 2026-10-25)
+//!
+//! The owner settled it. **The node's peer-link identity is its own persisted key**
+//! ([`issue_node_peer_identity`], under `NODE_PEER_TLS_IDENTITY_SERVICE` in its own
+//! subdirectory), so a peer pins it once and neither of the node's keys stands in for
+//! the other. **Every node identity is named from its key**, as a desktop's has been
+//! since GAP-141 ([`node_name`]: `node-<fingerprint>` serving, `node-peer-<fingerprint>`
+//! outbound, `-ephemeral-` when the keystore is unreachable), where every node used to
+//! call both of its certificates `gungnir-node`. **Every certificate states its role**
+//! as its extended key usage ([`Usage`]): `serverAuth` on a serving one, `clientAuth` on
+//! a desktop's or a node's outbound one. The node presents an operator's configured
+//! `GUNGNIR_TLS_CERT`/`GUNGNIR_TLS_KEY` on its peer links in place of the issued one;
+//! that precedence is the node's (`gungnir-node/src/main.rs::host_tls`), so a desktop's
+//! link is unchanged.
 //!
 //! **Honest either way, never a silent downgrade.** Each persistent function falls
 //! back to the same ephemeral issuance [`issue_for_client`] already used, logged as a
@@ -82,10 +93,12 @@
 //! fail before this module could try a keystore at all.
 //!
 //! **Whether to attempt the persistent path at all is the caller's decision, not this
-//! module's.** [`issue_node_serving_identity`] and [`issue_desktop_outbound_identity`]
-//! always try; `gungnir-app/src/session.rs::link_tls_for` only calls the desktop one
-//! when `security.key_provider` is already `OperatingSystemKeystore`, and calls
-//! [`issue_for_client`] directly otherwise. That gate exists because attempting the
+//! module's.** [`issue_node_serving_identity`], [`issue_node_peer_identity`] and
+//! [`issue_desktop_outbound_identity`] always try; `gungnir-app/src/session.rs::
+//! link_tls_for` only calls the desktop one when `security.key_provider` is already
+//! `OperatingSystemKeystore`, and `gungnir-node/src/main.rs::host_tls` applies the same
+//! gate to the node's peer identity, issuing [`issue_node_peer_identity_ephemeral`]
+//! otherwise. That gate exists because attempting the
 //! persistent path does real disk and operating-system-keystore I/O where the
 //! ephemeral path is purely in memory, and `link_tls_for` runs on every `AppState`
 //! built (every peer link, every reconnect) -- unconditionally attempting it would
@@ -212,8 +225,70 @@ impl<P: KeyProvider> rustls::sign::Signer for ProviderSigner<P> {
 /// Sixty-four bits of a SHA-256 over the public half. Two desktops collide by accident
 /// at about one chance in four billion across a hundred thousand of them, which is a
 /// different order of thing from the certainty of collision this replaces: every desktop
-/// called itself `gungnir-app` (GAP-141).
+/// called itself `gungnir-app` (GAP-141). A node's names carry the same (D-135).
 const DESKTOP_NAME_HEX: usize = 16;
+
+/// What a certificate may be used for, stated on it as its extended key usage (D-135,
+/// RFC 5280 §4.2.1.12).
+///
+/// **One role per certificate.** A serving certificate cannot authenticate a client and
+/// an outbound one cannot serve, so a key taken from one role is no use in the other; a
+/// verifier that checks the extension refuses the wrong one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Usage {
+    /// A node serving the transport: `serverAuth`.
+    Server,
+    /// A desktop, or a node on its peer links, authenticating as a client: `clientAuth`.
+    Client,
+}
+
+impl Usage {
+    fn purpose(self) -> rcgen::ExtendedKeyUsagePurpose {
+        match self {
+            Usage::Server => rcgen::ExtendedKeyUsagePurpose::ServerAuth,
+            Usage::Client => rcgen::ExtendedKeyUsagePurpose::ClientAuth,
+        }
+    }
+}
+
+/// A name derived from the public half of a key: `<prefix>-<fingerprint>`, or
+/// `<prefix>-ephemeral-<fingerprint>` when the key does not survive a restart.
+fn key_name(prefix: &str, spki_der: &[u8], persisted: bool) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(spki_der);
+    let mut hex = String::with_capacity(DESKTOP_NAME_HEX);
+    for byte in digest.iter().take(DESKTOP_NAME_HEX / 2) {
+        use std::fmt::Write as _;
+        // Writing to a String cannot fail; the result is discarded rather than unwrapped.
+        let _ = write!(hex, "{byte:02x}");
+    }
+    if persisted {
+        format!("{prefix}-{hex}")
+    } else {
+        format!("{prefix}-ephemeral-{hex}")
+    }
+}
+
+/// Which of a node's two identities a name is for (D-135).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeRole {
+    /// The identity the node serves the transport under: `node-<fingerprint>`.
+    Serving,
+    /// The identity the node presents on its peer links: `node-peer-<fingerprint>`.
+    Peer,
+}
+
+/// What a node's identity is called: a name derived from its key, as a desktop's is
+/// (D-135). Until D-135 every node's serving and outbound certificates were both named
+/// `gungnir-node`, so a peer's `machine_identities` could not tell one node from another.
+#[must_use]
+pub fn node_name(spki_der: &[u8], role: NodeRole, persisted: bool) -> String {
+    let prefix = match role {
+        NodeRole::Serving => "node",
+        NodeRole::Peer => "node-peer",
+    };
+    key_name(prefix, spki_der, persisted)
+}
 
 /// What a desktop calls itself: a name derived from the public half of the key its
 /// certificate carries (GAP-141).
@@ -231,19 +306,7 @@ const DESKTOP_NAME_HEX: usize = 16;
 /// implying a stability the key does not have.
 #[must_use]
 pub fn desktop_name(spki_der: &[u8], persisted: bool) -> String {
-    use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(spki_der);
-    let mut hex = String::with_capacity(DESKTOP_NAME_HEX);
-    for byte in digest.iter().take(DESKTOP_NAME_HEX / 2) {
-        use std::fmt::Write as _;
-        // Writing to a String cannot fail; the result is discarded rather than unwrapped.
-        let _ = write!(hex, "{byte:02x}");
-    }
-    if persisted {
-        format!("desktop-{hex}")
-    } else {
-        format!("desktop-ephemeral-{hex}")
-    }
+    key_name("desktop", spki_der, persisted)
 }
 
 /// A desktop's identity: the key it presents, the name that key gives it, and whether
@@ -264,10 +327,15 @@ pub struct HostIdentity {
     pub certificate_der: Vec<u8>,
     pub certificate_pem: String,
     pub key: Arc<dyn rustls::sign::SigningKey>,
+    /// The certificate's subject common name.
+    pub common_name: String,
+    /// True when the key came from the operating system's keystore and survives a
+    /// restart.
+    pub persisted: bool,
 }
 
-/// Issue the node's identity for `names` (DNS names or IP addresses the node is reached
-/// as).
+/// Issue an identity for `names` (DNS names or IP addresses the host is reached as),
+/// limited to `usage` (D-135).
 ///
 /// # Errors
 ///
@@ -279,6 +347,7 @@ pub fn issue<P: KeyProvider + 'static>(
     spki_der: Vec<u8>,
     names: Vec<String>,
     common_name: &str,
+    usage: Usage,
 ) -> Result<HostIdentity, String> {
     if key.purpose != KeyPurpose::TransportIdentity {
         return Err(format!("{key:?} is not a transport identity key"));
@@ -288,16 +357,19 @@ pub fn issue<P: KeyProvider + 'static>(
     params
         .distinguished_name
         .push(rcgen::DnType::CommonName, common_name);
+    params.extended_key_usages = vec![usage.purpose()];
     let certificate = params.self_signed(&signing).map_err(|e| e.to_string())?;
     Ok(HostIdentity {
         certificate_der: certificate.der().as_ref().to_vec(),
         certificate_pem: certificate.pem(),
         key: Arc::new(signing),
+        common_name: common_name.to_owned(),
+        persisted: false,
     })
 }
 
 /// Issue a client identity for this host from an ephemeral key provider, ready to put in
-/// [`crate::LinkTls::issued`].
+/// [`crate::LinkTls::issued`], limited to client authentication (D-135).
 ///
 /// **The private half never exists outside the provider**, which is the whole reason this
 /// returns a `CertifiedKey` and not a PEM: a PEM carrying a usable identity must contain
@@ -307,75 +379,74 @@ pub fn issue<P: KeyProvider + 'static>(
 /// value it only passes along.
 ///
 /// **Ephemeral, and that is a stated limit rather than an oversight.** The key lives in
-/// process memory, so this is a new identity every start until a persistent keystore
-/// exists (GAP-084) -- exactly the position the node's serving identity is in, recorded in
-/// the same words. A deployment pinning desktop certificates must pin again after a
-/// restart. The alternative today is key material on a path in a baseline, which the
-/// workspace rule forbids outright.
+/// process memory, so this is a new identity every start. A host that needs one a peer
+/// can pin uses a persistent issuer: [`issue_node_peer_identity`] or
+/// [`issue_desktop_outbound_identity`].
 ///
 /// # Errors
 ///
 /// When the provider cannot report its public half, or `rcgen` refuses the name.
 pub fn issue_for_client(common_name: &str) -> Result<Arc<rustls::sign::CertifiedKey>, String> {
-    Ok(as_certified_key(issue_ephemeral(
+    Ok(as_certified_key(issue_ephemeral_named(
         vec!["localhost".to_owned()],
-        common_name,
+        Usage::Client,
+        &|_, _| common_name.to_owned(),
+    )?))
+}
+
+/// As [`issue_for_client`], limited to serving (D-135): an ephemeral serving identity
+/// for a host reached as `localhost`, for a harness that serves the transport.
+///
+/// # Errors
+///
+/// As [`issue_for_client`].
+pub fn issue_for_server(common_name: &str) -> Result<Arc<rustls::sign::CertifiedKey>, String> {
+    Ok(as_certified_key(issue_ephemeral_named(
+        vec!["localhost".to_owned()],
+        Usage::Server,
+        &|_, _| common_name.to_owned(),
     )?))
 }
 
 /// A desktop's ephemeral identity, named after the key it just generated (GAP-141).
 ///
-/// Separate from [`issue_for_client`], which a node uses for its peer links under a name
-/// of its own: a node's peer link is one machine talking to another as itself, while a
-/// desktop's name has to tell two desktops apart, and only a fingerprint of the key does
-/// that without trusting a string.
+/// A desktop's name has to tell two desktops apart, and only a fingerprint of the key
+/// does that without trusting a string; a node's names are fingerprints too since D-135.
 ///
 /// # Errors
 ///
 /// As [`issue_for_client`].
 pub fn issue_desktop_identity() -> Result<DesktopIdentity, String> {
-    let identity = issue_ephemeral_named(vec!["localhost".to_owned()], &|spki| {
-        desktop_name(spki, false)
-    })?;
+    let identity =
+        issue_ephemeral_named(vec!["localhost".to_owned()], Usage::Client, &|spki, _| {
+            desktop_name(spki, false)
+        })?;
     Ok(DesktopIdentity {
         name: identity.common_name.clone(),
-        key: as_certified_key(identity.identity),
+        key: as_certified_key(identity),
         persisted: false,
     })
 }
 
-/// A fresh identity from a new ephemeral in-process provider, over `names`, named by
-/// `name_of` from the public half of the key it just generated.
+/// How an issued identity is named: from the public half of its key, and whether that
+/// key survives a restart.
+type NameOf<'a> = &'a dyn Fn(&[u8], bool) -> String;
+
+/// A fresh identity from a new ephemeral in-process provider, over `names`, limited to
+/// `usage`, named by `name_of` from the public half of the key it just generated.
 fn issue_ephemeral_named(
     names: Vec<String>,
-    name_of: &dyn Fn(&[u8]) -> String,
-) -> Result<NamedIdentity, String> {
+    usage: Usage,
+    name_of: NameOf<'_>,
+) -> Result<HostIdentity, String> {
     use gungnir_security::{KeyPurpose, P256KeyProvider};
     let mut provider = P256KeyProvider::new();
     let key = provider.generate(KeyPurpose::TransportIdentity);
     let spki = provider
         .public_key_der(&key)
         .map_err(|e| format!("the key provider gave no public half: {e}"))?;
-    let common_name = name_of(&spki);
-    let identity = issue(Arc::new(provider), key, spki, names, &common_name)?;
-    Ok(NamedIdentity {
-        identity,
-        common_name,
-    })
-}
-
-/// A fresh identity from a new ephemeral in-process provider, over `names`, under a name
-/// the caller states -- the node's serving identity, whose name is its own and not a
-/// fingerprint.
-fn issue_ephemeral(names: Vec<String>, common_name: &str) -> Result<HostIdentity, String> {
-    Ok(issue_ephemeral_named(names, &|_| common_name.to_owned())?.identity)
-}
-
-/// An issued identity and the name it was issued under, which for a desktop is derived
-/// from its key and so is not known until the key exists.
-struct NamedIdentity {
-    identity: HostIdentity,
-    common_name: String,
+    let common_name = name_of(&spki, false);
+    issue(Arc::new(provider), key, spki, names, &common_name, usage)
 }
 
 /// [`HostIdentity`] wrapped as a `CertifiedKey`, ready for [`crate::LinkTls::issued`].
@@ -388,11 +459,16 @@ fn as_certified_key(identity: HostIdentity) -> Arc<rustls::sign::CertifiedKey> {
     ))
 }
 
-/// The name a node's TLS-identity keystore entries live under in the operating
+/// The name a node's serving-identity keystore entries live under in the operating
 /// system's keystore (D-39; GAP-060's remaining slice) -- distinct from
-/// `gungnir-node-accounts` (GAP-057's node account store) and from
-/// `DESKTOP_TLS_IDENTITY_SERVICE` below, so none of the three collide on one machine.
+/// `gungnir-node-accounts` (GAP-057's node account store), from
+/// [`NODE_PEER_TLS_IDENTITY_SERVICE`] and from `DESKTOP_TLS_IDENTITY_SERVICE` below, so
+/// none of them collide on one machine.
 const NODE_TLS_IDENTITY_SERVICE: &str = "gungnir-node-tls-identity";
+
+/// As [`NODE_TLS_IDENTITY_SERVICE`], for the node's outbound, peer-link identity (D-135):
+/// its own key, so a compromise of one role's key is not a compromise of the other.
+const NODE_PEER_TLS_IDENTITY_SERVICE: &str = "gungnir-node-peer-tls-identity";
 
 /// As [`NODE_TLS_IDENTITY_SERVICE`], for the desktop's own outbound identity --
 /// distinct from `gungnir-desktop-keystore` (the desktop's journal-key custody,
@@ -409,6 +485,16 @@ const DESKTOP_TLS_IDENTITY_SERVICE: &str = "gungnir-desktop-tls-identity";
 /// directly against the data directory for a completely different key (the desktop's
 /// journal key).
 const TLS_IDENTITY_SUBDIR: &str = "tls-identity";
+
+/// As [`TLS_IDENTITY_SUBDIR`], for the node's peer-link identity, which lives beside the
+/// node's serving one in the same data directory and so needs a file of its own (D-135).
+const PEER_TLS_IDENTITY_SUBDIR: &str = "peer-tls-identity";
+
+/// Where the node's serving identity is kept.
+const SERVING_CUSTODY: Custody = Custody {
+    service: NODE_TLS_IDENTITY_SERVICE,
+    subdir: TLS_IDENTITY_SUBDIR,
+};
 
 /// A stable operating-system-keystore account for `data_dir`'s deployment: its own
 /// canonical path where one is obtainable, or the path exactly as given otherwise (for
@@ -431,21 +517,28 @@ fn account_for(data_dir: &Path) -> String {
     )
 }
 
+/// Where one persisted identity lives: its keystore service and its subdirectory.
+#[derive(Debug, Clone, Copy)]
+struct Custody {
+    service: &'static str,
+    subdir: &'static str,
+}
+
 /// Open (or create) the persistent keystore backing a TLS identity: its own
-/// subdirectory of `data_dir`, under `service`'s entry in the operating system's
+/// subdirectory of `data_dir`, under its service's entry in the operating system's
 /// keystore. No escrow -- escrow recovers sealed data for a party who lacks the key
 /// that sealed it (DN-22 §11), and a signing key has nothing sealed to recover.
 fn persistent_provider(
     data_dir: &Path,
-    service: &str,
+    custody: Custody,
 ) -> Result<Arc<gungnir_security::PersistentKeyProvider>, String> {
-    let keystore_dir = data_dir.join(TLS_IDENTITY_SUBDIR);
+    let keystore_dir = data_dir.join(custody.subdir);
     std::fs::create_dir_all(&keystore_dir)
         .map_err(|e| format!("creating {}: {e}", keystore_dir.display()))?;
     let account = account_for(data_dir);
     let provider = gungnir_security::PersistentKeyProvider::open_or_create_via_os_keystore(
         &keystore_dir,
-        service,
+        custody.service,
         &account,
         None,
     )
@@ -453,29 +546,35 @@ fn persistent_provider(
     Ok(Arc::new(provider))
 }
 
-/// Issue `names`' identity from a persistent, OS-keystore-backed provider under
-/// `service` when one is reachable; fall back to a fresh ephemeral one, honestly
-/// logged as a fallback, when it is not. See the module's own doc section for why this
-/// never silently claims persistence it does not have.
+/// Issue `names`' identity, limited to `usage`, from a persistent, OS-keystore-backed
+/// provider under `custody` when one is reachable; fall back to a fresh ephemeral one,
+/// honestly logged as a fallback, when it is not. Named by `name_of` from the key
+/// actually used, so the name says which it was. See the module's own doc section for
+/// why this never silently claims persistence it does not have.
 fn issue_persistent_or_ephemeral(
     data_dir: &Path,
-    service: &str,
+    custody: Custody,
     names: Vec<String>,
-    common_name: &str,
+    usage: Usage,
+    name_of: NameOf<'_>,
 ) -> Result<HostIdentity, String> {
-    let attempt = persistent_provider(data_dir, service).and_then(|provider| {
+    let attempt = persistent_provider(data_dir, custody).and_then(|provider| {
         let key = provider
             .active_or_generate(KeyPurpose::TransportIdentity)
             .map_err(|e| format!("no transport key: {e}"))?;
         let spki = provider
             .public_key_der(&key)
             .map_err(|e| format!("no public half: {e}"))?;
-        issue(provider, key, spki, names.clone(), common_name)
+        let common_name = name_of(&spki, true);
+        let mut identity = issue(provider, key, spki, names.clone(), &common_name, usage)?;
+        identity.persisted = true;
+        Ok(identity)
     });
     match attempt {
         Ok(identity) => {
             tracing::info!(
-                service,
+                service = custody.service,
+                name = %identity.common_name,
                 "this identity is persisted in the operating-system keystore and will \
                  survive a restart"
             );
@@ -483,12 +582,13 @@ fn issue_persistent_or_ephemeral(
         }
         Err(err) => {
             tracing::warn!(
-                service,
+                service = custody.service,
                 %err,
                 "could not issue this identity from the operating-system keystore; \
-                 issuing an ephemeral one instead, which will not survive a restart"
+                 issuing an ephemeral one instead, which will not survive a restart and \
+                 whose name says so"
             );
-            issue_ephemeral(names, common_name)
+            issue_ephemeral_named(names, usage, name_of)
         }
     }
 }
@@ -499,9 +599,7 @@ fn issue_persistent_or_ephemeral(
 /// certificate after a restart -- falling back to a fresh ephemeral one, honestly, when
 /// the keystore is unreachable (GAP-060's remaining slice; D-39).
 ///
-/// **Not the node's peer-link (outbound) identity**, which [`issue_for_client`] still
-/// issues ephemerally at every call in `gungnir-node/src/main.rs::host_tls`: see the
-/// module doc section above for why this deliberately does not change that.
+/// **D-135**: named `node-<fingerprint>` from its own key, and limited to serving.
 ///
 /// `data_dir` is the node's own data directory (`NodeConfig::data_dir`); `names` are
 /// the DNS names or IP addresses this node is reached as.
@@ -514,15 +612,84 @@ fn issue_persistent_or_ephemeral(
 pub fn issue_node_serving_identity(
     data_dir: &Path,
     names: Vec<String>,
-    common_name: &str,
 ) -> Result<HostIdentity, String> {
-    issue_persistent_or_ephemeral(data_dir, NODE_TLS_IDENTITY_SERVICE, names, common_name)
+    issue_persistent_or_ephemeral(
+        data_dir,
+        SERVING_CUSTODY,
+        names,
+        Usage::Server,
+        &|spki, persisted| node_name(spki, NodeRole::Serving, persisted),
+    )
+}
+
+/// What a node presents on its peer links (D-135): the key, the name that key gives it,
+/// and whether both survive a restart.
+pub struct NodePeerIdentity {
+    /// Ready for [`crate::LinkTls::issued`].
+    pub key: Arc<rustls::sign::CertifiedKey>,
+    /// The certificate's subject common name, which is what a peer reads as the party
+    /// and names in its `machine_identities`.
+    pub name: String,
+    /// True when the key came from the operating system's keystore.
+    pub persisted: bool,
+    /// The public certificate, for operators to pin at each peer.
+    pub certificate_pem: String,
+}
+
+impl From<HostIdentity> for NodePeerIdentity {
+    fn from(identity: HostIdentity) -> Self {
+        NodePeerIdentity {
+            name: identity.common_name.clone(),
+            persisted: identity.persisted,
+            certificate_pem: identity.certificate_pem.clone(),
+            key: as_certified_key(identity),
+        }
+    }
+}
+
+/// The node's outbound, peer-link identity (`gungnir-node/src/main.rs::host_tls`), D-135:
+/// its own key, persisted in the operating system's keystore beside the serving one under
+/// its own service and file, so a peer pins it once; named `node-peer-<fingerprint>`;
+/// limited to client authentication. Falls back to a fresh ephemeral one, honestly logged
+/// and named `node-peer-ephemeral-...`, when the keystore is unreachable.
+///
+/// # Errors
+///
+/// As [`issue_node_serving_identity`].
+pub fn issue_node_peer_identity(data_dir: &Path) -> Result<NodePeerIdentity, String> {
+    issue_persistent_or_ephemeral(
+        data_dir,
+        Custody {
+            service: NODE_PEER_TLS_IDENTITY_SERVICE,
+            subdir: PEER_TLS_IDENTITY_SUBDIR,
+        },
+        vec!["localhost".to_owned()],
+        Usage::Client,
+        &|spki, persisted| node_name(spki, NodeRole::Peer, persisted),
+    )
+    .map(NodePeerIdentity::from)
+}
+
+/// As [`issue_node_peer_identity`], from an ephemeral provider only: for a node whose
+/// baseline does not use the operating system's keystore, which is not made to leave an
+/// entry in it (the gate `gungnir-app/src/session.rs::issue_identity` applies to a
+/// desktop's).
+///
+/// # Errors
+///
+/// As [`issue_for_client`].
+pub fn issue_node_peer_identity_ephemeral() -> Result<NodePeerIdentity, String> {
+    issue_ephemeral_named(vec!["localhost".to_owned()], Usage::Client, &|spki, _| {
+        node_name(spki, NodeRole::Peer, false)
+    })
+    .map(NodePeerIdentity::from)
 }
 
 /// The desktop's outbound identity (`gungnir-app/src/session.rs::link_tls_for`),
 /// issued from a persistent, OS-keystore-backed provider so the identity a node sees
 /// from this desktop survives a restart -- falling back to a fresh ephemeral one,
 /// honestly, when the keystore is unreachable (GAP-060's remaining slice; D-39).
+/// Limited to client authentication (D-135).
 ///
 /// `data_dir` is the desktop's own data directory (`ConfigBaseline::data_dir`).
 ///
@@ -530,54 +697,20 @@ pub fn issue_node_serving_identity(
 ///
 /// As [`issue_node_serving_identity`].
 pub fn issue_desktop_outbound_identity(data_dir: &Path) -> Result<DesktopIdentity, String> {
-    let attempt = persistent_desktop_identity(data_dir);
-    match attempt {
-        Ok(named) => {
-            tracing::info!(
-                service = DESKTOP_TLS_IDENTITY_SERVICE,
-                name = %named.common_name,
-                "this desktop's identity is persisted in the operating-system keystore and \
-                 will survive a restart"
-            );
-            Ok(DesktopIdentity {
-                name: named.common_name.clone(),
-                key: as_certified_key(named.identity),
-                persisted: true,
-            })
-        }
-        Err(err) => {
-            tracing::warn!(
-                service = DESKTOP_TLS_IDENTITY_SERVICE,
-                %err,
-                "could not issue this desktop's identity from the operating-system \
-                 keystore; issuing an ephemeral one instead, whose name changes at every \
-                 start and says so"
-            );
-            issue_desktop_identity()
-        }
-    }
-}
-
-/// The desktop's persisted identity, named from the key the keystore holds.
-fn persistent_desktop_identity(data_dir: &Path) -> Result<NamedIdentity, String> {
-    let provider = persistent_provider(data_dir, DESKTOP_TLS_IDENTITY_SERVICE)?;
-    let key = provider
-        .active_or_generate(KeyPurpose::TransportIdentity)
-        .map_err(|e| format!("no transport key: {e}"))?;
-    let spki = provider
-        .public_key_der(&key)
-        .map_err(|e| format!("no public half: {e}"))?;
-    let common_name = desktop_name(&spki, true);
-    let identity = issue(
-        provider,
-        key,
-        spki,
+    issue_persistent_or_ephemeral(
+        data_dir,
+        Custody {
+            service: DESKTOP_TLS_IDENTITY_SERVICE,
+            subdir: TLS_IDENTITY_SUBDIR,
+        },
         vec!["localhost".to_owned()],
-        &common_name,
-    )?;
-    Ok(NamedIdentity {
-        identity,
-        common_name,
+        Usage::Client,
+        &desktop_name,
+    )
+    .map(|identity| DesktopIdentity {
+        name: identity.common_name.clone(),
+        persisted: identity.persisted,
+        key: as_certified_key(identity),
     })
 }
 
@@ -611,6 +744,7 @@ mod tests {
             spki.clone(),
             vec!["localhost".into()],
             "gungnir-node",
+            Usage::Server,
         )
         .expect("issued");
         let found = identity
@@ -636,6 +770,7 @@ mod tests {
             spki,
             vec!["localhost".into()],
             "gungnir-node",
+            Usage::Server,
         )
         .expect("issued");
         assert!(identity.certificate_pem.contains("BEGIN CERTIFICATE"));
@@ -669,6 +804,7 @@ mod tests {
             vec![0; 91],
             vec!["localhost".into()],
             "gungnir-node",
+            Usage::Server,
         )
         .is_err());
     }
@@ -708,6 +844,7 @@ mod tests {
             spki.clone(),
             vec!["localhost".into()],
             "gungnir-node",
+            Usage::Server,
         )
         .expect("issued once");
         assert!(identity_one.certificate_pem.contains("BEGIN CERTIFICATE"));
@@ -728,6 +865,7 @@ mod tests {
             spki_again,
             vec!["localhost".into()],
             "gungnir-node",
+            Usage::Server,
         )
         .expect("issued again");
         assert!(identity_two.certificate_pem.contains("BEGIN CERTIFICATE"));
@@ -751,13 +889,17 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         std::fs::write(&path, b"not a directory").expect("file standing in for a directory");
 
-        let identity = issue_node_serving_identity(
-            &path,
-            vec!["127.0.0.1".into(), "localhost".into()],
-            "gungnir-node",
-        )
-        .expect("the ephemeral fallback still issues");
+        let identity =
+            issue_node_serving_identity(&path, vec!["127.0.0.1".into(), "localhost".into()])
+                .expect("the ephemeral fallback still issues");
         assert!(identity.certificate_pem.contains("BEGIN CERTIFICATE"));
+        // D-135: the fallback's name is the key's, and says it does not survive a restart.
+        assert!(!identity.persisted);
+        assert!(
+            identity.common_name.starts_with("node-ephemeral-"),
+            "{}",
+            identity.common_name
+        );
 
         let _ = std::fs::remove_file(&path);
     }
@@ -785,6 +927,94 @@ mod tests {
             identity.name
         );
 
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The DER of an extended-key-usage purpose's OID: `id-kp` (1.3.6.1.5.5.7.3) and the
+    /// purpose's last arc.
+    fn eku_oid(last: u8) -> [u8; 10] {
+        [0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, last]
+    }
+
+    fn states(der: &[u8], last: u8) -> bool {
+        der.windows(10).any(|w| w == eku_oid(last))
+    }
+
+    /// D-135: every certificate states its one role -- serverAuth (…3.1) on a serving
+    /// identity, clientAuth (…3.2) on a desktop's and on a node's outbound one -- and
+    /// never the other.
+    #[test]
+    fn every_certificate_states_its_one_role() {
+        const SERVER: u8 = 1;
+        const CLIENT: u8 = 2;
+        let blocked = std::env::temp_dir().join(format!(
+            "gungnir-remote-identity-eku-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&blocked);
+        std::fs::write(&blocked, b"not a directory").expect("forces the ephemeral path");
+        let serving = issue_node_serving_identity(&blocked, vec!["localhost".into()])
+            .expect("issued")
+            .certificate_der;
+        let peer = issue_node_peer_identity(&blocked).expect("issued");
+        let peer = peer.key.cert[0].as_ref().to_vec();
+        let desktop = issue_desktop_identity().expect("issued");
+        let desktop = desktop.key.cert[0].as_ref().to_vec();
+        let server_harness = issue_for_server("harness").expect("issued");
+        let client_harness = issue_for_client("harness").expect("issued");
+        assert!(states(&serving, SERVER) && !states(&serving, CLIENT));
+        assert!(states(server_harness.cert[0].as_ref(), SERVER));
+        for der in [
+            peer.as_slice(),
+            desktop.as_slice(),
+            client_harness.cert[0].as_ref(),
+        ] {
+            assert!(states(der, CLIENT) && !states(der, SERVER));
+        }
+        let _ = std::fs::remove_file(&blocked);
+    }
+
+    /// D-135: a node's two identities are named from their own keys, so two nodes never
+    /// share a name and a node's serving and outbound names never collide; the name says
+    /// whether the key survives a restart.
+    #[test]
+    fn a_nodes_names_are_its_keys_so_two_nodes_and_two_roles_differ() {
+        let spki = vec![7u8; 91];
+        let serving = node_name(&spki, NodeRole::Serving, true);
+        let peer = node_name(&spki, NodeRole::Peer, true);
+        assert!(serving.starts_with("node-") && !serving.starts_with("node-peer-"));
+        assert!(peer.starts_with("node-peer-"));
+        assert_ne!(serving, peer);
+        assert_ne!(serving, node_name(&[8u8; 91], NodeRole::Serving, true));
+        assert!(node_name(&spki, NodeRole::Peer, false).starts_with("node-peer-ephemeral-"));
+        assert_eq!(serving, node_name(&spki, NodeRole::Serving, true), "stable");
+        let one = issue_node_peer_identity_ephemeral().expect("issued");
+        let two = issue_node_peer_identity_ephemeral().expect("issued");
+        assert_ne!(one.name, two.name, "two nodes issued one name");
+        // The name a peer reads off the certificate is the one the identity reports.
+        let on_certificate = gungnir_api::tls::subject_common_name(one.key.cert[0].as_ref());
+        assert_eq!(on_certificate.as_deref(), Some(one.name.as_str()));
+        assert!(one.certificate_pem.contains("BEGIN CERTIFICATE"));
+    }
+
+    /// As the serving identity's fallback, for the node's peer one (D-135).
+    #[test]
+    fn issue_node_peer_identity_falls_back_to_an_ephemeral_identity_when_the_keystore_directory_cannot_be_created(
+    ) {
+        let path = std::env::temp_dir().join(format!(
+            "gungnir-remote-identity-blocked-peer-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(&path, b"not a directory").expect("file standing in for a directory");
+        let identity =
+            issue_node_peer_identity(&path).expect("the ephemeral fallback still issues");
+        assert!(!identity.persisted);
+        assert!(
+            identity.name.starts_with("node-peer-ephemeral-"),
+            "{}",
+            identity.name
+        );
         let _ = std::fs::remove_file(&path);
     }
 
@@ -836,10 +1066,13 @@ mod tests {
     ) {
         let names = [
             NODE_TLS_IDENTITY_SERVICE,
+            NODE_PEER_TLS_IDENTITY_SERVICE,
             DESKTOP_TLS_IDENTITY_SERVICE,
             "gungnir-node-accounts",
             "gungnir-desktop-keystore",
         ];
+        // And the node's two identities never share a keystore file (D-135).
+        assert_ne!(TLS_IDENTITY_SUBDIR, PEER_TLS_IDENTITY_SUBDIR);
         for (i, a) in names.iter().enumerate() {
             for b in &names[i + 1..] {
                 assert_ne!(a, b, "two OS-keystore purposes must never share a name");
@@ -867,7 +1100,7 @@ mod tests {
         let dir = std::env::temp_dir().join("gungnir-remote-identity-persistence-fixture-c176c2");
         let _ = std::fs::create_dir_all(&dir);
 
-        match persistent_provider(&dir, NODE_TLS_IDENTITY_SERVICE) {
+        match persistent_provider(&dir, SERVING_CUSTODY) {
             Ok(first) => {
                 let key = first
                     .active_or_generate(KeyPurpose::TransportIdentity)
@@ -877,7 +1110,7 @@ mod tests {
 
                 // Reopened: the OS keystore handed back the same secret it stored the
                 // first time, so the same key comes back rather than a fresh one.
-                let again = persistent_provider(&dir, NODE_TLS_IDENTITY_SERVICE)
+                let again = persistent_provider(&dir, SERVING_CUSTODY)
                     .expect("reopened under the same OS-held secret");
                 let key_again = again
                     .active_or_generate(KeyPurpose::TransportIdentity)
