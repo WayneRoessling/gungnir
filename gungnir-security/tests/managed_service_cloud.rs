@@ -113,7 +113,7 @@ fn a_client_that_cannot_be_built_refuses_every_call_rather_than_hanging() {
     // And a second call gets the same treatment rather than blocking for ever, which is
     // the property `refuse_every_call` exists for: it keeps draining the queue.
     assert!(
-        service.unwrap_key(b"anything").is_err(),
+        service.unwrap_key(b"anything", None).is_err(),
         "the second call must be refused too"
     );
 }
@@ -132,9 +132,14 @@ fn aws_kms_wraps_unwraps_and_signs_for_real() {
 
     let secret = b"a thirty-two byte data key......";
     let wrapped = service.wrap(secret).expect("KMS wrapped the data key");
-    assert_ne!(wrapped, secret, "the data key was returned unwrapped");
+    assert_ne!(wrapped.blob, secret, "the data key was returned unwrapped");
+    // KMS names no version (D-48): its ciphertext already identifies the backing key.
+    assert_eq!(wrapped.key_version, None);
     assert_eq!(
-        service.unwrap_key(&wrapped).expect("KMS unwrapped it"),
+        service
+            .unwrap_key(&wrapped.blob, None)
+            .expect("KMS unwrapped it")
+            .secret,
         secret,
         "the round trip did not return what went in"
     );
@@ -165,14 +170,21 @@ fn azure_key_vault_wraps_unwraps_and_signs_for_real() {
     let wrapped = service
         .wrap(secret)
         .expect("the vault wrapped the data key");
-    assert_ne!(wrapped, secret, "the data key was returned unwrapped");
+    assert_ne!(wrapped.blob, secret, "the data key was returned unwrapped");
+    // D-48: the vault names the key version that wrapped it, and the unwrap asks for
+    // exactly that version and reports it back.
+    let version = wrapped
+        .key_version
+        .clone()
+        .expect("the vault named the key version that wrapped the secret");
+    let opened = service
+        .unwrap_key(&wrapped.blob, Some(&version))
+        .expect("the vault unwrapped it under the recorded version");
     assert_eq!(
-        service
-            .unwrap_key(&wrapped)
-            .expect("the vault unwrapped it"),
-        secret,
+        opened.secret, secret,
         "the round trip did not return what went in"
     );
+    assert_eq!(opened.key_version.as_deref(), Some(version.as_str()));
 
     match service.sign(b"a handshake transcript", SignatureScheme::EcdsaP256Sha256) {
         Ok(signature) => assert!(!signature.is_empty(), "an empty signature"),
