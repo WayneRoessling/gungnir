@@ -172,6 +172,9 @@ pub fn tick(state: &mut AppState) {
     //     DN-33 §5): against the live report the sensor changes above just made, before
     //     the drain below journals what re-opened. Nothing to do while nothing stands.
     crate::gap_acceptance::reconcile(state);
+    // GAP-194: the linked node's answers to the acceptances this desktop sent, and a
+    // forwarded one it refused re-opened here, before the drain below journals it.
+    crate::gap_acceptance::answers_from_node(state);
 
     // 3g. Once per session, journal which algorithm configuration the deployment opened
     //     with (GAP-086). Here rather than in `AppState::with_config`, because that

@@ -985,6 +985,25 @@ pub fn render_coverage_layers(
     render_gap_acceptance_section(ui, state, report.as_ref(), &names, draft).or(layer_action)
 }
 
+/// For each gap of the report PN-11 lists, the acceptance that stands for it: the node's
+/// marks while linked (GAP-194), this desktop's own ledger otherwise.
+fn standing_for<'a>(
+    state: &'a AppState,
+    node: Option<&'a (
+        gungnir_analytics::CoverageReport,
+        Vec<Option<gungnir_model::GapAcceptance>>,
+    )>,
+    report: Option<&gungnir_analytics::CoverageReport>,
+    in_force: Option<&gungnir_model::LaydownId>,
+) -> Vec<Option<&'a gungnir_model::GapAcceptance>> {
+    match node {
+        Some((_, marks)) => marks.iter().map(Option::as_ref).collect(),
+        None => report
+            .map(|r| crate::gap_acceptance::acceptances_for(state, r, in_force))
+            .unwrap_or_default(),
+    }
+}
+
 /// PN-11's gap list under the layer controls (GAP-106, DN-33 §8 rule 1): the gaps of the
 /// live `report`, named, each with the acceptance that stands for it or the control to
 /// accept it, the measure beside each total, and what re-opened this session.
@@ -999,6 +1018,10 @@ fn render_gap_acceptance_section(
         AcceptanceLine, GapAcceptanceView, GapLine, MeasureLine, ReopenedLine,
     };
     let in_force = crate::gap_acceptance::laydown_in_force(state);
+    // GAP-194, D-134: linked and the link up, the gaps listed and accepted from are the
+    // node's, with the acceptances the node holds; this desktop's own report otherwise.
+    let node = crate::gap_acceptance::node_gaps(state);
+    let report = node.as_ref().map(|(r, _)| r).or(report);
     let gaps_named: Vec<gungnir_model::AcceptedGap> = report
         .map(|r| {
             r.gaps
@@ -1015,9 +1038,7 @@ fn render_gap_acceptance_section(
                 .collect()
         })
         .unwrap_or_default();
-    let standing = report
-        .map(|r| crate::gap_acceptance::acceptances_for(state, r, in_force.as_ref()))
-        .unwrap_or_default();
+    let standing = standing_for(state, node.as_ref(), report, in_force.as_ref());
     let lines: Vec<GapLine<'_>> = gaps_named
         .iter()
         .zip(standing.iter().chain(std::iter::repeat(&None)))
@@ -1053,7 +1074,13 @@ fn render_gap_acceptance_section(
         })
         .collect();
     let measure = report.map(|r| {
-        let m = crate::gap_acceptance::measure(state, r, in_force.as_ref());
+        let m = match &node {
+            Some(_) => gungnir_analytics::CoverageMeasure::of(
+                r,
+                &standing.iter().map(Option::is_some).collect::<Vec<_>>(),
+            ),
+            None => crate::gap_acceptance::measure(state, r, in_force.as_ref()),
+        };
         MeasureLine {
             segments: m.segments,
             accepted_segments: m.accepted_segments,

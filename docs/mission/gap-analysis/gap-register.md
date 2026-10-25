@@ -190,14 +190,15 @@ history, and an entry is never edited once it has merged.
 | GAP-196 | A UAS's height above mean sea level is placed as an ellipsoidal height | Technical | CAP-1.7 | 3 | 6 | S | 18 | I4 | Services engineer | Closed |
 | GAP-197 | A DEM or point cloud in NAVD88, EGM96 or a national height datum cannot be placed | Technical | CAP-2.10 | 3 | 8 | M | 24 | I4 | UI engineer | Closed |
 | GAP-193 | A linked desktop's rehearsal acknowledgement is not on the node's decision record | Technical | CAP-5.9, CAP-7.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
-| GAP-194 | A gap acceptance is held only by the desktop that recorded it | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | L | 12 | I3 | Services engineer | In progress |
+| GAP-194 | A gap acceptance is held only by the desktop that recorded it | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | L | 12 | I3 | Services engineer | Closed |
 | GAP-195 | PN-07's degraded-condition acknowledgement is on no record | Technical | CAP-5.9 | 3 | 10 | S | 30 | I3 | UI engineer | Closed |
 | GAP-198 | The node places a UAS's height above mean sea level uncorrected | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Closed |
 | GAP-199 | A UAS reporting only its height above ground is placed at height zero | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Closed |
 | GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | L | 32 | I4 | UI engineer | Closed |
+| GAP-202 | A cut-off desktop that restarts forgets the gap acceptances it owed its node | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | S | 12 | I3 | Services engineer | Open |
 | GAP-201 | A linked desktop could miss a queued item until the queue moved again | Technical | CAP-5.9, CAP-4.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 
-Counts: 183 gaps, 3 mission, 180 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 184 gaps, 3 mission, 181 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2734,11 +2735,12 @@ Counts: 183 gaps, 3 mission, 180 technical; 1 already covered by a plan in `../.
   - 2026-09-26, Open: Found building GAP-106. The owner's decision is about what an acceptance is, not where it lives in a system of systems; the node already answers coverage and holds the queue, so which machine holds acceptances is a design question of its own, not a detail to take under the delegation.
   - 2026-10-23, Open: **Decided by the owner, 2026-10-23 (D-131); nothing is built yet.** The node holds acceptances for its linked desktops, as it holds the queue. Effort raised from M to L: the node has no laydown to re-open against, and getting the laydown in force to it is part of the build. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
   - 2026-10-24, In progress: **The node half built (D-131, D-134).** `POST /v3/coverage/acceptances`, a `gungnir-api` write path, takes a signed-in commander's acceptance and hands it to the node loop, which judges it against its own coverage answer, stamps it with its own baseline revision and current laydown, journals and audits it, re-opens it by DN-33 §5, folds the ledger from the journal at start and keeps its sessions from retention; `GET /v3/coverage` marks each accepted gap. The owner chose each detail on 2026-10-24 (D-134). The desktop half is the second pull request. The route and the transport types are human-owned; see docs/signatures.md. See `../../record/2026-10-24/the-node-holds-coverage-gap-acceptances.md`.
+  - 2026-10-25, Closed: **Closed 2026-10-25 (D-131, D-134).** The desktop half: the link reads the node's coverage answer with its marks (on connecting, on a planning event, on an answered post, and every 5 s) and posts acceptances until the node answers. While the link is up, PN-11 lists the node's gaps with the node's acceptances and accepting sends to the node, recording nothing locally. Cut off, the desktop records the acceptance and forwards it naming who accepted it; one the node refuses re-opens locally with the node's reason (`ReopenedBecause::RefusedByNode`), journaled and audited. Tested end to end against the node's own ledger in `linked_gap_acceptance.rs`. See `../../record/2026-10-25/a-linked-desktop-accepts-on-the-node.md`.
 - Evidence: `gungnir-app/src/gap_acceptance.rs`; `gungnir-remote/src/link.rs`, which reads no coverage answer; `../../design/DN-33-accepting-a-coverage-gap.md` amendment 1.
 - Severity: 3. Reach: 4 threads. Effort: L. Priority: 12.
 - Impact: A commander's acceptance is drawn on the desktop that recorded it and nowhere else: a second desktop's PN-11 shows the same gap as unexamined, and nothing on a linked desktop posts an acceptance to the node, which now holds them.
-- Closing action: The desktop half of D-131 and D-134: the link reading `GET /v3/coverage` with its acceptance marks; a linked desktop's PN-11 listing the node's gaps and posting to `POST /v3/coverage/acceptances`; a cut-off desktop's acceptances forwarded when its node answers, a refused one re-opened with the node's reason.
-- Target: I3. Owner: Services engineer. Status: In progress.
+- Closing action: Done 2026-10-25 (D-131, D-134): the node holds acceptances and marks them on `GET /v3/coverage`; a linked desktop lists the node's gaps and posts to `POST /v3/coverage/acceptances`; a cut-off desktop forwards what it accepted, and a refused one re-opens with the node's reason.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found building GAP-106 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`).
 - Depends on: GAP-106, D-131, D-134.
 
@@ -2805,6 +2807,20 @@ Counts: 183 gaps, 3 mission, 180 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: UI engineer. Status: Closed.
 - Reference: D-125; GAP-197; `../../record/2026-09-26/navd88-and-egm96-heights-convert-and-a-las.md`.
 - Depends on: D-125, GAP-197, D-127, D-128.
+
+**GAP-202 A cut-off desktop that restarts forgets the gap acceptances it owed its node**
+
+- Type: Technical.
+- Capability: CAP-1.4 Coverage and gaps; CAP-7.3 Three profiles.
+- History:
+  - 2026-10-25, Open: Found closing GAP-194: the forward is queued only when the acceptance is made, and the queue does not survive a restart.
+- Evidence: `gungnir_remote::link::Projection::acceptance_outbox` (in memory); `gungnir_app::gap_acceptance::accept` queues the forward only when the acceptance is made; an outage's decisions are recovered from the journal for forwarding (GAP-142), acceptances are not.
+- Severity: 3. Reach: 4 threads. Effort: S. Priority: 12.
+- Impact: A desktop cut off from its node records a commander's gap acceptance and queues it to forward, but the queue is held in memory. Restarted before the node answers, the desktop keeps the acceptance on its own journal and the node never hears of it, so every other console shows the gap as unexamined while this one shows it accepted.
+- Closing action: On start, find the acceptances this desktop made while cut off that its node has not answered, from its own journal, and queue them to forward again, as GAP-142 does for an outage's decisions; the node answers a repeat `already-accepted`.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: Found closing GAP-194 (`../../record/2026-10-25/a-linked-desktop-accepts-on-the-node.md`).
+- Depends on: GAP-194, GAP-142.
 
 **GAP-201 A linked desktop could miss a queued item until the queue moved again**
 

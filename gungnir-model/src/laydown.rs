@@ -277,6 +277,10 @@ pub enum ReopenedBecause {
     ShapeChanged { now: Vec<AcceptedGap> },
     /// Coverage cannot be computed at all any more, so nothing can hold.
     NotMeasured { reason: String },
+    /// A desktop accepted it while cut off from its node, forwarded it when the node
+    /// answered, and the node refused it (GAP-194, D-134): no console shows an acceptance
+    /// the node does not hold. `reason` is the node's.
+    RefusedByNode { reason: String },
 }
 
 impl ReopenedBecause {
@@ -310,6 +314,9 @@ impl ReopenedBecause {
             ),
             ReopenedBecause::NotMeasured { reason } => {
                 format!("coverage can no longer be computed: {reason}")
+            }
+            ReopenedBecause::RefusedByNode { reason } => {
+                format!("it was accepted while cut off and the node refused it: {reason}")
             }
         }
     }

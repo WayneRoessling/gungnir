@@ -57,6 +57,7 @@ enum "ReopenedBecause" as ReopenedBecause <<InformationElement>> {
   LaydownChanged { from: Option<LaydownId>, to: Option<LaydownId>, }
   ShapeChanged { now: Vec<AcceptedGap> }
   NotMeasured { reason: String }
+  RefusedByNode { reason: String }
 }
 class "RehearsalBasis" as RehearsalBasis <<InformationElement>> {
   placements: String

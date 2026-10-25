@@ -231,6 +231,13 @@ pub struct Projection {
     /// and answers a repeat `already_held`.
     pub forward_outbox: std::collections::VecDeque<crate::queue::OutboundForward>,
     pub forward_replies: Vec<crate::queue::ForwardReply>,
+    /// The node's coverage answer with the acceptances it holds (GAP-194, D-131). See
+    /// [`crate::coverage`] for when it is read.
+    pub coverage: crate::coverage::NodeCoverage,
+    /// Acceptances on their way to `POST /v3/coverage/acceptances`, oldest first, and the
+    /// node's answer to each (GAP-194).
+    pub acceptance_outbox: std::collections::VecDeque<crate::coverage::OutboundAcceptance>,
+    pub acceptance_outcomes: Vec<crate::coverage::AcceptanceOutcome>,
 }
 
 /// A sensor task on its way to the node (GAP-004).
@@ -692,6 +699,39 @@ impl NodeLink {
             .unwrap_or_default()
     }
 
+    /// The node's coverage answer with the acceptances it holds, while the link is up
+    /// (GAP-194, D-131); `None` before the first read and after the link goes down.
+    #[must_use]
+    pub fn coverage(&self) -> Option<gungnir_api::v3::CoverageResponse> {
+        self.read().and_then(|p| p.coverage.answer().cloned())
+    }
+
+    /// Send a gap acceptance to the node (GAP-194). **Nothing is recorded on this desktop
+    /// by calling this**: the node judges and records it, and its answer comes back
+    /// through [`NodeLink::take_acceptance_outcomes`].
+    pub fn accept_gap(&self, acceptance: crate::coverage::OutboundAcceptance) {
+        if let Ok(mut p) = self.projection.lock() {
+            p.acceptance_outbox.push_back(acceptance);
+        }
+    }
+
+    /// The node's answers to the acceptances posted since the last call.
+    #[must_use]
+    pub fn take_acceptance_outcomes(&self) -> Vec<crate::coverage::AcceptanceOutcome> {
+        self.projection
+            .lock()
+            .map(|mut p| std::mem::take(&mut p.acceptance_outcomes))
+            .unwrap_or_default()
+    }
+
+    /// Acceptances posted and not yet answered, oldest first (GAP-194), for PN-11.
+    #[must_use]
+    pub fn acceptances_in_flight(&self) -> Vec<crate::coverage::OutboundAcceptance> {
+        self.read()
+            .map(|p| p.acceptance_outbox.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
     /// Hand an outage's decisions to the link, for `POST /v3/decisions/forwarded`
     /// (GAP-134, DN-31 §6.8).
     ///
@@ -853,6 +893,9 @@ struct Urls {
     forwarded: String,
     /// The node's audit record (GAP-179, D-116).
     audit: String,
+    /// The node's coverage answer, and where an acceptance is posted (GAP-194).
+    coverage: String,
+    coverage_acceptances: String,
     /// True for an `https` endpoint: the stream is `wss` over our own TLS stream.
     tls: bool,
     host: String,
@@ -916,6 +959,8 @@ fn urls(endpoint: &RemoteEndpoint) -> Result<Urls, RemoteError> {
         queue: format!("{base}{}", path(routes::QUEUE)),
         forwarded: format!("{base}{}", path(routes::DECISIONS_FORWARDED)),
         audit: format!("{base}{}", path(routes::AUDIT)),
+        coverage: format!("{base}{}", path(routes::COVERAGE)),
+        coverage_acceptances: format!("{base}{}", path(routes::COVERAGE_ACCEPTANCES)),
         events: format!("{scheme}://{rest}{}", path(routes::EVENTS)),
         tls,
         host,
@@ -1111,6 +1156,9 @@ fn set_disconnected(projection: &Arc<Mutex<Projection>>, reason: &str) {
         // same key when the node comes back, which is how the client learns whether it
         // was recorded (DN-31 §6.3).
         p.queue.disconnected();
+        // GAP-194: the node's coverage answer goes with it, for the same reason; an
+        // acceptance waiting to be posted stays, and goes when the node answers.
+        p.coverage.forget();
     }
 }
 
@@ -1222,6 +1270,13 @@ async fn run_link(
     // leave an item queued in between in neither place until the next reconnection. See
     // `crate::queue`'s module documentation for the whole rule.
     refresh_queue(&client, urls, &session.token, projection, true).await;
+    // GAP-194: and the node's coverage answer with its acceptances, after the subscribe
+    // frame for the same reason: a planning event from here on marks it to be read again.
+    projection
+        .lock()
+        .map(|mut p| p.coverage.mark_stale())
+        .unwrap_or_default();
+    refresh_coverage(&client, urls, &session.token, projection).await;
 
     // Anything at all resets the clock: an envelope, or the server's heartbeat ping,
     // which `tokio-tungstenite` answers for us. Silence past the timeout means the link
@@ -1245,6 +1300,9 @@ async fn run_link(
                 flush_exchange(&client, urls, token, projection).await;
                 flush_decisions(&client, urls, token, projection).await;
                 flush_forwarded(&client, urls, token, projection).await;
+                // GAP-194: the acceptances, then the coverage answer they change.
+                flush_acceptances(&client, urls, token, projection).await;
+                refresh_coverage(&client, urls, token, projection).await;
                 // A picture the stream asked for and a failed fetch left owing. The
                 // stream's own branch below takes it as soon as the event arrives; this
                 // is what bounds the retry at one forward interval rather than at the
@@ -1752,6 +1810,130 @@ async fn refresh_queue(
             }
         }
         Err(err) => tracing::warn!(%err, "the node's approval queue could not be decoded"),
+    }
+}
+
+/// Read the node's coverage answer when it is due ([`crate::coverage`]). A failed read
+/// keeps the last answer and is tried again on the next forward tick.
+async fn refresh_coverage(
+    client: &reqwest::Client,
+    urls: &Urls,
+    token: &str,
+    projection: &Arc<Mutex<Projection>>,
+) {
+    if !projection.lock().is_ok_and(|p| p.coverage.is_due()) {
+        return;
+    }
+    let response = match with_token(client.get(&urls.coverage), token).send().await {
+        Ok(response) if response.status().is_success() => response,
+        Ok(response) if note_refused_token(projection, response.status()) => return,
+        Ok(response) => {
+            tracing::warn!(status = %response.status(), "the node refused its coverage answer");
+            return;
+        }
+        Err(err) => {
+            tracing::warn!(%err, "could not read the node's coverage answer");
+            return;
+        }
+    };
+    // GAP-171, D-102: the lossless form, as every body this desktop reads.
+    match lossless_body(response).await.and_then(|text| {
+        nonfinite::from_line::<gungnir_api::v3::CoverageResponse>(&text).map_err(|e| e.to_string())
+    }) {
+        Ok(answer) => {
+            if let Ok(mut p) = projection.lock() {
+                p.coverage.take_answer(answer);
+            }
+        }
+        Err(err) => tracing::warn!(%err, "the node's coverage answer could not be decoded"),
+    }
+}
+
+/// Post the acceptances this desktop has made, oldest first (GAP-194, D-131): the
+/// decision outbox's rule, so an acceptance goes again until the node has answered it.
+async fn flush_acceptances(
+    client: &reqwest::Client,
+    urls: &Urls,
+    token: &str,
+    projection: &Arc<Mutex<Projection>>,
+) {
+    for _ in 0..16 {
+        let Some(outbound) = projection
+            .lock()
+            .ok()
+            .and_then(|p| p.acceptance_outbox.front().cloned())
+        else {
+            return;
+        };
+        let request = gungnir_api::v3::GapAcceptanceRequest {
+            gap: outbound.gap.clone(),
+            reason: outbound.reason.clone(),
+            accepted_offline: outbound.accepted_offline.clone(),
+        };
+        let unanswered = |p: &mut Projection| {
+            if let Some(front) = p.acceptance_outbox.front_mut() {
+                front.attempts += 1;
+            }
+        };
+        let response = match with_token(client.post(&urls.coverage_acceptances), token)
+            .json(&request)
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                tracing::warn!(%err, "the node could not be reached with a gap acceptance");
+                projection
+                    .lock()
+                    .map(|mut p| unanswered(&mut p))
+                    .unwrap_or_default();
+                return;
+            }
+        };
+        if note_refused_token(projection, response.status())
+            || crate::coverage::retry(response.status().as_u16())
+        {
+            projection
+                .lock()
+                .map(|mut p| unanswered(&mut p))
+                .unwrap_or_default();
+            return;
+        }
+        let status = response.status().as_u16();
+        let body = response.text().await.unwrap_or_default();
+        let answer = acceptance_answer_of(status, &body);
+        if let Ok(mut p) = projection.lock() {
+            p.acceptance_outbox.pop_front();
+            p.coverage.mark_stale();
+            p.acceptance_outcomes
+                .push(crate::coverage::AcceptanceOutcome {
+                    gap: outbound.gap,
+                    local: outbound.local,
+                    answer,
+                });
+        }
+    }
+}
+
+fn acceptance_answer_of(status: u16, body: &str) -> crate::coverage::AcceptanceAnswer {
+    use crate::coverage::AcceptanceAnswer;
+    let unreadable = |what: &str, err: String| AcceptanceAnswer::Rejected {
+        status,
+        reason: format!("the node {what} that this desktop could not read: {err}"),
+    };
+    match status {
+        201 => nonfinite::from_line::<gungnir_api::v3::GapAcceptanceRecorded>(body).map_or_else(
+            |e| unreadable("recorded an acceptance", e.to_string()),
+            |recorded| AcceptanceAnswer::Recorded(recorded.acceptance),
+        ),
+        409 => nonfinite::from_line::<gungnir_api::v3::GapAcceptanceRefused>(body).map_or_else(
+            |e| unreadable("refused an acceptance for a reason", e.to_string()),
+            AcceptanceAnswer::Refused,
+        ),
+        _ => AcceptanceAnswer::Rejected {
+            status,
+            reason: body.trim().to_owned(),
+        },
     }
 }
 
@@ -2335,6 +2517,9 @@ fn apply(projection: &Arc<Mutex<Projection>>, envelope: &Envelope) -> Result<(),
         // These four variants were dropped by this function's `_ => {}` until GAP-133, so
         // a node decided in its own queue and every linked desktop saw nothing of it.
         Event::Command(command) => p.queue.note(command, envelope.mission_time),
+        // GAP-194: an acceptance recorded or re-opened on the node moves the coverage
+        // answer's marks, so it is read again on the next forward tick.
+        Event::Planning(_) => p.coverage.mark_stale(),
         _ => {}
     }
     Ok(())
