@@ -143,6 +143,15 @@ pub fn tracking_service(
             mode_transition: b.config.imm_mode_transition,
             initial_mode_probabilities: b.config.imm_initial_mode_probabilities,
         };
+        // D-46: the dense-group section, the same way and for the same reason.
+        let dense_group = b.config.dense_group.as_ref().map(|d| {
+            gungnir_tracking_service::DenseGroupBaselineFields {
+                filter: d.filter.clone(),
+                probability_of_detection: d.probability_of_detection,
+                clutter_density: d.clutter_density,
+                birth_weight: d.birth_weight,
+            }
+        });
         (
             b,
             gungnir_tracking_service::PipelineSettings::from_baseline(
@@ -150,6 +159,7 @@ pub fn tracking_service(
                 &b.config.filter_selection,
                 &imm,
                 b.config.measurement_noise_var,
+                dense_group.as_ref(),
             ),
         )
     });

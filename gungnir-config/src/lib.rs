@@ -1049,6 +1049,9 @@ pub struct TrackingProfileConfig {
     /// its actual sensor's own variance to correct the mismatch DN-28 §7 found.
     #[serde(default = "default_measurement_noise_var")]
     pub measurement_noise_var: [f64; 3],
+    /// The dense-group mode (GAP-015; D-46). See [`TrackingConfig::dense_group`].
+    #[serde(default)]
+    pub dense_group: Option<DenseGroupConfig>,
     /// The one candidate per profile that is in force when the console opens.
     ///
     /// Exactly one per declared profile: zero means the deployment cannot say what is
@@ -1096,6 +1099,53 @@ pub struct TrackingConfig {
     /// default.
     #[serde(default = "default_measurement_noise_var")]
     pub measurement_noise_var: [f64; 3],
+    /// The dense-group mode: a random-finite-set filter the tracker runs beside its
+    /// per-track filters for a scan too dense to associate, reporting a count and a shape
+    /// and never tracks (GAP-015). **Absent switches the mode off**, which is what every
+    /// baseline written before D-46 meant and what the pipeline does by default, because
+    /// an engaged epoch at the specified raid size costs hundreds of milliseconds
+    /// (`gungnir-fusion-async`'s `PipelineSettings::dense_group` records the figures). A
+    /// deployment that names this section turns the mode on knowing that.
+    #[serde(default)]
+    pub dense_group: Option<DenseGroupConfig>,
+}
+
+/// The dense-group mode's settings in a baseline (GAP-015; D-46).
+///
+/// `{"filter": "gm-cphd", "probability_of_detection": 0.8}`. The filter and the three
+/// figures the pipeline says are a deployment's to state; every other dense-group setting
+/// is derived from figures the workspace already states and is not a baseline's to move
+/// (`gungnir-fusion-async`'s `DenseGroupBaselineFields` says which).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DenseGroupConfig {
+    /// `"gm-phd"` (the default, by D-46) or `"gm-cphd"`. The CPHD also estimates the
+    /// distribution over the target count, which the PHD cannot, at more cost per scan.
+    #[serde(default = "default_dense_group_filter")]
+    pub filter: String,
+    /// The sensor's probability of detecting a present target, in `(0, 1]`. Absent keeps
+    /// the pipeline's literature default of 0.95, which is optimistic for every sensor in
+    /// the test-track library and so worth stating.
+    #[serde(default)]
+    pub probability_of_detection: Option<f64>,
+    /// Clutter returns per cubic metre of the sensor's coverage, finite and positive:
+    /// false alarms per scan divided by the coverage volume. Absent keeps the pipeline's
+    /// default, worked out for the densest test-track radar.
+    #[serde(default)]
+    pub clutter_density: Option<f64>,
+    /// The expected number of new targets each detection in an engaged scan announces,
+    /// finite and positive. Absent keeps the pipeline's placeholder of 0.1.
+    #[serde(default)]
+    pub birth_weight: Option<f64>,
+}
+
+/// The dense-group filters [`DenseGroupConfig::filter`] may name. Restated rather than
+/// imported, because this crate sits below `gungnir-fusion-async`; that crate refuses any
+/// other name at application too.
+pub const DENSE_GROUP_FILTERS: &[&str] = &["gm-phd", "gm-cphd"];
+
+/// D-46: the PHD stays the dense-group default.
+fn default_dense_group_filter() -> String {
+    "gm-phd".to_owned()
 }
 
 /// `PipelineSettings::default()`'s own figure (DN-30), so a baseline predating this
@@ -1833,6 +1883,7 @@ impl ConfigBaseline {
                         imm_mode_transition: c.imm_mode_transition,
                         imm_initial_mode_probabilities: c.imm_initial_mode_probabilities,
                         measurement_noise_var: c.measurement_noise_var,
+                        dense_group: c.dense_group.clone(),
                     },
                     promoted: c.promoted,
                     validated_by: c.validated_by.clone(),
@@ -3479,6 +3530,55 @@ fn validate_decision_rules(p: &gungnir_model::PolicySettings) -> Result<(), Conf
     Ok(())
 }
 
+/// Rule 5 of [`validate_profiles`] for one candidate: the rules `validate` applies to
+/// `tracking`, held to a candidate too.
+///
+/// # Errors
+///
+/// [`ConfigError::Invalid`], naming the candidate and the rule.
+fn validate_candidate(candidate: &TrackingProfileConfig) -> Result<(), ConfigError> {
+    if !(candidate.gate_threshold.is_finite() && candidate.gate_threshold > 0.0) {
+        return Err(ConfigError::Invalid(format!(
+            "candidate {:?} in profile {:?} must have a finite, positive gate threshold",
+            candidate.name, candidate.profile
+        )));
+    }
+    if candidate.filter_selection.trim().is_empty() {
+        return Err(ConfigError::Invalid(format!(
+            "candidate {:?} in profile {:?} selects no filter",
+            candidate.name, candidate.profile
+        )));
+    }
+    validate_measurement_noise_var(
+        candidate.measurement_noise_var,
+        &format!(
+            "candidate {:?} in profile {:?}",
+            candidate.name, candidate.profile
+        ),
+    )?;
+    if candidate.filter_selection == "imm-cv-ct" {
+        validate_imm_fields(
+            candidate.imm_turn_rate_rad_s,
+            candidate.imm_mode_transition,
+            candidate.imm_initial_mode_probabilities,
+            &format!(
+                "candidate {:?} in profile {:?}",
+                candidate.name, candidate.profile
+            ),
+        )?;
+    }
+    if let Some(dense_group) = &candidate.dense_group {
+        validate_dense_group(
+            dense_group,
+            &format!(
+                "candidate {:?} in profile {:?}",
+                candidate.name, candidate.profile
+            ),
+        )?;
+    }
+    Ok(())
+}
+
 /// Mission profiles and candidate algorithm baselines
 /// (docs/design/DN-24-mission-profiles-and-algorithm-baselines.md §6, GAP-086).
 ///
@@ -3537,37 +3637,8 @@ fn validate_profiles(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 candidate.profile
             )));
         }
-        // Rule 5: the two rules `validate` applies to `tracking`, per candidate.
-        if !(candidate.gate_threshold.is_finite() && candidate.gate_threshold > 0.0) {
-            return Err(ConfigError::Invalid(format!(
-                "candidate {:?} in profile {:?} must have a finite, positive gate threshold",
-                candidate.name, candidate.profile
-            )));
-        }
-        if candidate.filter_selection.trim().is_empty() {
-            return Err(ConfigError::Invalid(format!(
-                "candidate {:?} in profile {:?} selects no filter",
-                candidate.name, candidate.profile
-            )));
-        }
-        validate_measurement_noise_var(
-            candidate.measurement_noise_var,
-            &format!(
-                "candidate {:?} in profile {:?}",
-                candidate.name, candidate.profile
-            ),
-        )?;
-        if candidate.filter_selection == "imm-cv-ct" {
-            validate_imm_fields(
-                candidate.imm_turn_rate_rad_s,
-                candidate.imm_mode_transition,
-                candidate.imm_initial_mode_probabilities,
-                &format!(
-                    "candidate {:?} in profile {:?}",
-                    candidate.name, candidate.profile
-                ),
-            )?;
-        }
+        // Rule 5.
+        validate_candidate(candidate)?;
     }
 
     for profile in &baseline.mission_profiles {
@@ -3669,6 +3740,42 @@ fn validate_measurement_noise_var(variance: [f64; 3], what: &str) -> Result<(), 
             return Err(ConfigError::Invalid(format!(
                 "{what}'s measurement_noise_var.{axis} must be finite and positive"
             )));
+        }
+    }
+    Ok(())
+}
+
+/// A dense-group section (D-46): a filter the pipeline runs, and scene figures it can run
+/// with. The same rules `gungnir-fusion-async` applies, checked before a candidate can be
+/// promoted rather than when the tracker starts.
+///
+/// # Errors
+///
+/// [`ConfigError::Invalid`], naming `what` (the candidate or `tracking`) and the field.
+fn validate_dense_group(config: &DenseGroupConfig, what: &str) -> Result<(), ConfigError> {
+    if !DENSE_GROUP_FILTERS.contains(&config.filter.as_str()) {
+        return Err(ConfigError::Invalid(format!(
+            "{what}'s dense_group.filter is {:?}; it must be one of {DENSE_GROUP_FILTERS:?}",
+            config.filter
+        )));
+    }
+    if let Some(p) = config.probability_of_detection {
+        if !(p.is_finite() && p > 0.0 && p <= 1.0) {
+            return Err(ConfigError::Invalid(format!(
+                "{what}'s dense_group.probability_of_detection must be above zero and at most one"
+            )));
+        }
+    }
+    for (field, value) in [
+        ("clutter_density", config.clutter_density),
+        ("birth_weight", config.birth_weight),
+    ] {
+        if let Some(v) = value {
+            if !(v.is_finite() && v > 0.0) {
+                return Err(ConfigError::Invalid(format!(
+                    "{what}'s dense_group.{field} must be finite and positive"
+                )));
+            }
         }
     }
     Ok(())
@@ -4191,6 +4298,9 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                 t.imm_initial_mode_probabilities,
                 "tracking",
             )?;
+        }
+        if let Some(dense_group) = &t.dense_group {
+            validate_dense_group(dense_group, "tracking")?;
         }
     }
     if let BackendConfig::Remote { endpoint } = &baseline.backend {
@@ -6704,6 +6814,7 @@ MFkw
             // DN-30 §5: a well-formed figure, distinct from the default, so a test using
             // this helper is exercising DN-24's rules rather than the noise value itself.
             measurement_noise_var: [625.0, 3600.0, 22500.0],
+            dense_group: None,
             promoted,
             validated_by: None,
         }
@@ -6756,6 +6867,126 @@ MFkw
                 assert!(m.contains("measurement_noise_var.north"), "{m}");
             }
             other => panic!("a zero measurement-noise axis was accepted: {other:?}"),
+        }
+    }
+
+    /// D-46: a dense-group section parses in the shape [`DenseGroupConfig`] documents,
+    /// names the PHD when it names no filter, and is carried onto the candidate the
+    /// binaries apply; a baseline without one has the mode off.
+    #[test]
+    fn a_dense_group_section_parses_defaults_to_the_phd_and_reaches_the_candidate() {
+        let tracking = |section: &str| -> ConfigBaseline {
+            serde_json::from_str(&format!(
+                r#"{{"version": 1, "tracking": {{"filter_selection": "kf-cv",
+                    "gate_threshold": 9.21{section}}}}}"#
+            ))
+            .expect("parses")
+        };
+        let absent = tracking("");
+        assert!(validate(&absent).is_ok());
+        assert_eq!(absent.algorithm_candidates()[0].config.dense_group, None);
+
+        let phd = tracking(r#", "dense_group": {"probability_of_detection": 0.8}"#);
+        assert!(validate(&phd).is_ok());
+        let section = phd.algorithm_candidates()[0]
+            .config
+            .dense_group
+            .clone()
+            .expect("carried onto the candidate");
+        assert_eq!(section.filter, "gm-phd", "D-46: the PHD stays the default");
+        assert_eq!(section.probability_of_detection, Some(0.8));
+        assert_eq!(section.clutter_density, None);
+        assert_eq!(section.birth_weight, None);
+
+        let cphd = tracking(r#", "dense_group": {"filter": "gm-cphd"}"#);
+        assert!(validate(&cphd).is_ok());
+        assert_eq!(
+            cphd.algorithm_candidates()[0]
+                .config
+                .dense_group
+                .as_ref()
+                .map(|d| d.filter.as_str()),
+            Some("gm-cphd")
+        );
+
+        // A profile candidate carries its own section across too.
+        let mut candidate = candidate("air-defence", "cphd", true);
+        candidate.dense_group = cphd.tracking.and_then(|t| t.dense_group);
+        let profiles = with_profiles(&["air-defence"], vec![candidate.clone()], None);
+        assert!(validate(&profiles).is_ok());
+        assert_eq!(
+            profiles.algorithm_candidates()[0].config.dense_group,
+            candidate.dense_group
+        );
+    }
+
+    /// D-46: a dense-group section naming a filter the pipeline does not run, or a scene
+    /// figure it cannot run with, is refused before a candidate can be promoted -- on a
+    /// profile candidate and on `tracking` alike.
+    #[test]
+    fn a_dense_group_section_the_pipeline_cannot_run_is_refused() {
+        let section = |filter: &str| DenseGroupConfig {
+            filter: filter.into(),
+            probability_of_detection: None,
+            clutter_density: None,
+            birth_weight: None,
+        };
+        let cases = [
+            (section("gm-glmb"), "dense_group.filter"),
+            (
+                DenseGroupConfig {
+                    probability_of_detection: Some(0.0),
+                    ..section("gm-phd")
+                },
+                "dense_group.probability_of_detection",
+            ),
+            (
+                DenseGroupConfig {
+                    probability_of_detection: Some(1.01),
+                    ..section("gm-cphd")
+                },
+                "dense_group.probability_of_detection",
+            ),
+            (
+                DenseGroupConfig {
+                    clutter_density: Some(-1.0e-15),
+                    ..section("gm-phd")
+                },
+                "dense_group.clutter_density",
+            ),
+            (
+                DenseGroupConfig {
+                    birth_weight: Some(f64::NAN),
+                    ..section("gm-phd")
+                },
+                "dense_group.birth_weight",
+            ),
+        ];
+        for (bad, field) in cases {
+            let mut c = candidate("air-defence", "dense", true);
+            c.dense_group = Some(bad.clone());
+            match validate(&with_profiles(&["air-defence"], vec![c], None)) {
+                Err(ConfigError::Invalid(m)) => assert!(m.contains(field), "{m}"),
+                other => panic!("a candidate's {field} was accepted: {other:?}"),
+            }
+            let b = ConfigBaseline {
+                tracking: Some(TrackingConfig {
+                    filter_selection: "kf-cv".into(),
+                    gate_threshold: 9.21,
+                    imm_turn_rate_rad_s: 0.0,
+                    imm_mode_transition: [[0.0; 2]; 2],
+                    imm_initial_mode_probabilities: [0.0; 2],
+                    measurement_noise_var: default_measurement_noise_var(),
+                    dense_group: Some(bad),
+                }),
+                ..ConfigBaseline::default()
+            };
+            match validate(&b) {
+                Err(ConfigError::Invalid(m)) => {
+                    assert!(m.contains(field) && m.contains("tracking"), "{m}");
+                }
+                other => panic!("tracking's {field} was accepted: {other:?}"),
+            }
         }
     }
 
@@ -6975,6 +7206,7 @@ MFkw
             imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
             imm_initial_mode_probabilities: [0.9, 0.1],
             measurement_noise_var: [625.0, 3600.0, 22500.0],
+            dense_group: None,
         });
         match validate(&b) {
             Err(ConfigError::Invalid(m)) => assert!(m.contains("mutually exclusive"), "{m}"),
@@ -7031,6 +7263,7 @@ MFkw
                 imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
                 imm_initial_mode_probabilities: [0.9, 0.1],
                 measurement_noise_var: [625.0, 3600.0, 22500.0],
+                dense_group: None,
             }),
             ..ConfigBaseline::default()
         };

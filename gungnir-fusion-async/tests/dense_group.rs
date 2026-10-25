@@ -7,7 +7,8 @@
 
 use gungnir_association::jpda::MAX_DETECTIONS;
 use gungnir_fusion_async::{
-    run_batch, DenseGroupFilter, DenseGroupSettings, Detection, FusionPipeline, PipelineSettings,
+    run_batch, BaselineError, DenseGroupBaselineFields, DenseGroupFilter, DenseGroupSettings,
+    Detection, FusionPipeline, ImmBaselineFields, PipelineSettings,
 };
 use gungnir_track::{Track, TrackStatus};
 use nalgebra::SVector;
@@ -230,6 +231,154 @@ fn the_cphd_selection_reports_a_distribution_and_the_phd_does_not() {
 
     // And the tracks are still the tracks, under either selection.
     assert_eq!(fingerprint(&phd.snapshot()), fingerprint(&cphd.snapshot()));
+}
+
+/// A promoted baseline's dense-group section, as `PipelineSettings::from_baseline` takes it.
+fn from_baseline(
+    dense_group: Option<&DenseGroupBaselineFields>,
+) -> Result<PipelineSettings, BaselineError> {
+    let imm = ImmBaselineFields {
+        turn_rate_rad_s: 0.05,
+        mode_transition: [[0.97, 0.03], [0.03, 0.97]],
+        initial_mode_probabilities: [0.9, 0.1],
+    };
+    PipelineSettings::from_baseline(9.21, "kf-cv", &imm, [400.0, 400.0, 900.0], dense_group)
+}
+
+fn section(filter: &str) -> DenseGroupBaselineFields {
+    DenseGroupBaselineFields {
+        filter: filter.into(),
+        probability_of_detection: None,
+        clutter_density: None,
+        birth_weight: None,
+    }
+}
+
+/// **D-46, end to end.** A baseline that names `"gm-cphd"` gets the CPHD running -- the
+/// whole cardinality distribution, from the same raid the hand-built selection above
+/// reports one for -- and one that names `"gm-phd"`, or names no filter at all through
+/// `gungnir-config`'s default, gets the PHD. A baseline naming no section leaves the mode
+/// off, which is what every baseline written before D-46 meant.
+#[test]
+fn a_baseline_naming_gm_cphd_runs_the_cphd_and_one_naming_none_leaves_the_mode_off() {
+    let off = from_baseline(None).expect("applied");
+    assert!(off.dense_group.is_none());
+
+    let detections = raid(14, 60.0, 6);
+    for (name, filter) in [
+        ("gm-cphd", DenseGroupFilter::Cphd),
+        ("gm-phd", DenseGroupFilter::Phd),
+    ] {
+        let settings = from_baseline(Some(&section(name))).expect("applied");
+        let mut pipeline = FusionPipeline::new(settings);
+        for d in detections.clone() {
+            pipeline.push(d).expect("accepted");
+        }
+        pipeline.flush();
+        let estimate = pipeline.dense_group_estimate().expect("engaged");
+        assert_eq!(estimate.filter, filter, "{name}");
+        assert_eq!(
+            estimate.most_probable_count.is_some(),
+            filter == DenseGroupFilter::Cphd,
+            "only the CPHD carries a cardinality distribution ({name})"
+        );
+    }
+}
+
+/// D-46: the scene figures a baseline states replace the defaults, and only those; the
+/// derived settings stay as the pipeline derives them.
+///
+/// Exact float comparison is right here: every figure is copied, never computed.
+#[test]
+#[allow(clippy::float_cmp)]
+fn a_baseline_s_scene_figures_replace_the_defaults_and_nothing_else_moves() {
+    let fields = DenseGroupBaselineFields {
+        filter: "gm-cphd".into(),
+        probability_of_detection: Some(0.8),
+        clutter_density: Some(2.0e-14),
+        birth_weight: Some(0.2),
+    };
+    let settings = from_baseline(Some(&fields))
+        .expect("applied")
+        .dense_group
+        .expect("on");
+    let default = DenseGroupSettings::default();
+    assert_eq!(settings.filter, DenseGroupFilter::Cphd);
+    assert_eq!(settings.phd.probability_of_detection, 0.8);
+    assert_eq!(settings.phd.clutter_density, 2.0e-14);
+    assert_eq!(settings.birth_weight, 0.2);
+    assert_eq!(
+        DenseGroupSettings {
+            filter: default.filter,
+            phd: gungnir_rfs::PhdSettings {
+                probability_of_detection: default.phd.probability_of_detection,
+                clutter_density: default.phd.clutter_density,
+                ..settings.phd
+            },
+            birth_weight: default.birth_weight,
+            ..settings
+        },
+        default,
+        "only the filter and the three scene figures are a baseline's to move"
+    );
+
+    let unstated = from_baseline(Some(&section("gm-phd")))
+        .expect("applied")
+        .dense_group
+        .expect("on");
+    assert_eq!(unstated, default, "an unstated figure keeps the default");
+}
+
+/// D-46: a dense-group section the mode cannot run with is refused by name -- never the
+/// PHD in place of a filter nobody built, never the default in place of a figure that is
+/// not one. `gungnir-config` refuses all of these first; this is what a caller that
+/// skipped that validation is told.
+#[test]
+fn a_dense_group_section_the_mode_cannot_run_is_refused_not_substituted() {
+    let err = from_baseline(Some(&section("gm-glmb"))).expect_err("refused");
+    assert!(
+        matches!(&err, BaselineError::UnsupportedDenseGroupFilter { filter, .. } if filter == "gm-glmb"),
+        "{err:?}"
+    );
+    assert!(
+        err.to_string().contains("gm-cphd"),
+        "the refusal lists what runs: {err}"
+    );
+
+    let bad = |f: fn(&mut DenseGroupBaselineFields)| {
+        let mut fields = section("gm-cphd");
+        f(&mut fields);
+        from_baseline(Some(&fields)).expect_err("refused")
+    };
+    for (err, field) in [
+        (
+            bad(|f| f.probability_of_detection = Some(0.0)),
+            "probability_of_detection",
+        ),
+        (
+            bad(|f| f.probability_of_detection = Some(1.5)),
+            "probability_of_detection",
+        ),
+        (
+            bad(|f| f.probability_of_detection = Some(f64::NAN)),
+            "probability_of_detection",
+        ),
+        (bad(|f| f.clutter_density = Some(0.0)), "clutter_density"),
+        (
+            bad(|f| f.clutter_density = Some(f64::INFINITY)),
+            "clutter_density",
+        ),
+        (bad(|f| f.birth_weight = Some(-0.1)), "birth_weight"),
+    ] {
+        assert!(
+            matches!(&err, BaselineError::InvalidDenseGroup { field: f, .. } if *f == field),
+            "{field}: {err:?}"
+        );
+        assert!(
+            err.to_string().contains(&format!("dense_group.{field}")),
+            "{err}"
+        );
+    }
 }
 
 /// When the raid ends, the mode is released rather than reporting a group for ever, and

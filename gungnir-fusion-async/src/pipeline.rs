@@ -115,7 +115,10 @@
 //! further apart are separate epochs, each predicted forward to its own measurement
 //! time, which is the ordinary sequential treatment of asynchronous sensors.
 
-use crate::dense_group::{DenseGroupEstimate, DenseGroupSettings, DenseGroupState};
+use crate::dense_group::{
+    DenseGroupEstimate, DenseGroupFilter, DenseGroupSettings, DenseGroupState,
+    IMPLEMENTED_DENSE_GROUP_FILTERS,
+};
 use crate::{BearingDetection, Detection};
 use gungnir_association::{solve_assignment, ChiSquareGate, GlobalNearestNeighbor};
 use gungnir_core::{ConstantVelocity, CoordinatedTurn, LateDataPolicy};
@@ -312,11 +315,10 @@ pub struct PipelineSettings {
     /// While it is `None` the mode costs nothing at all: `run_dense_group` returns on the
     /// first line, before any comparison.
     ///
-    /// **Not settable from a promoted baseline.** [`PipelineSettings::from_baseline`]
-    /// leaves it at the default: `gungnir-config`'s `TrackingConfig` has no vocabulary for
-    /// it, and inventing one here would put a field in the pipeline that no governance
-    /// record could account for. That plumbing is recorded as remaining in GAP-015 rather
-    /// than half-built.
+    /// **Set from a promoted baseline** since D-46: `TrackingConfig::dense_group` names the
+    /// filter and the scene, and [`PipelineSettings::from_baseline`] carries it here, so a
+    /// deployment that runs the mode has a governance record that says so. A baseline
+    /// that names no dense-group section leaves it `None`, as above.
     pub dense_group: Option<DenseGroupSettings>,
 }
 
@@ -392,6 +394,26 @@ pub enum BaselineError {
          number; a promoted baseline is not applied by substituting the default noise"
     )]
     InvalidMeasurementNoise { axis: &'static str, value: f64 },
+    /// The baseline's dense-group section names a filter this build does not run (D-46).
+    #[error(
+        "the baseline's dense_group.filter is {filter:?}; this build runs {implemented:?}, \
+         and a promoted baseline is not applied by substituting one filter for another"
+    )]
+    UnsupportedDenseGroupFilter {
+        filter: String,
+        implemented: &'static [&'static str],
+    },
+    /// A scene parameter in the baseline's dense-group section is outside what the filter
+    /// can run with (D-46).
+    #[error(
+        "the baseline's dense_group.{field} is {value}, which {rule}; a promoted baseline \
+         is not applied by substituting the default"
+    )]
+    InvalidDenseGroup {
+        field: &'static str,
+        value: f64,
+        rule: &'static str,
+    },
 }
 
 /// A late-data policy the pipeline cannot honour (GAP-114).
@@ -449,6 +471,83 @@ const MEASUREMENT_NOISE_AXES: [&str; 3] = ["east", "north", "height"];
 /// Gaussian) and JPDA/MHT (a different axis, association rather than estimation) are
 /// each still their own future increment (DN-28 §6).
 pub const IMPLEMENTED_FILTERS: &[&str] = &["kf-cv", "linear-kf", "constant-velocity", "imm-cv-ct"];
+
+/// The dense-group mode's settings, from the baseline (GAP-015; D-46).
+///
+/// **Only the filter and the scene**: which random-finite-set filter runs, and the three
+/// figures [`DenseGroupSettings`] says are a deployment's to state -- its sensor's
+/// probability of detection, its clutter density, and the birth weight. Each scene figure
+/// left `None` keeps [`DenseGroupSettings::default`]'s. The rest of those settings -- the
+/// mixture cap, the cardinality bound, the engagement threshold -- are derived from figures
+/// this workspace already states (`docs/performance-budgets.md`'s Scenario 4,
+/// `gungnir_association::jpda::MAX_DETECTIONS`) rather than chosen, and are not a
+/// baseline's to move.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DenseGroupBaselineFields {
+    /// `"gm-phd"` or `"gm-cphd"`: [`DenseGroupFilter::as_str`]'s names.
+    pub filter: String,
+    /// `p_D`, in `(0, 1]`.
+    pub probability_of_detection: Option<f64>,
+    /// Clutter per cubic metre, finite and positive. See
+    /// `crate::dense_group::DEFAULT_CLUTTER_DENSITY` for the arithmetic.
+    pub clutter_density: Option<f64>,
+    /// The weight of the birth component at each detection, finite and positive.
+    pub birth_weight: Option<f64>,
+}
+
+impl DenseGroupBaselineFields {
+    /// The settings these fields describe.
+    ///
+    /// # Errors
+    ///
+    /// [`BaselineError::UnsupportedDenseGroupFilter`] or
+    /// [`BaselineError::InvalidDenseGroup`]. `gungnir-config` refuses both first; this
+    /// does not assume it, for the same reason [`PipelineSettings::from_baseline`] does
+    /// not.
+    fn settings(&self) -> Result<DenseGroupSettings, BaselineError> {
+        let filter = DenseGroupFilter::from_name(&self.filter).ok_or_else(|| {
+            BaselineError::UnsupportedDenseGroupFilter {
+                filter: self.filter.clone(),
+                implemented: IMPLEMENTED_DENSE_GROUP_FILTERS,
+            }
+        })?;
+        let mut settings = DenseGroupSettings {
+            filter,
+            ..DenseGroupSettings::default()
+        };
+        if let Some(p) = self.probability_of_detection {
+            if !(p.is_finite() && p > 0.0 && p <= 1.0) {
+                return Err(BaselineError::InvalidDenseGroup {
+                    field: "probability_of_detection",
+                    value: p,
+                    rule: "is not a probability above zero",
+                });
+            }
+            settings.phd.probability_of_detection = p;
+        }
+        if let Some(k) = self.clutter_density {
+            if !(k.is_finite() && k > 0.0) {
+                return Err(BaselineError::InvalidDenseGroup {
+                    field: "clutter_density",
+                    value: k,
+                    rule: "is not finite and positive",
+                });
+            }
+            settings.phd.clutter_density = k;
+        }
+        if let Some(w) = self.birth_weight {
+            if !(w.is_finite() && w > 0.0) {
+                return Err(BaselineError::InvalidDenseGroup {
+                    field: "birth_weight",
+                    value: w,
+                    rule: "is not finite and positive",
+                });
+            }
+            settings.birth_weight = w;
+        }
+        Ok(settings)
+    }
+}
 
 /// The `"imm-cv-ct"` selection's own settings, from the baseline (DN-28 §5).
 ///
@@ -515,7 +614,8 @@ impl PipelineSettings {
     }
 
     /// Build settings from a promoted algorithm baseline's fields (DN-24 §7, GAP-053;
-    /// `imm` fields added by DN-28 §5; `measurement_noise_var` added by DN-30 §5).
+    /// `imm` fields added by DN-28 §5; `measurement_noise_var` added by DN-30 §5;
+    /// `dense_group` added by D-46).
     ///
     /// Takes the primitives rather than `gungnir_config::TrackingConfig`, because this
     /// crate sits below `gungnir-config` and may not depend on it; both binaries read
@@ -524,12 +624,15 @@ impl PipelineSettings {
     /// selection may still have to supply a value, since it does not know in advance
     /// which candidate a baseline promoted. `measurement_noise_var` is read
     /// unconditionally: every filter selection builds its `R` from it, unlike the `imm`
-    /// fields.
+    /// fields. `dense_group` is the baseline's dense-group section, `None` where it names
+    /// none, which leaves the mode off: an argument rather than a builder so that no
+    /// caller can apply a baseline and quietly leave its dense-group section behind.
     ///
     /// # Errors
     ///
     /// [`BaselineError`]: a filter this build does not have, a gate threshold that is not
-    /// finite and positive, or a measurement-noise axis that is not. `gungnir-config`
+    /// finite and positive, a measurement-noise axis that is not, or a dense-group section
+    /// naming a filter or a scene figure the mode cannot run with. `gungnir-config`
     /// refuses the last two before a candidate is promoted, and this does not assume it:
     /// until the 2026-09-09 review a value that failed here was silently replaced by
     /// `Self::default()`'s while the baseline's name was still stamped on every track
@@ -540,6 +643,7 @@ impl PipelineSettings {
         filter_selection: &str,
         imm: &ImmBaselineFields,
         measurement_noise_var: [f64; 3],
+        dense_group: Option<&DenseGroupBaselineFields>,
     ) -> Result<Self, BaselineError> {
         if !IMPLEMENTED_FILTERS.contains(&filter_selection) {
             return Err(UnsupportedFilter {
@@ -569,6 +673,9 @@ impl PipelineSettings {
             settings.imm_mode_transition = imm.mode_transition;
             settings.imm_initial_mode_probabilities = imm.initial_mode_probabilities;
         }
+        settings.dense_group = dense_group
+            .map(DenseGroupBaselineFields::settings)
+            .transpose()?;
         Ok(settings)
     }
 }

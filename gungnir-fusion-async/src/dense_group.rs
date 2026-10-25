@@ -137,9 +137,11 @@ pub enum DenseGroupFilter {
     /// The Gaussian-mixture PHD (`gungnir_rfs::PhdFilter`). Propagates the intensity
     /// alone, so the count it reports is that distribution's *mean* and nothing more.
     ///
-    /// **The default.** Whether to flip it is left to the owner rather than changed in
-    /// passing here (the CPHD derivation: item 109; this mode's own wiring: item 128).
-    /// See [`Self::Cphd`] for the case for the flip.
+    /// **The default, by D-46 (2026-09-15).** The case for the CPHD below is real, and
+    /// the owner kept the PHD as the default anyway: it is cheaper per scan, and flipping a
+    /// pipeline's default changes what every deployment running the mode reports without
+    /// any of them asking. A deployment that wants the CPHD names `"gm-cphd"` in its
+    /// baseline's `tracking.dense_group.filter` (`crate::DenseGroupBaselineFields`).
     #[default]
     Phd,
     /// The Gaussian-mixture CPHD (`gungnir_rfs::CphdFilter`). Propagates the whole
@@ -152,11 +154,13 @@ pub enum DenseGroupFilter {
     /// also fills [`DenseGroupEstimate::most_probable_count`] and
     /// [`DenseGroupEstimate::count_distribution`], which the PHD cannot: a commander told
     /// "about 2.4 targets" is owed the difference between "almost always 2, sometimes 3"
-    /// and "often 0, occasionally 5". Whether to make this the default is a live open
-    /// question left to the owner, named rather than decided here (the derivation:
-    /// item 109; this mode's own wiring around it: item 128).
+    /// and "often 0, occasionally 5". **Selectable, not the default** (D-46; the
+    /// derivation: item 109; this mode's own wiring around it: item 128).
     Cphd,
 }
+
+/// The names [`DenseGroupFilter::from_name`] accepts, for a refusal to list.
+pub const IMPLEMENTED_DENSE_GROUP_FILTERS: &[&str] = &["gm-phd", "gm-cphd"];
 
 impl DenseGroupFilter {
     /// The name this filter answers to in a configuration or a report.
@@ -166,6 +170,15 @@ impl DenseGroupFilter {
             DenseGroupFilter::Phd => "gm-phd",
             DenseGroupFilter::Cphd => "gm-cphd",
         }
+    }
+
+    /// The filter a configuration names, by [`Self::as_str`]'s names; `None` for any
+    /// other, which a caller refuses rather than substitutes.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        [DenseGroupFilter::Phd, DenseGroupFilter::Cphd]
+            .into_iter()
+            .find(|f| f.as_str() == name)
     }
 }
 
@@ -289,7 +302,8 @@ pub struct DenseGroupSettings {
     /// small because most detections in a tracked scene belong to targets the intensity
     /// already holds, and a deployment's own figure belongs in its baseline. **It is not
     /// the 0.4 the PHD oracle fixture uses**, which is a birth-*region* weight at known
-    /// truth positions and a different model. Nothing promoted supplies this yet.
+    /// truth positions and a different model. A promoted baseline supplies its own since
+    /// D-46 (`crate::DenseGroupBaselineFields::birth_weight`).
     ///
     /// # It matters much less than being undetermined suggests
     ///

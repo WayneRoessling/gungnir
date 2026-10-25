@@ -1858,6 +1858,23 @@ fn imm_fields(
     }
 }
 
+/// The baseline's dense-group section in the form `PipelineSettings::from_baseline` takes
+/// (D-46), `None` where it names none and the mode stays off. Built here for
+/// [`imm_fields`]' reason.
+fn dense_group_fields(
+    config: &gungnir_config::TrackingConfig,
+) -> Option<gungnir_tracking_service::DenseGroupBaselineFields> {
+    config
+        .dense_group
+        .as_ref()
+        .map(|d| gungnir_tracking_service::DenseGroupBaselineFields {
+            filter: d.filter.clone(),
+            probability_of_detection: d.probability_of_detection,
+            clutter_density: d.clutter_density,
+            birth_weight: d.birth_weight,
+        })
+}
+
 /// The settings the embedded pipeline runs: the promoted algorithm baseline's where this
 /// build can apply it, and the deployment's late-data policy whatever the algorithm
 /// baseline says (GAP-114, D-98).
@@ -1898,6 +1915,7 @@ fn algorithm_settings(
         &baseline.config.filter_selection,
         &imm_fields(&baseline.config),
         baseline.config.measurement_noise_var,
+        dense_group_fields(&baseline.config).as_ref(),
     ) {
         Ok(settings) => settings,
         Err(err) => {
@@ -1922,6 +1940,7 @@ fn applied_baseline(
         &baseline.config.filter_selection,
         &imm_fields(&baseline.config),
         baseline.config.measurement_noise_var,
+        dense_group_fields(&baseline.config).as_ref(),
     )
     .ok()
     .map(|_| &baseline.id)
