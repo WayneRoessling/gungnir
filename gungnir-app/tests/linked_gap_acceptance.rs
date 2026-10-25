@@ -452,3 +452,109 @@ fn a_forward_the_node_refuses_reopens_here_with_its_reason() {
     drop(node);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// Restart `desk` over the same journal, on round 1, signed in as the commander again.
+fn restarted(mut desk: AppState, addr: std::net::SocketAddr, dir: std::path::PathBuf) -> AppState {
+    update::tick(&mut desk);
+    desk.save_session().expect("saved");
+    drop(desk);
+    let (mut desk, _) = desktop_with(&format!("http://{addr}"), round_1(), dir);
+    // The radars come back in standby; searching again, as before the restart, the
+    // desktop's own coverage is what the acceptance was made against, so DN-33 §5 leaves
+    // it standing.
+    for id in [1, 2] {
+        desk.sensors
+            .set_mode(
+                gungnir_model::SensorId(id),
+                gungnir_model::SensorMode::Search,
+            )
+            .expect("search");
+    }
+    desk
+}
+
+/// **GAP-202: a cut-off desktop restarts before its node answers.** The forward that was
+/// waiting is gone with the process, but the acceptance is on the journal; the restarted
+/// desktop owes it again, and when the node answers it holds it as the commander's.
+#[test]
+fn a_forward_owed_before_a_restart_is_sent_after_it() {
+    let addr = free_addr();
+    let (desk, dir, id, report) = cut_off_desktop_that_accepted(addr);
+    let mut desk = restarted(desk, addr, dir.clone());
+    assert_eq!(
+        desk.gap_acceptances.owed(),
+        &[id],
+        "owed again after the restart"
+    );
+    update::tick(&mut desk);
+    assert!(
+        desk.link.as_ref().is_some_and(|l| l
+            .acceptances_in_flight()
+            .iter()
+            .any(|o| o.local == Some(id))),
+        "queued again for the node"
+    );
+    let node = Node::serve(addr, &round_1(), report);
+    until(&mut desk, "the node to hold the recovered forward", |s| {
+        gap_acceptance::node_gaps(s).is_some_and(|(_, marks)| marks.iter().any(Option::is_some))
+    });
+    until(&mut desk, "the forward to settle", |s| {
+        s.gap_acceptances.owed().is_empty()
+    });
+    let (_, marks) = gap_acceptance::node_gaps(&desk).expect("read");
+    let held = marks.iter().flatten().next().expect("marked");
+    assert_eq!(
+        held.operator,
+        COMMANDER.to_string(),
+        "the accepting commander's"
+    );
+    assert!(desk
+        .gap_acceptances
+        .standing
+        .iter()
+        .any(|(a, _)| a.id == id));
+    drop(node);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// **GAP-202: a restart re-sends what the node already holds.** The node answers
+/// `already-accepted`, which settles the forward: the acceptance stands here and nothing
+/// re-opens.
+#[test]
+fn a_forward_the_node_already_holds_settles_without_reopening() {
+    let addr = free_addr();
+    let (mut desk, dir, id, report) = cut_off_desktop_that_accepted(addr);
+    let node = Node::serve(addr, &round_1(), report);
+    until(&mut desk, "the first forward to settle", |s| {
+        s.gap_acceptances.owed().is_empty()
+    });
+    let mut desk = restarted(desk, addr, dir.clone());
+    assert_eq!(
+        desk.gap_acceptances.owed(),
+        &[id],
+        "owed again after the restart"
+    );
+    until(&mut desk, "the repeat to settle", |s| {
+        s.gap_acceptances.owed().is_empty()
+    });
+    assert!(
+        desk.gap_acceptances
+            .standing
+            .iter()
+            .any(|(a, _)| a.id == id),
+        "already held on the node is held: it stands"
+    );
+    assert!(
+        desk.gap_acceptances.reopened.is_empty(),
+        "nothing re-opened"
+    );
+    assert!(
+        desk.alerts
+            .iter()
+            .any(|a| a.contains("already accepted on the node")),
+        "{:?}",
+        desk.alerts
+    );
+    drop(node);
+    let _ = std::fs::remove_dir_all(dir);
+}

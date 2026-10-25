@@ -195,7 +195,7 @@ history, and an entry is never edited once it has merged.
 | GAP-198 | The node places a UAS's height above mean sea level uncorrected | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Closed |
 | GAP-199 | A UAS reporting only its height above ground is placed at height zero | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Closed |
 | GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | L | 32 | I4 | UI engineer | Closed |
-| GAP-202 | A cut-off desktop that restarts forgets the gap acceptances it owed its node | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | S | 12 | I3 | Services engineer | Open |
+| GAP-202 | A cut-off desktop that restarts forgets the gap acceptances it owed its node | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | S | 12 | I3 | Services engineer | Closed |
 | GAP-201 | A linked desktop could miss a queued item until the queue moved again | Technical | CAP-5.9, CAP-4.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 
 Counts: 184 gaps, 3 mission, 181 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
@@ -2814,11 +2814,12 @@ Counts: 184 gaps, 3 mission, 181 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.4 Coverage and gaps; CAP-7.3 Three profiles.
 - History:
   - 2026-10-25, Open: Found closing GAP-194: the forward is queued only when the acceptance is made, and the queue does not survive a restart.
+  - 2026-10-25, Closed: **Closed 2026-10-25.** `GapAcceptances` owes each acceptance made while cut off a forward until the node answers, and on the connected profile owes every recovered one again at start; `forward_owed` keeps each in the link's outbox while a commander is signed in, since the route refuses anyone else. `already-accepted` now settles a forward, where it re-opened the acceptance before, and a `401` or `403` leaves it owed rather than re-opening it. Tested end to end across a restart in `linked_gap_acceptance.rs`. See `../../record/2026-10-25/a-forward-owed-survives-a-restart.md`.
 - Evidence: `gungnir_remote::link::Projection::acceptance_outbox` (in memory); `gungnir_app::gap_acceptance::accept` queues the forward only when the acceptance is made; an outage's decisions are recovered from the journal for forwarding (GAP-142), acceptances are not.
 - Severity: 3. Reach: 4 threads. Effort: S. Priority: 12.
 - Impact: A desktop cut off from its node records a commander's gap acceptance and queues it to forward, but the queue is held in memory. Restarted before the node answers, the desktop keeps the acceptance on its own journal and the node never hears of it, so every other console shows the gap as unexamined while this one shows it accepted.
-- Closing action: On start, find the acceptances this desktop made while cut off that its node has not answered, from its own journal, and queue them to forward again, as GAP-142 does for an outage's decisions; the node answers a repeat `already-accepted`.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Closing action: Done 2026-10-25: the desktop's ledger owes each acceptance a forward until the node answers, owes every recovered one again at start on the connected profile, and keeps each owed one in the link's outbox while a commander is signed in.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found closing GAP-194 (`../../record/2026-10-25/a-linked-desktop-accepts-on-the-node.md`).
 - Depends on: GAP-194, GAP-142.
 

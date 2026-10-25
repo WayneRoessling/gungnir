@@ -644,7 +644,12 @@ impl AppState {
         let fallback = recover_outage_or_alert(&journal, &mut alerts);
         // GAP-106, GAP-107: the gap acceptances that stand and every rehearsal on the
         // record, read before this session opens so what earlier ones decided is known.
-        let planning = crate::planning_record::recover(&journal);
+        let mut planning = crate::planning_record::recover(&journal);
+        // GAP-202: on the connected profile, every recovered acceptance is owed its node a
+        // forward, since none that was waiting survived the restart.
+        if matches!(config.backend, gungnir_config::BackendConfig::Remote { .. }) {
+            planning.acceptances.owe_all();
+        }
         if let Some(reason) = &planning.unreadable {
             alerts.push(format!(
                 "The planning record could not be read whole ({reason}); gap acceptances \

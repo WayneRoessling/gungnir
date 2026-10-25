@@ -11634,9 +11634,9 @@
     made; an outage's decisions are recovered from the journal for forwarding (GAP-142),
     acceptances are not
   action: >-
-    On start, find the acceptances this desktop made while cut off that its node has not
-    answered, from its own journal, and queue them to forward again, as GAP-142 does for
-    an outage's decisions; the node answers a repeat `already-accepted`.
+    Done 2026-10-25: the desktop's ledger owes each acceptance a forward until the node
+    answers, owes every recovered one again at start on the connected profile, and keeps
+    each owed one in the link's outbox while a commander is signed in.
   ref: >-
     Found closing GAP-194 (`../../record/2026-10-25/a-linked-desktop-accepts-on-the-node.md`)
   history:
@@ -11645,6 +11645,17 @@
     note: >-
       Found closing GAP-194: the forward is queued only when the acceptance is made, and
       the queue does not survive a restart.
+  - date: 2026-10-25
+    status: Closed
+    note: >-
+      **Closed 2026-10-25.** `GapAcceptances` owes each acceptance made while cut off a
+      forward until the node answers, and on the connected profile owes every recovered
+      one again at start; `forward_owed` keeps each in the link's outbox while a commander
+      is signed in, since the route refuses anyone else. `already-accepted` now settles a
+      forward, where it re-opened the acceptance before, and a `401` or `403` leaves it
+      owed rather than re-opening it. Tested end to end across a restart in
+      `linked_gap_acceptance.rs`. See
+      `../../record/2026-10-25/a-forward-owed-survives-a-restart.md`.
 - id: GAP-201
   name: A linked desktop could miss a queued item until the queue moved again
   type: Technical

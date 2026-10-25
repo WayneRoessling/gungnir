@@ -175,6 +175,8 @@ pub fn tick(state: &mut AppState) {
     // GAP-194: the linked node's answers to the acceptances this desktop sent, and a
     // forwarded one it refused re-opened here, before the drain below journals it.
     crate::gap_acceptance::answers_from_node(state);
+    // GAP-202: and every acceptance still owed a forward kept in the link's outbox.
+    crate::gap_acceptance::forward_owed(state);
 
     // 3g. Once per session, journal which algorithm configuration the deployment opened
     //     with (GAP-086). Here rather than in `AppState::with_config`, because that
