@@ -67,3 +67,7 @@ gungnir-analytics = { path = "../gungnir-analytics", version = "0.1.0" }
 serde_json.workspace = true
 # The end-to-end transport test drives the real server with the real client.
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+# The exchange wire check generates a real mission report from a real journal, the way a
+# desktop's report reaches the exchange (GAP-065). Dev-only edges; neither is drawn.
+gungnir-reporting = { path = "../gungnir-reporting", version = "0.1.0" }
+gungnir-store = { path = "../gungnir-store", version = "0.1.0" }

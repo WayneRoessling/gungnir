@@ -60,7 +60,7 @@ Diagrams (rendered under `rendered/resources/` by the render scripts in the UAF 
 | RS-observability `gungnir-observability` | `gungnir-model` |  |
 | RS-oracle `gungnir-oracle` | `gungnir-filters`, `gungnir-association`, `gungnir-rfs`, `gungnir-scenario` | `gungnir-testkit` |
 | RS-policy `gungnir-policy` | `gungnir-model`, `gungnir-geo` |  |
-| RS-remote `gungnir-remote` | `gungnir-security`, `gungnir-model`, `gungnir-eventing`, `gungnir-api`, `gungnir-tracking-service`, `gungnir-intercept-service` | `gungnir-analytics` |
+| RS-remote `gungnir-remote` | `gungnir-security`, `gungnir-model`, `gungnir-eventing`, `gungnir-api`, `gungnir-tracking-service`, `gungnir-intercept-service` | `gungnir-analytics`, `gungnir-reporting`, `gungnir-store` |
 | RS-render `gungnir-render` | none |  |
 | RS-replay `gungnir-replay` | `gungnir-model`, `gungnir-eventing`, `gungnir-store`, `gungnir-time` |  |
 | RS-reporting `gungnir-reporting` | `gungnir-model`, `gungnir-eventing`, `gungnir-store`, `gungnir-metrics`, `gungnir-identity` |  |

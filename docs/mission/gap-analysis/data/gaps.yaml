@@ -5847,7 +5847,9 @@
     for those three: their real product bodies (a `LaunchWarningReport`, a
     `MissionReport`, a handoff) compared byte for byte after crossing the wire, which
     `gungnir-api/tests/exchange.rs` does not do -- it crosses real TLS but compares ids and
-    counts on placeholder bodies.
+    counts on placeholder bodies. **Closed 2026-10-25**: that check is built
+    (`gungnir-remote/tests/wire_conformance.rs`,
+    `every_exchange_product_crosses_both_hops_with_zero_loss`).
   ref: "`docs/design/DN-18-coalition-exchange.md` amendment 2"
   history:
   - date: 2026-09-08
@@ -5896,6 +5898,17 @@
       and nothing checks the real warning, report and handoff bodies byte for byte after
       the wire. That check is what is left. The two test files that said tracks and health
       were the only exchange items with a producer now say otherwise.
+  - date: 2026-10-25
+    status: Closed
+    note: >-
+      **Closed: every produced exchange item now crosses the wire checked byte for
+      byte.** A real launch warning, a mission report generated from a real journal (with
+      a diverged tracker's NaN and infinity) and a handoff are written by a signed-in
+      desktop to its node and read by a partner over mutual TLS; each product matches the
+      desktop's canonical encoding, its body appears verbatim in the served response, and
+      the non-finite metrics arrive as DN-18 §15's object. With the lossy formats moot,
+      nothing of this entry remains. See
+      `../../record/2026-10-25/gap-065-the-exchange-products-cross-the-wire.md`.
 - id: GAP-066
   name: Service contracts too thin
   type: Technical
