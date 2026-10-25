@@ -35,6 +35,7 @@ fn candidate(profile: &str, name: &str, promoted: bool) -> TrackingProfileConfig
         // DN-30 §5: a well-formed figure, distinct from the default, since this fixture
         // exercises governance events rather than the noise value itself.
         measurement_noise_var: [625.0, 3600.0, 22500.0],
+        dense_group: None,
         promoted,
         validated_by: Some("oracle comparison".into()),
     }
@@ -166,6 +167,7 @@ fn a_baseline_with_only_tracking_governs_its_one_configuration() {
         imm_mode_transition: [[0.97, 0.03], [0.03, 0.97]],
         imm_initial_mode_probabilities: [0.9, 0.1],
         measurement_noise_var: [625.0, 3600.0, 22500.0],
+        dense_group: None,
     };
     let (state, dir) = desktop(
         "implicit",

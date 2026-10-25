@@ -19,14 +19,18 @@ pub mod sync;
 #[cfg(all(test, loom))]
 mod loom_model;
 
-pub use dense_group::{DenseGroupEstimate, DenseGroupFilter, DenseGroupSettings, GroupComponent};
+pub use dense_group::{
+    DenseGroupEstimate, DenseGroupFilter, DenseGroupSettings, GroupComponent,
+    IMPLEMENTED_DENSE_GROUP_FILTERS,
+};
 /// The late-data policy [`PipelineSettings::late_data`] carries (GAP-114). Owned by
 /// `gungnir-core`; re-exported so a caller naming the settings can name the policy too.
 pub use gungnir_core::LateDataPolicy;
 pub use pipeline::{
-    run_batch, BaselineError, BearingOutcome, BearingRefusal, FilterSelection, FusionPipeline,
-    ImmBaselineFields, InvalidLateData, PipelineSettings, PipelineStats, PushError,
-    RetainedBearing, TimedTrack, UnsupportedFilter, IMPLEMENTED_FILTERS, MIN_BEARING_WINDOW_S,
+    run_batch, BaselineError, BearingOutcome, BearingRefusal, DenseGroupBaselineFields,
+    FilterSelection, FusionPipeline, ImmBaselineFields, InvalidLateData, PipelineSettings,
+    PipelineStats, PushError, RetainedBearing, TimedTrack, UnsupportedFilter, IMPLEMENTED_FILTERS,
+    MIN_BEARING_WINDOW_S,
 };
 
 // The channel types come from `crate::sync` rather than straight from

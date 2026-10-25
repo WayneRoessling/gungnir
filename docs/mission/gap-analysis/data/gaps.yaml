@@ -1192,7 +1192,13 @@
     (2026-09-15) answers the default-filter question item 128 left open**:
     `DenseGroupFilter::Phd` stays the default and CPHD becomes selectable through the
     `TrackingConfig` vocabulary this action already owed, so a deployment asks for the
-    cardinality estimate by name and no shipped behaviour changes underneath anyone.
+    cardinality estimate by name and no shipped behaviour changes underneath anyone. **Built 2026-10-25**: `TrackingConfig`
+    gains `dense_group` (the filter, `gm-phd` by default or `gm-cphd`, and the sensor's
+    detection probability, clutter density and birth weight), which reaches the pipeline
+    through `PipelineSettings::from_baseline`, so the `TrackingConfig` vocabulary item above
+    is done
+    (`../../record/2026-10-25/d-46-the-dense-group-filter-is-chosen.md`). The
+    `spawn_blocking` plumbing and a consumer for the estimate remain.
   ref: "`ARCHITECTURE.md` §10, the tracking math itself"
   history:
   - date: 2026-09-15
@@ -1434,6 +1440,17 @@
       filtering as absent rather than implying a dense-group mode exists. PHD/CPHD and
       LMB filters are trait surfaces; dense raids cannot be counted.
 
+  - date: 2026-10-25
+    status: Open
+    note: >-
+      **D-46 built: a baseline chooses the dense-group filter.** `TrackingConfig` and each
+      profile candidate gain a `dense_group` section naming `gm-phd` (the default) or
+      `gm-cphd`, plus the sensor's detection probability, clutter density and birth
+      weight. `PipelineSettings::from_baseline` takes it as an argument and refuses a
+      filter or figure it cannot run rather than substituting the default; both binaries
+      pass it through. An absent section leaves the mode off, so no deployment changes.
+      Still open: the `spawn_blocking` plumbing and a consumer for the estimate. See
+      `../../record/2026-10-25/d-46-the-dense-group-filter-is-chosen.md`.
 - id: GAP-016
   name: Scenario generator
   type: Technical

@@ -29,8 +29,8 @@ pub use gungnir_fusion_async::Detection;
 /// making every host depend on `gungnir-fusion-async`: the hosts speak to the pipeline
 /// through this facade, which is the whole point of `ARCHITECTURE.md` §2.
 pub use gungnir_fusion_async::{
-    BaselineError, FilterSelection, ImmBaselineFields, InvalidLateData, PipelineSettings,
-    PipelineStats, UnsupportedFilter,
+    BaselineError, DenseGroupBaselineFields, FilterSelection, ImmBaselineFields, InvalidLateData,
+    PipelineSettings, PipelineStats, UnsupportedFilter,
 };
 pub use gungnir_model::{
     BearingRayView, DetectionView, MissionTime, SensorId, TrackId, TrackStatus, TrackView,
@@ -1109,6 +1109,7 @@ mod tests {
             "kf-cv",
             &imm_fields(),
             [625.0, 3600.0, 22500.0],
+            None,
         )
         .expect("implemented");
         let mut governed = LiveTrackingService::with_pipeline_settings(runtime.handle(), settings)
@@ -1120,9 +1121,14 @@ mod tests {
         );
 
         // A filter this build does not have is refused rather than substituted.
-        let err =
-            PipelineSettings::from_baseline(11.34, "ekf", &imm_fields(), [625.0, 3600.0, 22500.0])
-                .expect_err("not built");
+        let err = PipelineSettings::from_baseline(
+            11.34,
+            "ekf",
+            &imm_fields(),
+            [625.0, 3600.0, 22500.0],
+            None,
+        )
+        .expect_err("not built");
         assert!(
             matches!(&err, BaselineError::UnsupportedFilter(u) if u.selection == "ekf"),
             "{err:?}"
@@ -1154,6 +1160,7 @@ mod tests {
             "imm-cv-ct",
             &imm_fields(),
             [625.0, 3600.0, 22500.0],
+            None,
         )
         .expect("DN-28: imm-cv-ct is implemented");
         assert_eq!(
@@ -1174,6 +1181,7 @@ mod tests {
             "kf-cv",
             &imm_fields(),
             [625.0, 3600.0, 22500.0],
+            None,
         )
         .expect("implemented");
         assert_eq!(settings.measurement_noise_var, [625.0, 3600.0, 22500.0]);
@@ -1191,7 +1199,7 @@ mod tests {
             ([f64::NAN, 3600.0, 22500.0], "east"),
             ([625.0, f64::INFINITY, 22500.0], "north"),
         ] {
-            let err = PipelineSettings::from_baseline(11.34, "kf-cv", &imm_fields(), bad)
+            let err = PipelineSettings::from_baseline(11.34, "kf-cv", &imm_fields(), bad, None)
                 .expect_err("refused");
             assert!(
                 matches!(&err, BaselineError::InvalidMeasurementNoise { axis: a, .. } if *a == axis),
@@ -1215,6 +1223,7 @@ mod tests {
                 "kf-cv",
                 &imm_fields(),
                 [625.0, 3600.0, 22500.0],
+                None,
             )
             .expect_err("refused");
             assert!(
