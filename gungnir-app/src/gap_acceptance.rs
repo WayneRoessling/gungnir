@@ -21,6 +21,18 @@
 //! writes one attributed to nobody, because nobody did it. The ledger is folded from the
 //! journal at start ([`crate::planning_record::recover`]) and retention keeps the session
 //! holding each standing acceptance.
+//!
+//! # Linked to a node (GAP-194, D-131, D-134)
+//!
+//! **The node holds acceptances for the desktops linked to it**, and judges each against
+//! the coverage answer it serves. So while the link is up, [`accept`] records nothing
+//! here: it sends the acceptance to the node, PN-11 lists the node's gaps with the
+//! acceptances the node holds ([`node_gaps`]), and the node's answer comes back as an alert
+//! ([`answers_from_node`]). **While the link is down** the desktop accepts what its signed-in
+//! commander may, exactly as an unlinked one does, and queues the acceptance to forward,
+//! naming who accepted it, when and on which desktop. When the node answers, an acceptance
+//! it holds stands here too; one it refuses re-opens here with the node's reason, journaled
+//! and audited, so no console shows an acceptance the node does not hold.
 
 use crate::state::AppState;
 use gungnir_analytics::{
@@ -68,6 +80,26 @@ impl GapAcceptances {
             .filter_map(|(_, s)| *s)
             .chain(self.highest_session)
             .collect()
+    }
+}
+
+/// What [`accept`] did with an acceptance.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Accepted {
+    /// Recorded here: no node is linked, or the link is down and it is queued to forward.
+    Recorded(GapAcceptanceId),
+    /// Sent to the linked node, which records it or refuses it (GAP-194).
+    SentToNode,
+}
+
+impl Accepted {
+    /// The acceptance recorded here, if it was.
+    #[must_use]
+    pub fn recorded(&self) -> Option<GapAcceptanceId> {
+        match self {
+            Accepted::Recorded(id) => Some(*id),
+            Accepted::SentToNode => None,
+        }
     }
 }
 
@@ -128,14 +160,18 @@ pub fn laydown_in_force(state: &AppState) -> Option<LaydownId> {
 /// acceptance is never made of a gap that changed between the frame that drew it and the
 /// click.
 ///
+/// **Linked and the link up, it is sent to the node** and nothing is recorded here: the gap
+/// was drawn from the node's answer ([`node_gaps`]) and the node judges it against that
+/// (GAP-194). Linked and the link down, it is recorded here and queued to forward.
+///
 /// # Errors
 ///
-/// [`AcceptError`]; nothing is recorded.
+/// [`AcceptError`]; nothing is recorded or sent.
 pub fn accept(
     state: &mut AppState,
     gap: &AcceptedGap,
     reason: &str,
-) -> Result<GapAcceptanceId, AcceptError> {
+) -> Result<Accepted, AcceptError> {
     let Some(session) = state.signed_in() else {
         return Err(AcceptError::NotSignedIn);
     };
@@ -148,6 +184,49 @@ pub fn accept(
     if reason.is_empty() {
         return Err(AcceptError::NoReason);
     }
+    if let Some(link) = state.link.as_ref().filter(|l| l.connected()) {
+        link.accept_gap(gungnir_remote::coverage::OutboundAcceptance {
+            gap: gap.clone(),
+            reason: reason.to_owned(),
+            accepted_offline: None,
+            local: None,
+            attempts: 0,
+        });
+        return Ok(Accepted::SentToNode);
+    }
+    let id = record_here(state, gap, reason, &session)?;
+    // Cut off from a node this desktop is linked to: forwarded when it answers (D-131).
+    if let Some(link) = state.link.as_ref() {
+        if let Some((acceptance, _)) = state
+            .gap_acceptances
+            .standing
+            .iter()
+            .find(|(a, _)| a.id == id)
+        {
+            link.accept_gap(gungnir_remote::coverage::OutboundAcceptance {
+                gap: acceptance.gap.clone(),
+                reason: acceptance.reason.clone(),
+                accepted_offline: Some(gungnir_remote::coverage::OfflineAcceptance {
+                    operator: acceptance.operator.clone(),
+                    role: acceptance.role.clone(),
+                    at: acceptance.at,
+                    origin: crate::session::origin_of(state),
+                }),
+                local: Some(id),
+                attempts: 0,
+            });
+        }
+    }
+    Ok(Accepted::Recorded(id))
+}
+
+/// Record `gap` on this desktop's own ledger, against its own live report.
+fn record_here(
+    state: &mut AppState,
+    gap: &AcceptedGap,
+    reason: &str,
+    session: &gungnir_security::OperatorSession,
+) -> Result<GapAcceptanceId, AcceptError> {
     let (report, names) = live(state);
     let report = report.map_err(|reason| AcceptError::NotMeasured {
         reason: reason.to_owned(),
@@ -315,6 +394,94 @@ pub fn measure(
         .map(Option::is_some)
         .collect();
     CoverageMeasure::of(report, &flags)
+}
+
+/// While the link to a node is up, the node's coverage report and, for each of its gaps,
+/// the acceptance the node holds for it (GAP-194, D-134): what PN-11 lists and accepts
+/// from. `None` with no link, the link down, nothing read yet, or a node that computes no
+/// coverage -- PN-11 then lists this desktop's own report.
+#[must_use]
+pub fn node_gaps(state: &AppState) -> Option<(CoverageReport, Vec<Option<GapAcceptance>>)> {
+    let link = state.link.as_ref().filter(|l| l.connected())?;
+    match link.coverage()? {
+        gungnir_remote::coverage::CoverageResponse::Computed(computed) => {
+            let mut marks = computed.acceptances;
+            marks.resize(computed.report.gaps.len(), None);
+            Some((computed.report, marks))
+        }
+        gungnir_remote::coverage::CoverageResponse::NotComputed { .. } => None,
+    }
+}
+
+/// The node's answers to the acceptances this desktop sent, as alerts, and a forwarded one
+/// the node refused re-opened here with the node's reason (GAP-194, D-134). Called every
+/// frame from `update::tick`; costs nothing with no link.
+pub fn answers_from_node(state: &mut AppState) {
+    let Some(link) = state.link.as_ref() else {
+        return;
+    };
+    let outcomes = link.take_acceptance_outcomes();
+    let now = state.clock.now();
+    for outcome in outcomes {
+        let sentence = outcome.answer.sentence();
+        let refused = !matches!(
+            outcome.answer,
+            gungnir_remote::coverage::AcceptanceAnswer::Recorded(_)
+        );
+        let Some(local) = outcome.local else {
+            state.alerts.push(if refused {
+                format!("Gap not accepted by the node: {sentence}")
+            } else {
+                format!("Gap acceptance recorded on the node: {sentence}")
+            });
+            continue;
+        };
+        if !refused {
+            state.alerts.push(format!(
+                "Gap acceptance {local}, made while cut off, forwarded: {sentence}"
+            ));
+            continue;
+        }
+        let Some(at) = state
+            .gap_acceptances
+            .standing
+            .iter()
+            .position(|(a, _)| a.id == local)
+        else {
+            // Already re-opened here for a reason of its own; nothing stands to re-open.
+            continue;
+        };
+        let (acceptance, _) = state.gap_acceptances.standing.remove(at);
+        let because = ReopenedBecause::RefusedByNode { reason: sentence };
+        publish(
+            state,
+            now,
+            PlanningEvent::GapAcceptanceReopened {
+                acceptance: acceptance.id,
+                because: because.clone(),
+                at: now,
+            },
+        );
+        let said = format!(
+            "Gap acceptance {} of {} re-opened: {}",
+            acceptance.id,
+            acceptance.gap.describe(),
+            because.sentence()
+        );
+        // Nobody here re-opened it: the entry names no operator.
+        state.audit.record(crate::audit::entry(
+            None,
+            now,
+            ACCEPT_COVERAGE_GAP,
+            said.clone(),
+        ));
+        state.alerts.push(said);
+        state.gap_acceptances.reopened.push(Reopened {
+            acceptance,
+            because,
+            at: now,
+        });
+    }
 }
 
 fn publish(state: &mut AppState, now: MissionTime, event: PlanningEvent) {

@@ -11348,10 +11348,10 @@
     `gungnir-app/src/gap_acceptance.rs`; `gungnir-remote/src/link.rs`, which reads no
     coverage answer; `../../design/DN-33-accepting-a-coverage-gap.md` amendment 1
   action: >-
-    The desktop half of D-131 and D-134: the link reading `GET /v3/coverage` with its
-    acceptance marks; a linked desktop's PN-11 listing the node's gaps and posting to
-    `POST /v3/coverage/acceptances`; a cut-off desktop's acceptances forwarded when its
-    node answers, a refused one re-opened with the node's reason.
+    Done 2026-10-25 (D-131, D-134): the node holds acceptances and marks them on
+    `GET /v3/coverage`; a linked desktop lists the node's gaps and posts to
+    `POST /v3/coverage/acceptances`; a cut-off desktop forwards what it accepted, and a
+    refused one re-opens with the node's reason.
   ref: >-
     Found building GAP-106 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`)
   history:
@@ -11382,6 +11382,18 @@
       2026-10-24 (D-134). The desktop half is the second pull request. The route and the
       transport types are human-owned; see docs/signatures.md. See
       `../../record/2026-10-24/the-node-holds-coverage-gap-acceptances.md`.
+  - date: 2026-10-25
+    status: Closed
+    note: >-
+      **Closed 2026-10-25 (D-131, D-134).** The desktop half: the link reads the node's
+      coverage answer with its marks (on connecting, on a planning event, on an answered
+      post, and every 5 s) and posts acceptances until the node answers. While the link
+      is up, PN-11 lists the node's gaps with the node's acceptances and accepting sends
+      to the node, recording nothing locally. Cut off, the desktop records the acceptance
+      and forwards it naming who accepted it; one the node refuses re-opens locally with
+      the node's reason (`ReopenedBecause::RefusedByNode`), journaled and audited. Tested
+      end to end against the node's own ledger in `linked_gap_acceptance.rs`. See
+      `../../record/2026-10-25/a-linked-desktop-accepts-on-the-node.md`.
 - id: GAP-195
   name: PN-07's degraded-condition acknowledgement is on no record
   type: Technical
@@ -11590,6 +11602,38 @@
       `pointcloud_crs.rs` files; the `crs` build runs only in `proj-crs`. See
       `../../record/2026-10-23/nad83-reaches-wgs-84-by-its-realisation.md`.
 
+- id: GAP-202
+  name: A cut-off desktop that restarts forgets the gap acceptances it owed its node
+  type: Technical
+  caps: [CAP-1.4, CAP-7.3]
+  layer: Service facades and wiring
+  sev: 3
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: [GAP-194, GAP-142]
+  impact: >-
+    A desktop cut off from its node records a commander's gap acceptance and queues it to
+    forward, but the queue is held in memory. Restarted before the node answers, the
+    desktop keeps the acceptance on its own journal and the node never hears of it, so
+    every other console shows the gap as unexamined while this one shows it accepted.
+  evidence: >-
+    `gungnir_remote::link::Projection::acceptance_outbox` (in memory);
+    `gungnir_app::gap_acceptance::accept` queues the forward only when the acceptance is
+    made; an outage's decisions are recovered from the journal for forwarding (GAP-142),
+    acceptances are not
+  action: >-
+    On start, find the acceptances this desktop made while cut off that its node has not
+    answered, from its own journal, and queue them to forward again, as GAP-142 does for
+    an outage's decisions; the node answers a repeat `already-accepted`.
+  ref: >-
+    Found closing GAP-194 (`../../record/2026-10-25/a-linked-desktop-accepts-on-the-node.md`)
+  history:
+  - date: 2026-10-25
+    status: Open
+    note: >-
+      Found closing GAP-194: the forward is queued only when the acceptance is made, and
+      the queue does not survive a restart.
 - id: GAP-201
   name: A linked desktop could miss a queued item until the queue moved again
   type: Technical

@@ -754,11 +754,17 @@ impl App {
             // refused and said why; either way the draft is the window's to keep or clear.
             PanelAction::AcceptGap(a) => {
                 match gungnir_app::gap_acceptance::accept(&mut self.state, &a.gap, &a.reason) {
-                    Ok(id) => {
-                        self.state.alerts.push(format!(
-                            "Gap acceptance {id} recorded: {}",
-                            a.gap.describe()
-                        ));
+                    Ok(accepted) => {
+                        use gungnir_app::gap_acceptance::Accepted;
+                        self.state.alerts.push(match accepted {
+                            Accepted::Recorded(id) => {
+                                format!("Gap acceptance {id} recorded: {}", a.gap.describe())
+                            }
+                            // GAP-194: the node records it, and its answer is an alert.
+                            Accepted::SentToNode => {
+                                format!("Gap acceptance sent to the node: {}", a.gap.describe())
+                            }
+                        });
                         self.sustainment.gap_acceptance =
                             gungnir_ui::panels::coverage_layers::AcceptanceDraft::default();
                     }

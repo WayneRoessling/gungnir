@@ -265,8 +265,16 @@ sensors. A desktop that masks with a loaded DEM draws different gaps, so a linke
 accepts from the node's answer. Its own report keeps a mark only where a gap matches.
 
 **A cut-off desktop** accepts what its signed-in role may and forwards the acceptance when
-the node answers. An acceptance the node refuses re-opens on the desktop with the node's
-reason. The link's half of this is GAP-194's second pull request.
+the node answers, naming who accepted it (`accepted_offline`). An acceptance the node
+refuses re-opens on the desktop with the node's reason: `ReopenedBecause::RefusedByNode`,
+journaled and audited under nobody, as §8 rule 3's re-openings are.
+
+**The desktop's half (2026-10-25).** The link reads the node's answer on connecting, on
+any planning event the stream carries, after its own post is answered, and every 5 s,
+because the node's coverage moves with its sensors and no event says so. It posts an
+acceptance until the node answers, keeping it through `503`, `504`, an unreachable node
+and a lapsed token. While the link is up, PN-11 lists the node's gaps with the node's
+acceptances and its measure, and accepting sends to the node and records nothing here.
 
 ## Traceability
 

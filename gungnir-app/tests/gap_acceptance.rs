@@ -188,7 +188,9 @@ fn a_commander_accepts_a_gap_and_nobody_else_can() {
         &gap,
         "the upper Vell is covered by the harbour patrol until R2 is moved",
     )
-    .expect("a signed-in commander accepts");
+    .expect("a signed-in commander accepts")
+    .recorded()
+    .expect("recorded here: no node is linked");
     update::tick(&mut state);
     let journaled = planning_events(&events);
     assert!(
@@ -321,7 +323,10 @@ fn a_changed_shape_re_opens_the_acceptance() {
     let events = state.events.subscribe();
     let (_, gap) = the_uncovered_gap(&state);
     sign_in(&mut state, COMMANDER);
-    let id = gap_acceptance::accept(&mut state, &gap, "accepted for the exercise").expect("ok");
+    let id = gap_acceptance::accept(&mut state, &gap, "accepted for the exercise")
+        .expect("ok")
+        .recorded()
+        .expect("recorded here");
     update::tick(&mut state);
     update::tick(&mut state);
     assert_eq!(state.gap_acceptances.standing.len(), 1, "nothing changed");
@@ -372,7 +377,10 @@ fn a_new_revision_or_another_laydown_in_force_re_opens_it_and_nothing_else_does(
         radars_searching(state);
         let (_, gap) = the_uncovered_gap(state);
         sign_in(state, COMMANDER);
-        let id = gap_acceptance::accept(state, &gap, "accepted for the exercise").expect("ok");
+        let id = gap_acceptance::accept(state, &gap, "accepted for the exercise")
+            .expect("ok")
+            .recorded()
+            .expect("recorded here");
         update::tick(state);
         state.save_session().expect("saved");
         id

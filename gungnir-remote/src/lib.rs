@@ -33,6 +33,7 @@
 //! sealed keystore and the escrow record, GAP-084), not the handshake, which
 //! `gungnir-api/tests/mutual_tls.rs` gates today.
 
+pub mod coverage;
 pub mod endpoint;
 pub mod identity;
 pub mod link;
