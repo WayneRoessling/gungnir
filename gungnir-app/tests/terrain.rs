@@ -98,6 +98,7 @@ fn desktop_vertical(
             frame: frame.into(),
             vertical: vertical.map(str::to_string),
             nad83_realisation: None,
+            vertical_sigma_m: None,
         }),
         geoid_grid_dir: Some(dir.join("no-grid-here").to_string_lossy().into_owned()),
         ..ConfigBaseline::default()
@@ -573,6 +574,7 @@ fn the_pinned_grids_are_verified_at_start_and_place_a_dem() {
                 frame: "epsg:32633".into(),
                 vertical,
                 nad83_realisation: None,
+                vertical_sigma_m: None,
             }),
             geoid_grid_dir: Some(grid_dir.clone()),
             ..ConfigBaseline::default()

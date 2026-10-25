@@ -24,7 +24,8 @@ class "UasIdentificationReport" as UasIdentificationReport <<InformationElement>
 enum "UasAltitudeReference" as UasAltitudeReference <<InformationElement>> {
   GeoidCorrected { model: String, separation_m: f64, }
   MeanSeaLevelUncorrected { reason: String, }
-  NoAbsoluteHeight
+  TerrainPlaced { terrain: String, ground_m: f64, ground_sigma_m: f64, }
+  NoAbsoluteHeight { reason: String, }
 }
 class "OperationalRisk" as OperationalRisk <<InformationElement>> {
   certification_category: UasCertificationCategory

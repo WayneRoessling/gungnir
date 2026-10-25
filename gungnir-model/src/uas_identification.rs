@@ -152,6 +152,18 @@ impl UasIdentificationReport {
 /// bias it cannot remove instead of trusting the number as if it were ellipsoidal.
 pub const EGM2008_MAX_ABS_SEPARATION_M: f64 = 106.91;
 
+/// How far a UAS whose height nobody could place may be from the height the picture holds,
+/// metres (GAP-199, D-130): the figure D-130 left to be chosen when it was built.
+///
+/// Such a report is held at height 0, and the UAS is somewhere between the lowest ground
+/// on Earth and its highest plus its height above ground. The highest ground is Everest's
+/// summit, 8,848.86 m above mean sea level (the 2020 survey), whose geoid separation is a
+/// few tens of metres; 10 km covers it and over a kilometre above it. A detection placed
+/// from such a report widens its up variance by this bound's square, as D-124 widens an
+/// uncorrected one by [`EGM2008_MAX_ABS_SEPARATION_M`]'s, so the tracker reads the height
+/// as unknown rather than as 0 m measured to 30 m.
+pub const UNKNOWN_UAS_HEIGHT_BOUND_M: f64 = 10_000.0;
+
 /// What a Category 129 report's height is measured from (GAP-196; D-123 decides the
 /// correction, D-124 what happens without it).
 ///
@@ -181,23 +193,51 @@ pub enum UasAltitudeReference {
         /// this binary, the grid missing or refused, the position off the grid.
         reason: String,
     },
-    /// The record carries no I129/090, so there is no absolute height: `position.alt_m`
-    /// is set to 0 and is not a measurement. I129/100 (above ground level) cannot stand
-    /// in without a ground elevation model (GAP-199).
-    NoAbsoluteHeight,
+    /// The record carries no I129/090, and `position.alt_m` is I129/100 (height above
+    /// ground level) plus the ground's WGS-84 ellipsoidal height under the report, read
+    /// from a loaded DEM (GAP-199, D-130): an ellipsoidal height, as the picture reads
+    /// every other one.
+    TerrainPlaced {
+        /// The DEM the ground height came from, as the host names it.
+        terrain: String,
+        /// The ground's ellipsoidal height under the report, metres.
+        ground_m: f64,
+        /// The DEM's own vertical error, one standard deviation in metres, which the
+        /// detection placed from the report adds to its up variance.
+        ground_sigma_m: f64,
+    },
+    /// The record carries no I129/090, and no ground height placed it: `position.alt_m`
+    /// is 0 and is not a measurement. The detection's up variance says the height is
+    /// unknown, widened by [`UNKNOWN_UAS_HEIGHT_BOUND_M`]'s square (GAP-199, D-130).
+    NoAbsoluteHeight {
+        /// Why no height was placed, in words an operator reads: no I129/100 either, no
+        /// DEM loaded, or the position off the DEM.
+        reason: String,
+    },
 }
 
 impl UasAltitudeReference {
     /// Whether `position.alt_m` is a WGS-84 ellipsoidal height.
     #[must_use]
     pub fn is_ellipsoidal(&self) -> bool {
-        matches!(self, UasAltitudeReference::GeoidCorrected { .. })
+        matches!(
+            self,
+            UasAltitudeReference::GeoidCorrected { .. }
+                | UasAltitudeReference::TerrainPlaced { .. }
+        )
     }
 
     /// Whether `position.alt_m` is a height above mean sea level no model corrected.
     #[must_use]
     pub fn is_msl_uncorrected(&self) -> bool {
         matches!(self, UasAltitudeReference::MeanSeaLevelUncorrected { .. })
+    }
+
+    /// Whether `position.alt_m` is no height at all: the record gave none that could be
+    /// placed (GAP-199).
+    #[must_use]
+    pub fn is_height_unknown(&self) -> bool {
+        matches!(self, UasAltitudeReference::NoAbsoluteHeight { .. })
     }
 
     /// What placing the height cost, in words. Even a corrected height states one:
@@ -223,11 +263,22 @@ impl UasAltitudeReference {
                  to {EGM2008_MAX_ABS_SEPARATION_M} m, and is carried as mean sea level, \
                  never as an ellipsoidal height"
             ),
-            UasAltitudeReference::NoAbsoluteHeight => "neither I129/090 nor a usable \
-                 absolute altitude is present in this record; I129/100 (above ground \
-                 level) cannot substitute without a ground elevation model, so altitude is \
-                 set to 0"
-                .to_string(),
+            UasAltitudeReference::TerrainPlaced {
+                terrain,
+                ground_m,
+                ground_sigma_m,
+            } => format!(
+                "the record carries no I129/090; I129/100 (height above ground level) is \
+                 placed on the WGS-84 ellipsoid by adding the ground height under the \
+                 report, {ground_m:.1} m, from {terrain}, whose vertical error, \
+                 {ground_sigma_m:.1} m, is added to the detection's"
+            ),
+            UasAltitudeReference::NoAbsoluteHeight { reason } => format!(
+                "the record carries no I129/090 and no height could be placed ({reason}); \
+                 altitude is set to 0, which is not a measurement, and the detection's \
+                 vertical variance says the height is unknown, up to \
+                 {UNKNOWN_UAS_HEIGHT_BOUND_M} m"
+            ),
         }
     }
 
@@ -245,8 +296,13 @@ impl UasAltitudeReference {
             UasAltitudeReference::MeanSeaLevelUncorrected { reason } => {
                 format!("above mean sea level, NOT corrected to the ellipsoid: {reason}")
             }
-            UasAltitudeReference::NoAbsoluteHeight => {
-                "no absolute height reported (altitude set to 0, not a measurement)".to_string()
+            UasAltitudeReference::TerrainPlaced {
+                terrain, ground_m, ..
+            } => format!(
+                "WGS-84 ellipsoidal: height above ground + {terrain} ground {ground_m:.1} m"
+            ),
+            UasAltitudeReference::NoAbsoluteHeight { reason } => {
+                format!("height unknown (set to 0, not a measurement): {reason}")
             }
         }
     }
@@ -334,8 +390,22 @@ mod tests {
             .summary()
             .starts_with("above mean sea level, NOT corrected"));
 
-        let none = UasAltitudeReference::NoAbsoluteHeight;
+        let placed = UasAltitudeReference::TerrainPlaced {
+            terrain: "dem/site.tif".into(),
+            ground_m: 152.4,
+            ground_sigma_m: 4.0,
+        };
+        assert!(placed.is_ellipsoidal() && !placed.is_height_unknown());
+        assert!(placed.loss().contains("152.4 m, from dem/site.tif"));
+        assert!(placed.loss().contains("vertical error, 4.0 m"));
+        assert!(placed.summary().starts_with("WGS-84 ellipsoidal"));
+
+        let none = UasAltitudeReference::NoAbsoluteHeight {
+            reason: "no DEM is loaded".into(),
+        };
         assert!(!none.is_ellipsoidal() && !none.is_msl_uncorrected());
-        assert!(none.loss().contains("set to 0"));
+        assert!(none.is_height_unknown());
+        assert!(none.loss().contains("set to 0") && none.loss().contains("no DEM is loaded"));
+        assert!(none.summary().starts_with("height unknown"));
     }
 }

@@ -42,7 +42,9 @@
 //! the EGM2008 grid when [`crate::geoid::lend_to_feeds`] has lent it one, and otherwise
 //! leaves it flagged as mean sea level (D-123, D-124). The flag survives association:
 //! each track keeps its last report's [`UasAltitudeReference`], PN-04 says it in a line
-//! ([`height_line`]) and PN-03 marks the track's U ([`msl_height_tracks`]).
+//! ([`height_line`]) and PN-03 marks the track's U ([`msl_height_tracks`]). A report
+//! with no I129/090 is placed on the DEM [`crate::ground::lend_to_feeds`] lends, or
+//! carried as unknown, and PN-03 marks that too ([`unknown_height_tracks`]; GAP-199).
 //!
 //! `gungnir-node` binds the same Category 129 gateways and fuses none of this, for the
 //! reason its own AIS and ADS-B bindings already record: that binary has no edge to
@@ -88,6 +90,8 @@ pub struct LastUasIdentification {
     pub separation_m: f64,
     /// I129/090 as sent, metres above mean sea level, when the report carried it.
     pub altitude_amsl_m: Option<f64>,
+    /// I129/100 as sent, metres above ground level, when the report carried it (GAP-199).
+    pub altitude_agl_m: Option<f64>,
     /// What the report's placed height is measured from (GAP-196).
     pub altitude: UasAltitudeReference,
 }
@@ -99,9 +103,10 @@ pub struct LastUasIdentification {
 #[must_use]
 pub fn height_line(state: &AppState, track: TrackId) -> Option<(String, bool)> {
     let last = state.uas.by_track.get(&track)?;
-    let sent = match last.altitude_amsl_m {
-        Some(h) => format!("{h:.1} m above mean sea level"),
-        None => "no height above mean sea level".to_string(),
+    let sent = match (last.altitude_amsl_m, last.altitude_agl_m) {
+        (Some(h), _) => format!("{h:.1} m above mean sea level"),
+        (None, Some(h)) => format!("{h:.1} m above ground level"),
+        (None, None) => "no height".to_string(),
     };
     Some((
         format!(
@@ -121,6 +126,21 @@ pub fn msl_height_tracks(state: &AppState) -> Vec<TrackId> {
         .by_track
         .iter()
         .filter(|(_, last)| last.altitude.is_msl_uncorrected())
+        .map(|(id, _)| *id)
+        .collect();
+    tracks.sort_by_key(|t| t.0);
+    tracks
+}
+
+/// The tracks whose last Category 129 report gave no height anybody could place: PN-03
+/// marks their U as unknown (GAP-199, D-130).
+#[must_use]
+pub fn unknown_height_tracks(state: &AppState) -> Vec<TrackId> {
+    let mut tracks: Vec<TrackId> = state
+        .uas
+        .by_track
+        .iter()
+        .filter(|(_, last)| last.altitude.is_height_unknown())
         .map(|(id, _)| *id)
         .collect();
     tracks.sort_by_key(|t| t.0);
@@ -226,6 +246,7 @@ fn associate(
             at: report.receipt_time,
             separation_m,
             altitude_amsl_m: report.altitude_amsl_m,
+            altitude_agl_m: report.altitude_agl_m,
             altitude: report.altitude_reference.clone(),
         },
     );

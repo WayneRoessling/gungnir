@@ -11508,12 +11508,10 @@
     `gungnir-ingest/src/adapters/asterix.rs` (`uas_position_variance` keeps the
     baseline for it)
   action: >-
-    Build D-130. A terrain lookup the host lends the ingest adapter, as it lends
-    `GeoidSeparation`; a UAS with I129/100 and no I129/090 placed at the terrain's
-    ellipsoidal height plus its height above ground where a loaded DEM covers it, the
-    DEM's own vertical error added to the detection's; otherwise flagged with a vertical
-    variance that says the height is unknown, its figure chosen and recorded with the
-    build.
+    Done 2026-10-24 (D-130): `gungnir_ingest::terrain::GroundElevation` lent through a
+    `TerrainHandle`, the desktop's placed DEM read through it when
+    `terrain.vertical_sigma_m` states its error, and an unknown height widened by
+    `gungnir_model::UNKNOWN_UAS_HEIGHT_BOUND_M` (10 km) squared.
   ref: >-
     Found closing GAP-196 (`../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`)
   history:
@@ -11530,6 +11528,19 @@
       places the height; without one the variance says it is unknown. The node loads no
       terrain, so it takes the second path. See
       `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
+  - date: 2026-10-24
+    status: Closed
+    note: >-
+      **Closed 2026-10-24 (D-130).** The ASTERIX adapter places a record with I129/100
+      and no I129/090 at the ground's ellipsoidal height plus its own, from a
+      `GroundElevation` the desktop lends its feeds once its DEM is placed and
+      `terrain.vertical_sigma_m` states the DEM's error, which the detection adds to its
+      up variance. Otherwise -- no I129/100, no DEM, no stated error, off it, or the node
+      -- the height is unknown at 0, flagged, its up variance widened by 10 km squared
+      (D-130's figure), marked on PN-03 and PN-04, and counted on PN-09 and the node's
+      health line. The adapter's Category 129 arm and `terrain.rs` are the
+      `gungnir-ingest` gateway: human-owned; see docs/signatures.md. See
+      `../../record/2026-10-24/a-uas-height-above-ground-lands-on-the.md`.
 - id: GAP-200
   name: A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84
   type: Technical

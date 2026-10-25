@@ -193,7 +193,7 @@ history, and an entry is never edited once it has merged.
 | GAP-194 | A gap acceptance is held only by the desktop that recorded it | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | L | 12 | I3 | Services engineer | In progress |
 | GAP-195 | PN-07's degraded-condition acknowledgement is on no record | Technical | CAP-5.9 | 3 | 10 | S | 30 | I3 | UI engineer | Closed |
 | GAP-198 | The node places a UAS's height above mean sea level uncorrected | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Closed |
-| GAP-199 | A UAS reporting only its height above ground is placed at height zero | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Open |
+| GAP-199 | A UAS reporting only its height above ground is placed at height zero | Technical | CAP-1.7 | 3 | 6 | M | 18 | I4 | Services engineer | Closed |
 | GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | L | 32 | I4 | UI engineer | Closed |
 | GAP-201 | A linked desktop could miss a queued item until the queue moved again | Technical | CAP-5.9, CAP-4.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 
@@ -2781,11 +2781,12 @@ Counts: 183 gaps, 3 mission, 180 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-09-26, Open: Filed closing GAP-196, which settled the mean-sea-level height and left this one as it was: the report says the height is 0 and not a measurement, and PN-04 says so, but the detection's variance does not.
   - 2026-10-23, Open: **Decided by the owner, 2026-10-23 (D-130); nothing is built yet.** A loaded DEM places the height; without one the variance says it is unknown. The node loads no terrain, so it takes the second path. See `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
+  - 2026-10-24, Closed: **Closed 2026-10-24 (D-130).** The ASTERIX adapter places a record with I129/100 and no I129/090 at the ground's ellipsoidal height plus its own, from a `GroundElevation` the desktop lends its feeds once its DEM is placed and `terrain.vertical_sigma_m` states the DEM's error, which the detection adds to its up variance. Otherwise -- no I129/100, no DEM, no stated error, off it, or the node -- the height is unknown at 0, flagged, its up variance widened by 10 km squared (D-130's figure), marked on PN-03 and PN-04, and counted on PN-09 and the node's health line. The adapter's Category 129 arm and `terrain.rs` are the `gungnir-ingest` gateway: human-owned; see docs/signatures.md. See `../../record/2026-10-24/a-uas-height-above-ground-lands-on-the.md`.
 - Evidence: `gungnir_model::UasAltitudeReference::NoAbsoluteHeight`; `gungnir-ingest/src/adapters/asterix.rs` (`uas_position_variance` keeps the baseline for it).
 - Severity: 3. Reach: 6 threads. Effort: M. Priority: 18.
 - Impact: A Category 129 record may carry I129/100 (height above ground level) without I129/090. With no ground elevation model on the ingest path the codec sets the height to 0 and records the loss, and the detection keeps the baseline 30 m vertical sigma, so the tracker weighs a height that may be hundreds of metres wrong as if it were measured.
-- Closing action: Build D-130. A terrain lookup the host lends the ingest adapter, as it lends `GeoidSeparation`; a UAS with I129/100 and no I129/090 placed at the terrain's ellipsoidal height plus its height above ground where a loaded DEM covers it, the DEM's own vertical error added to the detection's; otherwise flagged with a vertical variance that says the height is unknown, its figure chosen and recorded with the build.
-- Target: I4. Owner: Services engineer. Status: Open.
+- Closing action: Done 2026-10-24 (D-130): `gungnir_ingest::terrain::GroundElevation` lent through a `TerrainHandle`, the desktop's placed DEM read through it when `terrain.vertical_sigma_m` states its error, and an unknown height widened by `gungnir_model::UNKNOWN_UAS_HEIGHT_BOUND_M` (10 km) squared.
+- Target: I4. Owner: Services engineer. Status: Closed.
 - Reference: Found closing GAP-196 (`../../record/2026-09-26/a-uas-height-reaches-the-wgs-84-ellipsoid.md`).
 - Depends on: GAP-101, GAP-196, D-130.
 

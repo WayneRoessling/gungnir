@@ -35,6 +35,7 @@ pub mod gap_acceptance;
 pub mod geofences;
 pub mod geoid;
 pub mod governance;
+pub mod ground;
 pub mod handoffs;
 pub mod hazards;
 pub mod identity;

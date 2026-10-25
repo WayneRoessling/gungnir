@@ -751,7 +751,7 @@ impl std::str::FromStr for Nad83Realisation {
 /// (GAP-023, D-41). See [`Frame`]. A `GeoTIFF`'s own tags are read regardless of what
 /// `frame` declares; a mismatch between the two, or a file whose tags contradict a
 /// `"local-enu"` declaration, is refused at load, by name.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TerrainConfig {
     /// An ESRI ASCII grid (`.asc`) or a `GeoTIFF` (`.tif`, `.tiff`).
     pub path: String,
@@ -782,6 +782,15 @@ pub struct TerrainConfig {
     /// most NAD83(2011) surveys as well as the 1986 adjustment it names. Absent by default.
     #[serde(default)]
     pub nad83_realisation: Option<String>,
+    /// The DEM's vertical error, one standard deviation in metres, as its producer states
+    /// it (GAP-199, D-130): a product's RMSE, or its LE90 divided by 1.6449.
+    ///
+    /// Read only to place a UAS that reports its height above ground on this DEM, whose
+    /// detection adds this error to its own. Absent by default, and then no height is
+    /// placed on the DEM: a ground height of unstated accuracy would be weighed as if it
+    /// were exact, so such a UAS is carried as unknown with that reason instead.
+    #[serde(default)]
+    pub vertical_sigma_m: Option<f64>,
 }
 
 fn default_terrain_frame() -> String {
@@ -2954,6 +2963,16 @@ fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
         return Err(ConfigError::Invalid(format!(
             "terrain.nad83_realisation {reason}"
         )));
+    }
+    // GAP-199: an error is a positive, finite number of metres; zero would claim a DEM
+    // that is exact.
+    if let Some(sigma) = t.vertical_sigma_m {
+        if !(sigma.is_finite() && sigma > 0.0) {
+            return Err(ConfigError::Invalid(format!(
+                "terrain.vertical_sigma_m is {sigma}; a DEM's vertical error is a positive \
+                 number of metres"
+            )));
+        }
     }
     Ok(())
 }
@@ -5698,6 +5717,7 @@ MFkw
                 frame: "local-enu".into(),
                 vertical: None,
                 nad83_realisation: None,
+                vertical_sigma_m: None,
             }),
             ..ConfigBaseline::default()
         };
@@ -5707,6 +5727,7 @@ MFkw
             frame: "local-enu".into(),
             vertical: None,
             nad83_realisation: None,
+            vertical_sigma_m: None,
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
         // GAP-023, D-41: a real-world CRS by EPSG code is now accepted syntactically --
@@ -5717,6 +5738,7 @@ MFkw
             frame: "EPSG:32633".into(),
             vertical: None,
             nad83_realisation: None,
+            vertical_sigma_m: None,
         });
         validate(&b).expect("a declared real-world CRS by EPSG code is valid");
         b.terrain = Some(TerrainConfig {
@@ -5724,6 +5746,7 @@ MFkw
             frame: "epsg:4326".into(),
             vertical: None,
             nad83_realisation: None,
+            vertical_sigma_m: None,
         });
         validate(&b).expect("lowercase epsg: is accepted the same way");
         // Neither "local-enu" nor "epsg:<code>" is still refused, whatever the reason.
@@ -5732,6 +5755,7 @@ MFkw
             frame: "wgs84".into(),
             vertical: None,
             nad83_realisation: None,
+            vertical_sigma_m: None,
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
         b.terrain = Some(TerrainConfig {
@@ -5739,6 +5763,7 @@ MFkw
             frame: "epsg:not-a-number".into(),
             vertical: None,
             nad83_realisation: None,
+            vertical_sigma_m: None,
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
     }
@@ -5782,6 +5807,7 @@ MFkw
                 frame: "epsg:32633".into(),
                 vertical: Some("epsg:3855".into()),
                 nad83_realisation: None,
+                vertical_sigma_m: None,
             }),
             geoid_grid_dir: Some("/opt/gungnir/geoid".into()),
             ..ConfigBaseline::default()
@@ -5826,6 +5852,7 @@ MFkw
                 frame: "epsg:26910".into(),
                 vertical: Some("epsg:5703".into()),
                 nad83_realisation: Some("epsg:6318".into()),
+                vertical_sigma_m: None,
             }),
             ..ConfigBaseline::default()
         };
@@ -5837,6 +5864,31 @@ MFkw
             panic!("WGS 84 is not a NAD83 realisation");
         };
         assert!(reason.contains("terrain.nad83_realisation"), "{reason}");
+    }
+
+    /// GAP-199 (D-130): a DEM's vertical error is optional, and when stated it is a
+    /// positive, finite number of metres.
+    #[test]
+    fn a_dem_vertical_error_is_a_positive_number_of_metres() {
+        let terrain = |sigma| ConfigBaseline {
+            terrain: Some(TerrainConfig {
+                path: "dem/site.asc".into(),
+                frame: "local-enu".into(),
+                vertical: None,
+                nad83_realisation: None,
+                vertical_sigma_m: sigma,
+            }),
+            ..ConfigBaseline::default()
+        };
+        for good in [None, Some(0.5), Some(4.0)] {
+            validate(&terrain(good)).expect("absent, or a positive error");
+        }
+        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            let Err(ConfigError::Invalid(reason)) = validate(&terrain(Some(bad))) else {
+                panic!("{bad} is not a vertical error");
+            };
+            assert!(reason.contains("terrain.vertical_sigma_m"), "{reason}");
+        }
     }
 
     /// GAP-200 (D-127): a pinned frame epoch is a decimal year a picture can be at.

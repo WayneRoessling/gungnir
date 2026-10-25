@@ -139,6 +139,12 @@ pub struct FeedLine<'a> {
     /// ASTERIX Category 129 heights above mean sea level no geoid model corrected:
     /// carried as mean sea level and flagged, never as ellipsoidal (GAP-196, D-124).
     pub uas_heights_msl_uncorrected: u64,
+    /// ASTERIX Category 129 heights above ground level the DEM put on the WGS-84
+    /// ellipsoid (GAP-199).
+    pub uas_heights_terrain_placed: u64,
+    /// ASTERIX Category 129 records whose height nobody could place: carried as unknown
+    /// at 0 and flagged (GAP-199, D-130).
+    pub uas_heights_unknown: u64,
 }
 
 /// One bound AIS feed's counters (GAP-010).
@@ -602,6 +608,13 @@ fn render_feeds(ui: &mut egui::Ui, palette: &theme::Palette, feeds: &[FeedLine<'
                     f.uas_heights_geoid_corrected
                 );
             }
+            if f.uas_heights_terrain_placed > 0 {
+                let _ = write!(
+                    text,
+                    "; {} UAS heights above ground placed on the DEM",
+                    f.uas_heights_terrain_placed
+                );
+            }
             let mut colour = palette.healthy_color();
             if f.not_decoded > 0 || f.unknown_radar > 0 {
                 let _ = write!(
@@ -618,6 +631,15 @@ fn render_feeds(ui: &mut egui::Ui, palette: &theme::Palette, feeds: &[FeedLine<'
                     text,
                     "; {} UAS heights above mean sea level, not corrected to the ellipsoid",
                     f.uas_heights_msl_uncorrected
+                );
+                colour = palette.warning_color;
+            }
+            // GAP-199 (D-130): a height nobody could place is a loss the same way.
+            if f.uas_heights_unknown > 0 {
+                let _ = write!(
+                    text,
+                    "; {} UAS heights unknown, held at 0",
+                    f.uas_heights_unknown
                 );
                 colour = palette.warning_color;
             }
