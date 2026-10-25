@@ -112,6 +112,9 @@ pub struct BoundFeeds {
     /// The geoid model every feed bound here holds (GAP-196), one handle cloned into
     /// each: unavailable until [`crate::geoid::lend_to_feeds`] lends the verified grid.
     pub geoid: gungnir_ingest::geoid::GeoidHandle,
+    /// The ground elevation model every feed bound here holds (GAP-199), one handle cloned
+    /// into each: unavailable until [`crate::ground::lend_to_feeds`] lends the placed DEM.
+    pub terrain: gungnir_ingest::terrain::TerrainHandle,
 }
 
 impl Default for BoundFeeds {
@@ -121,6 +124,9 @@ impl Default for BoundFeeds {
             stats: Vec::new(),
             uas_reports: Vec::new(),
             geoid: gungnir_ingest::geoid::GeoidHandle::unavailable(crate::geoid::NOT_YET_CHECKED),
+            terrain: gungnir_ingest::terrain::TerrainHandle::unavailable(
+                crate::ground::NOT_YET_LENT,
+            ),
         }
     }
 }
@@ -153,6 +159,7 @@ pub fn bind_feeds(
     for spec in feed_specs(config) {
         let feed_sinks = FeedSinks {
             geoid: sinks.geoid.clone(),
+            terrain: sinks.terrain.clone(),
             ..FeedSinks::default()
         };
         match bind_feed(&spec, &frame, &feed_sinks) {
@@ -196,6 +203,8 @@ pub fn feed_lines(state: &AppState) -> Vec<gungnir_ui::panels::sensor_health::Fe
                 unknown_radar: s.unknown_radar,
                 uas_heights_geoid_corrected: s.uas_heights_geoid_corrected,
                 uas_heights_msl_uncorrected: s.uas_heights_msl_uncorrected,
+                uas_heights_terrain_placed: s.uas_heights_terrain_placed,
+                uas_heights_unknown: s.uas_heights_unknown,
             }
         })
         .collect()

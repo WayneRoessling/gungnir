@@ -824,6 +824,8 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
 fn render_track_table(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction> {
     // GAP-196: the tracks whose last UAS report's height is still above mean sea level.
     let msl_heights = crate::uas::msl_height_tracks(state);
+    // GAP-199: and those whose last UAS report gave no height anybody could place.
+    let unknown_heights = crate::uas::unknown_height_tracks(state);
     let view = TrackTableView {
         tracks: state.tracking.tracks(),
         now: state.clock.now(),
@@ -831,6 +833,7 @@ fn render_track_table(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction
         scores: Err(ASSESSMENT),
         selected: state.selected_track(),
         msl_heights: &msl_heights,
+        unknown_heights: &unknown_heights,
         vocabulary: &state.config.vocabulary,
     };
     gungnir_ui::panels::track_table::render_track_table(ui, &state.palette, &view)

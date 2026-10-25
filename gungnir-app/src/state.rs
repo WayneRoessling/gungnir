@@ -85,6 +85,12 @@ pub struct AppState {
     /// The geoid model every bound radar feed holds (GAP-196): the verified EGM2008 grid
     /// once [`crate::geoid::lend_to_feeds`] lends it, the reason there is none until then.
     pub geoid_feeds: gungnir_ingest::geoid::GeoidHandle,
+    /// The ground elevation model every bound radar feed holds (GAP-199): the placed DEM
+    /// once [`crate::ground::lend_to_feeds`] lends it, the reason there is none until then.
+    pub terrain_feeds: gungnir_ingest::terrain::TerrainHandle,
+    /// The terrain standing last lent to the feeds, so the lookup is built once per load
+    /// rather than once per tick.
+    pub terrain_lent: Option<crate::terrain::TerrainStatus>,
     /// The EGM2008 grid status last lent to the feeds, so a lookup service starts once
     /// per change rather than once per tick.
     pub geoid_lent: Option<crate::geoid::GeoidStatus>,
@@ -734,6 +740,8 @@ impl AppState {
             geoid_checks: Vec::new(),
             geoid_feeds: feeds.geoid.clone(),
             geoid_lent: None,
+            terrain_feeds: feeds.terrain.clone(),
+            terrain_lent: None,
             registration: crate::pointcloud::RegistrationOutcome::NoPair,
             registration_engine: None,
             service_sinks: feeds.observations,

@@ -173,6 +173,15 @@ pub const TIME_OF_DAY_ABSENT: &str = "no time of day (I129/070); source time set
 /// answer -- corrected, or the reason it could not be.
 pub const DECODED_WITHOUT_A_GEOID: &str =
     "decoded by the Category 129 codec, which reaches no geoid model";
+/// Why a record with I129/100 and no I129/090 has no height yet: the codec reaches no
+/// ground elevation model (GAP-199). The ingest adapter replaces this with its own answer
+/// -- placed on a DEM, or the reason it could not be.
+pub const DECODED_WITHOUT_TERRAIN: &str =
+    "decoded by the Category 129 codec, which reaches no ground elevation model";
+/// Why a record has no height at all: it carries neither I129/090 nor I129/100, and
+/// nothing can place one (GAP-199).
+pub const NO_HEIGHT_IN_RECORD: &str =
+    "the record carries neither I129/090 nor I129/100 (height above ground level)";
 const MAX_FRN: usize = 21;
 /// I129/080: 180 / 2^30 degrees per count (§5.2.8) -- see the module documentation for
 /// the cross-check against the specification's own worked decimal, and for why this
@@ -536,18 +545,29 @@ impl AsterixCat129Codec {
         // which this crate has no model to add (module documentation, GAP-196). So the
         // height is placed as sent and the report says what it is, as data: the
         // adapter that places the report corrects it where a verified grid is attached.
-        // I129/100 (AGL) is deliberately never used here even alone: without a ground
-        // elevation model, an above-ground-level height cannot honestly become an
-        // absolute one, and inventing a ground elevation would be exactly the
-        // confidently-wrong move this workspace forbids (GAP-199).
-        let (alt_m, altitude_reference) = match record.altitude_amsl_m {
-            Some(amsl) => (
+        // I129/100 (AGL) is never used here even alone: without a ground elevation
+        // model, an above-ground-level height cannot honestly become an absolute one, and
+        // inventing a ground elevation would be exactly the confidently-wrong move this
+        // workspace forbids. The adapter places it on a DEM where the host lends one
+        // (GAP-199, D-130), and otherwise says the height is unknown.
+        let (alt_m, altitude_reference) = match (record.altitude_amsl_m, record.altitude_agl_m) {
+            (Some(amsl), _) => (
                 amsl,
                 UasAltitudeReference::MeanSeaLevelUncorrected {
                     reason: DECODED_WITHOUT_A_GEOID.to_owned(),
                 },
             ),
-            None => (0.0, UasAltitudeReference::NoAbsoluteHeight),
+            (None, agl) => (
+                0.0,
+                UasAltitudeReference::NoAbsoluteHeight {
+                    reason: if agl.is_some() {
+                        DECODED_WITHOUT_TERRAIN
+                    } else {
+                        NO_HEIGHT_IN_RECORD
+                    }
+                    .to_owned(),
+                },
+            ),
         };
 
         Ok(UasIdentificationReport {

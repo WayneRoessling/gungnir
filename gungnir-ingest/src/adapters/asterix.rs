@@ -52,8 +52,20 @@
 //! is mean sea level and why; the detection carries that in its provenance, its vertical
 //! variance is widened by the square of the largest separation EGM2008 has anywhere
 //! (`gungnir_model::EGM2008_MAX_ABS_SEPARATION_M`), and [`AsterixFeedStats`] counts it.
+//!
+//! **A UAS's height above ground, placed on a DEM (GAP-199, D-130): human-owned (the
+//! `gungnir-ingest` gateway).** A record with I129/100 and no I129/090 states its height
+//! only above the ground under it. Where the host lent a ground elevation model through
+//! [`FeedSinks::terrain`] (`crate::terrain`) and it covers the report's position, the
+//! adapter places the UAS at the ground's ellipsoidal height plus I129/100, and the
+//! detection adds the DEM's own vertical error to its up variance. Where it did not -- no
+//! DEM on this binary (the node's case), none loaded, the position off it or in a hole --
+//! or the record carries no I129/100 either, the height stays 0, the report says it is
+//! unknown and why, the up variance is widened by the square of
+//! `gungnir_model::UNKNOWN_UAS_HEIGHT_BOUND_M`, and [`AsterixFeedStats`] counts it.
 
 use crate::geoid::GeoidHandle;
+use crate::terrain::TerrainHandle;
 use crate::{DetectionView, IngestError, ProtocolAdapter};
 use gungnir_interop::asterix::{cat034, cat048, cat129, cat205, data_blocks, RadarSite};
 use gungnir_interop::{
@@ -62,7 +74,7 @@ use gungnir_interop::{
 };
 use gungnir_model::{
     Geodetic, LocalFrame, MissionTime, SensorId, UasAltitudeReference, UasIdentificationReport,
-    EGM2008_MAX_ABS_SEPARATION_M,
+    EGM2008_MAX_ABS_SEPARATION_M, UNKNOWN_UAS_HEIGHT_BOUND_M,
 };
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt::Write as _;
@@ -88,15 +100,26 @@ pub const MAX_DATAGRAMS_PER_POLL: usize = 4096;
 const BASELINE_POSITION_VARIANCE_M2: [f64; 3] = [400.0, 400.0, 900.0];
 
 /// The per-axis variance a Category 129 detection carries: the baseline, with the up
-/// axis widened by the square of the largest geoid separation EGM2008 has anywhere when
-/// the height is still above mean sea level (GAP-196, D-124). A corrected height, and a
-/// record with no absolute height at all (GAP-199), keep the baseline.
+/// axis widened by what the height does not know. A height still above mean sea level
+/// adds the square of the largest geoid separation EGM2008 has anywhere (GAP-196, D-124);
+/// a height placed on a DEM adds the square of the DEM's own vertical error, and a height
+/// nobody could place adds the square of [`UNKNOWN_UAS_HEIGHT_BOUND_M`] (GAP-199, D-130).
+/// A geoid-corrected height keeps the baseline.
 #[must_use]
 pub fn uas_position_variance(reference: &UasAltitudeReference) -> [f64; 3] {
     let mut variance = BASELINE_POSITION_VARIANCE_M2;
-    if reference.is_msl_uncorrected() {
-        variance[2] += EGM2008_MAX_ABS_SEPARATION_M * EGM2008_MAX_ABS_SEPARATION_M;
-    }
+    variance[2] += match reference {
+        UasAltitudeReference::GeoidCorrected { .. } => 0.0,
+        UasAltitudeReference::MeanSeaLevelUncorrected { .. } => {
+            EGM2008_MAX_ABS_SEPARATION_M * EGM2008_MAX_ABS_SEPARATION_M
+        }
+        UasAltitudeReference::TerrainPlaced { ground_sigma_m, .. } => {
+            ground_sigma_m * ground_sigma_m
+        }
+        UasAltitudeReference::NoAbsoluteHeight { .. } => {
+            UNKNOWN_UAS_HEIGHT_BOUND_M * UNKNOWN_UAS_HEIGHT_BOUND_M
+        }
+    };
     variance
 }
 
@@ -132,6 +155,11 @@ pub struct FeedSinks {
     /// default is unavailable, so a host that sets nothing gets every Category 129
     /// height flagged as mean sea level and counted, never passed off as ellipsoidal.
     pub geoid: GeoidHandle,
+    /// The ground elevation model this host lends the feed, or why it lends none
+    /// (GAP-199). The default is unavailable, so a host that sets nothing gets every
+    /// Category 129 height above ground carried as unknown and counted, never placed on
+    /// an invented ground.
+    pub terrain: TerrainHandle,
 }
 
 /// The adapter's counters as of its last poll, for a host to read.
@@ -158,6 +186,7 @@ pub fn bind_feed(
             .with_df_sites(&spec.df_sites, frame)
             .with_uas_sites(&spec.uas_sites)
             .with_geoid(sinks.geoid.clone())
+            .with_terrain(sinks.terrain.clone())
             .with_observation_sink(sinks.observations.clone())
             .with_stats_sink(sinks.stats.clone()),
     )
@@ -343,6 +372,13 @@ pub struct AsterixFeedStats {
     /// corrected, carried as mean sea level and flagged (D-124). Each is a report
     /// whose height is off the ellipsoid by the local separation; PN-09 shows the count.
     pub uas_heights_msl_uncorrected: u64,
+    /// GAP-199: Category 129 heights above ground level placed on the WGS-84 ellipsoid
+    /// by adding them to the lent DEM's ground height (D-130).
+    pub uas_heights_terrain_placed: u64,
+    /// GAP-199: Category 129 records with no I129/090 whose height **nobody** placed --
+    /// no I129/100, no DEM lent, or the position off it -- carried as unknown at 0 and
+    /// flagged (D-130). PN-09 shows the count.
+    pub uas_heights_unknown: u64,
     /// Valid Category 048 or 205 records that are not observations (048's `TYP = 0`;
     /// 205's position message types and detection-end reports -- see
     /// `cat205::AsterixCat205Codec::map`).
@@ -379,6 +415,8 @@ pub struct AsterixFeedAdapter<S: DatagramSource> {
     /// GAP-196: the geoid model the host lends, read on every Category 129 report so a
     /// model lent after binding is used from the next report on.
     geoid: GeoidHandle,
+    /// GAP-199: the ground elevation model the host lends, read the same way.
+    terrain: TerrainHandle,
     buf: Vec<u8>,
     service_reports: VecDeque<RadarServiceReport>,
     /// UAS identification reports mapped since the last drain (GAP-101), the same
@@ -482,6 +520,7 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
             cat205: AsterixCat205Codec::default(),
             cat129: AsterixCat129Codec::default(),
             geoid: GeoidHandle::default(),
+            terrain: TerrainHandle::default(),
             buf: vec![0; MAX_DATAGRAM],
             service_reports: VecDeque::new(),
             uas_reports: VecDeque::new(),
@@ -564,6 +603,16 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
     #[must_use]
     pub fn with_geoid(mut self, geoid: GeoidHandle) -> Self {
         self.geoid = geoid;
+        self
+    }
+
+    /// The ground elevation model a Category 129 report's height above ground is placed
+    /// with (GAP-199, D-130): a handle the host keeps and may set after binding. Without
+    /// this the adapter holds an unavailable one, and every such height is carried as
+    /// unknown, flagged and counted.
+    #[must_use]
+    pub fn with_terrain(mut self, terrain: TerrainHandle) -> Self {
+        self.terrain = terrain;
         self
     }
 
@@ -692,10 +741,17 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
     /// it stays where it is (GAP-196; module documentation). Runs before the report is
     /// placed or queued, so the detection and the report agree.
     ///
-    /// Only a height the codec left as mean sea level is touched: a record with no
-    /// I129/090 has no height to correct, and one already corrected is not corrected
-    /// twice.
+    /// A height the codec left as mean sea level is corrected with the geoid; a record
+    /// with no I129/090 is placed on the ground with I129/100, or carried as unknown
+    /// ([`Self::place_above_ground`]). One already placed is not placed twice.
     fn place_uas_height(&mut self, report: &mut UasIdentificationReport) {
+        if matches!(
+            report.altitude_reference,
+            UasAltitudeReference::NoAbsoluteHeight { .. }
+        ) {
+            self.place_above_ground(report);
+            return;
+        }
         let (Some(amsl), UasAltitudeReference::MeanSeaLevelUncorrected { .. }) =
             (report.altitude_amsl_m, &report.altitude_reference)
         else {
@@ -736,6 +792,61 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
         self.stats.uas_heights_msl_uncorrected += 1;
     }
 
+    /// Place a record with no I129/090 on the ground under it with I129/100, or say why
+    /// its height is unknown (GAP-199, D-130; module documentation).
+    ///
+    /// A ground height and its error must both be finite, and the error positive: a model
+    /// that answers otherwise is reported by name and the height is unknown, never placed
+    /// on a ground nobody measured.
+    fn place_above_ground(&mut self, report: &mut UasIdentificationReport) {
+        let Some(agl) = report.altitude_agl_m.filter(|h| h.is_finite()) else {
+            let reason = match report.altitude_agl_m {
+                Some(h) => format!("I129/100 decoded as {h}"),
+                None => gungnir_interop::asterix::cat129::NO_HEIGHT_IN_RECORD.to_owned(),
+            };
+            self.keep_unknown(report, reason);
+            return;
+        };
+        let lat_deg = report.position.lat_rad.to_degrees();
+        let lon_deg = report.position.lon_rad.to_degrees();
+        let placed = self.terrain.current().and_then(|model| {
+            model
+                .ground(lat_deg, lon_deg)
+                .map(|ground| (model.name().to_owned(), ground))
+                .map_err(|e| format!("{} gives no ground height here: {e}", model.name()))
+        });
+        match placed {
+            Ok((terrain, ground))
+                if ground.ellipsoidal_m.is_finite()
+                    && ground.sigma_m.is_finite()
+                    && ground.sigma_m > 0.0 =>
+            {
+                report.position.alt_m = ground.ellipsoidal_m + agl;
+                report.altitude_reference = UasAltitudeReference::TerrainPlaced {
+                    terrain,
+                    ground_m: ground.ellipsoidal_m,
+                    ground_sigma_m: ground.sigma_m,
+                };
+                self.stats.uas_heights_terrain_placed += 1;
+            }
+            Ok((terrain, ground)) => self.keep_unknown(
+                report,
+                format!(
+                    "{terrain} returned a ground height of {} m with an error of {} m",
+                    ground.ellipsoidal_m, ground.sigma_m
+                ),
+            ),
+            Err(reason) => self.keep_unknown(report, reason),
+        }
+    }
+
+    /// The height stays 0, flagged as unknown with `reason` and counted (D-130).
+    fn keep_unknown(&mut self, report: &mut UasIdentificationReport, reason: String) {
+        report.position.alt_m = 0.0;
+        report.altitude_reference = UasAltitudeReference::NoAbsoluteHeight { reason };
+        self.stats.uas_heights_unknown += 1;
+    }
+
     /// A UAS identification report's own claimed position (`Geodetic`, module
     /// documentation on `gungnir_model::UasIdentificationReport` explains why it stays
     /// geodetic through `gungnir-interop`) placed in this deployment's ENU frame and
@@ -746,7 +857,9 @@ impl<S: DatagramSource> AsterixFeedAdapter<S> {
     /// by a separation nobody knows here, anywhere up to
     /// [`EGM2008_MAX_ABS_SEPARATION_M`]; the up variance is widened by that bound's
     /// square so the tracker weighs the bias instead of trusting the height as if it
-    /// were ellipsoidal. The report's every loss, the height's included, goes on the
+    /// were ellipsoidal. **GAP-199 (D-130):** a height placed on a DEM adds the DEM's
+    /// error, and one nobody placed says it is unknown ([`uas_position_variance`]).
+    /// The report's every loss, the height's included, goes on the
     /// detection's provenance, so the picture carries the flag and not only the report.
     fn uas_detection(&self, report: &UasIdentificationReport) -> DetectionView {
         let enu = self.frame.to_enu(report.position);
@@ -1233,35 +1346,172 @@ mod tests {
         assert_eq!(adapter.stats().uas_heights_msl_uncorrected, 1);
     }
 
-    /// A record with no I129/090 has no height to correct, and neither count moves; its
-    /// own loss (altitude set to 0) is still on the detection (GAP-199).
+    /// A record with neither I129/090 nor I129/100 has no height to correct or place,
+    /// even with a geoid and a DEM lent: it is unknown, counted as such, and the detection
+    /// says so in its loss and its up variance (GAP-199, D-130).
     #[test]
-    // The baseline is returned untouched, so equality is the property.
-    #[allow(clippy::float_cmp)]
-    fn a_record_with_no_msl_height_is_not_counted_as_either() {
+    fn a_record_with_no_height_at_all_is_unknown_whatever_is_lent() {
         let sinks = FeedSinks::default();
         sinks
             .geoid
             .set_available(std::sync::Arc::new(FixedSeparation(Ok(34.92))));
+        sinks
+            .terrain
+            .set_available(std::sync::Arc::new(FixedGround(Ok((120.0, 4.0)))));
         let mut adapter = uas_feed(&sinks);
         let detections = adapter.handle_datagram(&cat129_datagram(), MissionTime(43_205.0));
         let report = adapter.drain_uas_reports().pop().expect("one report");
         assert_eq!(
             report.altitude_reference,
-            UasAltitudeReference::NoAbsoluteHeight
+            UasAltitudeReference::NoAbsoluteHeight {
+                reason: cat129::NO_HEIGHT_IN_RECORD.to_owned()
+            }
         );
         let s = adapter.stats();
         assert_eq!(
-            (s.uas_heights_msl_uncorrected, s.uas_heights_geoid_corrected),
-            (0, 0)
+            (
+                s.uas_heights_msl_uncorrected,
+                s.uas_heights_geoid_corrected,
+                s.uas_heights_terrain_placed,
+                s.uas_heights_unknown
+            ),
+            (0, 0, 0, 1)
         );
         let (_, variance) = up_and_variance(&detections[0]);
-        assert_eq!(variance, BASELINE_POSITION_VARIANCE_M2);
+        let unknown = 900.0 + UNKNOWN_UAS_HEIGHT_BOUND_M * UNKNOWN_UAS_HEIGHT_BOUND_M;
+        assert!((variance[2] - unknown).abs() < 1e-6, "{variance:?}");
         assert!(detections[0]
             .provenance
             .conversion_loss
             .as_deref()
             .is_some_and(|l| l.contains("set to 0")));
+    }
+
+    /// GAP-199: the same record as [`cat129_msl_datagram`] with I129/100 = 120.0 m above
+    /// ground level (`0x00_04B0`) in place of I129/090. FSPEC flags FRN 1, 6, 7 and FRN 8,
+    /// 10: `0x87, 0xA0`. LEN 23.
+    fn cat129_agl_datagram() -> Vec<u8> {
+        vec![
+            0x81, 0x00, 0x17, 0x87, 0xA0, 10, 20, b'D', b'E', 0x54, 0x60, 0x00, 0x12, 0x55, 0xAB,
+            0x96, 0x04, 0x13, 0x09, 0xB0, 0x00, 0x04, 0xB0,
+        ]
+    }
+
+    /// A ground model with one ground height and error everywhere, or none; stands in for
+    /// the desktop's placed DEM, which this crate cannot reach (the lookup itself is
+    /// tested in `gungnir-app`).
+    struct FixedGround(Result<(f64, f64), &'static str>);
+    impl crate::terrain::GroundElevation for FixedGround {
+        fn name(&self) -> &'static str {
+            "dem/site.tif"
+        }
+        fn ground(&self, _: f64, _: f64) -> Result<crate::terrain::GroundHeight, String> {
+            self.0
+                .map(|(ellipsoidal_m, sigma_m)| crate::terrain::GroundHeight {
+                    ellipsoidal_m,
+                    sigma_m,
+                })
+                .map_err(str::to_owned)
+        }
+    }
+
+    /// **The no-DEM path (D-130), the node's.** A host that lends no ground model gets a
+    /// height above ground carried as unknown at 0, with the reason, counted, on the
+    /// detection's provenance, and weighed with an up variance that says the height is
+    /// unknown -- not 0 m measured to 30 m.
+    #[test]
+    fn a_height_above_ground_with_no_dem_is_unknown_counted_and_widened() {
+        let mut adapter = uas_feed(&FeedSinks::default());
+        let detections = adapter.handle_datagram(&cat129_agl_datagram(), MissionTime(43_205.0));
+        let report = adapter.drain_uas_reports().pop().expect("one report");
+        assert_eq!(
+            report.altitude_reference,
+            UasAltitudeReference::NoAbsoluteHeight {
+                reason: crate::terrain::NO_TERRAIN_ATTACHED.to_owned()
+            }
+        );
+        assert!((report.altitude_agl_m.expect("kept as sent") - 120.0).abs() < 1e-9);
+        assert!(report.position.alt_m.abs() < 1e-12, "held at 0");
+        assert_eq!(adapter.stats().uas_heights_unknown, 1);
+        let (up, variance) = up_and_variance(&detections[0]);
+        assert!(up.abs() < 1e-3, "{up}");
+        let unknown = 900.0 + UNKNOWN_UAS_HEIGHT_BOUND_M * UNKNOWN_UAS_HEIGHT_BOUND_M;
+        assert!((variance[2] - unknown).abs() < 1e-6, "{variance:?}");
+        assert!((variance[0] - 400.0).abs() < 1e-12 && (variance[1] - 400.0).abs() < 1e-12);
+        let loss = detections[0]
+            .provenance
+            .conversion_loss
+            .as_deref()
+            .expect("the flag reaches the picture");
+        assert!(loss.contains(crate::terrain::NO_TERRAIN_ATTACHED), "{loss}");
+    }
+
+    /// **The placement (D-130)**, with the DEM lent through the host's handle *after* the
+    /// feed was bound, as the desktop's terrain load does: the report and the detection
+    /// carry the ground's ellipsoidal height plus I129/100, the up variance adds the DEM's
+    /// error, and the count moves.
+    #[test]
+    fn a_dem_lent_after_binding_places_the_height_above_its_ground() {
+        let sinks = FeedSinks::default();
+        let mut adapter = uas_feed(&sinks);
+        sinks
+            .terrain
+            .set_available(std::sync::Arc::new(FixedGround(Ok((152.4, 4.0)))));
+        let detections = adapter.handle_datagram(&cat129_agl_datagram(), MissionTime(43_205.0));
+        let report = adapter.drain_uas_reports().pop().expect("one report");
+        assert_eq!(
+            report.altitude_reference,
+            UasAltitudeReference::TerrainPlaced {
+                terrain: "dem/site.tif".into(),
+                ground_m: 152.4,
+                ground_sigma_m: 4.0
+            }
+        );
+        assert!((report.position.alt_m - 272.4).abs() < 1e-9);
+        let (up, variance) = up_and_variance(&detections[0]);
+        assert!((up - 272.4).abs() < 1e-3, "{up}");
+        assert!((variance[2] - (900.0 + 16.0)).abs() < 1e-9, "{variance:?}");
+        let s = adapter.stats();
+        assert_eq!(
+            (s.uas_heights_terrain_placed, s.uas_heights_unknown),
+            (1, 0)
+        );
+        let loss = detections[0]
+            .provenance
+            .conversion_loss
+            .as_deref()
+            .expect("stated");
+        assert!(loss.contains("152.4 m, from dem/site.tif"), "{loss}");
+    }
+
+    /// A DEM with no ground at the report's position -- off its edge, or in a hole -- or
+    /// one that answers with an error that is no error, leaves the height unknown with
+    /// that reason, never placed on a ground of 0.
+    #[test]
+    fn a_dem_with_no_ground_here_leaves_the_height_unknown_with_its_reason() {
+        for (answer, expected) in [
+            (
+                Err("off the DEM"),
+                "dem/site.tif gives no ground height here: off the DEM",
+            ),
+            (Ok((152.4, 0.0)), "with an error of 0 m"),
+            (Ok((f64::NAN, 4.0)), "a ground height of NaN m"),
+        ] {
+            let sinks = FeedSinks::default();
+            sinks
+                .terrain
+                .set_available(std::sync::Arc::new(FixedGround(answer)));
+            let mut adapter = uas_feed(&sinks);
+            adapter.handle_datagram(&cat129_agl_datagram(), MissionTime(43_205.0));
+            let report = adapter.drain_uas_reports().pop().expect("one report");
+            let UasAltitudeReference::NoAbsoluteHeight { reason } = &report.altitude_reference
+            else {
+                panic!("{:?}", report.altitude_reference);
+            };
+            assert!(reason.contains(expected), "{reason}");
+            assert!(report.position.alt_m.abs() < 1e-12);
+            assert_eq!(adapter.stats().uas_heights_unknown, 1);
+        }
     }
 
     #[test]
