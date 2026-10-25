@@ -5821,8 +5821,18 @@
     holds exactly one report at a time (`Option<MissionReport>`, replaced whole on every
     Generate rather than accumulated), which already is this desktop's whole current set
     for the item, so `Handoffs`' and `Warnings`' growing `Vec` was not the shape to copy
-    here and none was built. Remaining: the lossy-format round-trips and the interop
-    suite (GAP-063) across the wire between two nodes.
+    here and none was built. Remaining: the lossy-format round-trips and the interop suite (GAP-063)
+    across the wire between two nodes. **Re-read 2026-10-25, and only half of that is
+    left.** The lossy-format round-trips cannot happen: `gungnir-config` refuses an
+    exchange agreement in any format but canonical, ASTERIX 048 and 205 `encode` return
+    `NotImplemented` (`../../unbuilt.md`), and D-44 descoped STANAG 4676, so no lossy
+    format is ever sent; a partner that is not another instance of this product is
+    GAP-091's. GAP-063 closed with its wire suite covering tracks and health only, written
+    before `Warnings`, `Reports` and `Handoffs` had producers. What remains is that check
+    for those three: their real product bodies (a `LaunchWarningReport`, a
+    `MissionReport`, a handoff) compared byte for byte after crossing the wire, which
+    `gungnir-api/tests/exchange.rs` does not do -- it crosses real TLS but compares ids and
+    counts on placeholder bodies.
   ref: "`docs/design/DN-18-coalition-exchange.md` amendment 2"
   history:
   - date: 2026-09-08
@@ -5861,6 +5871,16 @@
       stream) and product exchange (reports to a partner). Pictures, warnings, and
       products are not exchanged with neighbours, higher command, or partners.
 
+  - date: 2026-10-25
+    status: In progress
+    note: >-
+      **The remaining item restated, not closed.** Its lossy-format half cannot occur: an
+      agreement in any format but canonical is refused at validation, ASTERIX encode is
+      unbuilt and STANAG 4676 is descoped (D-44), and a non-instance partner is GAP-091's.
+      Its wire half is real: GAP-063's suite checks tracks and health across two nodes,
+      and nothing checks the real warning, report and handoff bodies byte for byte after
+      the wire. That check is what is left. The two test files that said tracks and health
+      were the only exchange items with a producer now say otherwise.
 - id: GAP-066
   name: Service contracts too thin
   type: Technical
