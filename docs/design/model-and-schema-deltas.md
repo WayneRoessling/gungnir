@@ -198,6 +198,7 @@ path version with the model change and the two arrive together.
 | `GET /v2/handover`, `POST /v2/handover/acknowledge` | DN-21 | `picture.view`, `handover.acknowledge` |
 | `GET /v2/history?since_seq=N` | GAP-050 (2026-09-06) | `picture.view` | Built: the retained window from `N`, `410 Gone` past it |
 | `POST /v3/decisions/forwarded` | DN-31 §7, GAP-134 (2026-09-17) | `plan.decide` | Built: a batch taken whole or not at all; `202` counted, `409` naming what stands. New in `/v3`, so it has no `/v2` form |
+| `POST /v3/coverage/acceptances` | DN-33 amendment 1, GAP-194, D-131 (2026-10-24) | `coverage.accept_gap` | Built: judged by the node loop against its own coverage answer; `201` with the acceptance, `409` naming why not; marked on `GET /v3/coverage`. New in `/v3`, so it has no `/v2` form |
 
 **Landed 2026-09-06**: `Event` gained `Engagement(EngagementEvent)` and
 `Review(ReviewEvent)`, with the engagement outcome vocabulary in

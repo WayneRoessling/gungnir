@@ -236,8 +236,40 @@ One row, Draft, in `../verification-capability-table.md` §2:
 `gungnir-analytics`'s unit tests hold §5's tolerance to one sample either side, and
 `gungnir-security/tests/role_matrix.rs` holds §6 against §4.
 
+## 13. Amendment 1 -- the node holds acceptances (2026-10-24)
+
+GAP-194, on D-131 (the owner's walk of 2026-10-23) and D-134 (the owner's choices of
+2026-10-24). It supersedes §9's last bullet and §10's "no route is added".
+
+**In a linked deployment the node holds acceptances, as it holds the queue (D-55).**
+
+- **The route.** `POST /v3/coverage/acceptances` takes `{ gap, reason }` under an operator
+  token, and names no operator. It is a `gungnir-api` write path, so it is human-owned.
+- **The route's own refusals.** It refuses, and audits under `coverage.accept_gap`, a
+  caller with no token (`401`), a role without §6's action (`403`), and a body with no
+  reason or a gap that names nothing (`400`). Anything else it hands to the node loop.
+- **The node's judgement.** The loop judges the gap against **the coverage answer it
+  serves**, by §5's shape. It records the acceptance with **its own baseline's
+  `revision` and the laydown that baseline marks `current`**, and answers `201` with the
+  acceptance or `409` with why not.
+- **Re-opening.** §5 runs on the node every tick, against the same answer and its own
+  baseline.
+- **The record.** Accepting and re-opening are journaled and audited as §8 rules 2 and 3
+  say. The ledger is folded from the journal at start (§8 rule 6). Retention keeps the
+  sessions holding standing acceptances (§8 rule 7).
+- **What every console reads.** `GET /v3/coverage` carries `acceptances` beside the
+  report: for each gap, the acceptance that stands for it, or `null`.
+
+**The node's answer is the one judged**, and it is computed flat from the node's own
+sensors. A desktop that masks with a loaded DEM draws different gaps, so a linked desktop
+accepts from the node's answer. Its own report keeps a mark only where a gap matches.
+
+**A cut-off desktop** accepts what its signed-in role may and forwards the acceptance when
+the node answers. An acceptance the node refuses re-opens on the desktop with the node's
+reason. The link's half of this is GAP-194's second pull request.
+
 ## Traceability
 
-GAP-106; D-50, D-118; CAP-1.4, CAP-5.9; `../mission/roles-and-stakeholders.md` §4; US-16,
+GAP-106, GAP-194; D-50, D-118, D-131, D-134; CAP-1.4, CAP-5.9; `../mission/roles-and-stakeholders.md` §4; US-16,
 WF-17; PN-11, PN-16, PN-02, PN-01. Related notes: DN-12 (the gaps this annotates), DN-26
 (laydowns, and amendment 1's rehearsal advisory beside this), DN-23 (attribution).

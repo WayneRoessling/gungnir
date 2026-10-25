@@ -11339,21 +11339,19 @@
   effort: L
   target: I3
   owner: Services engineer
-  deps: [GAP-106, D-131]
+  deps: [GAP-106, D-131, D-134]
   impact: >-
     A commander's acceptance is drawn on the desktop that recorded it and nowhere else: a
-    node's `/v2|v3/coverage` answer and a second desktop's PN-11 show the same gap as
-    unexamined.
+    second desktop's PN-11 shows the same gap as unexamined, and nothing on a linked
+    desktop posts an acceptance to the node, which now holds them.
   evidence: >-
-    `gungnir-app/src/gap_acceptance.rs`; `gungnir-node/src/main.rs`'s coverage answer;
-    `../../design/DN-33-accepting-a-coverage-gap.md` §9
+    `gungnir-app/src/gap_acceptance.rs`; `gungnir-remote/src/link.rs`, which reads no
+    coverage answer; `../../design/DN-33-accepting-a-coverage-gap.md` amendment 1
   action: >-
-    Build D-131. A `/v3` write path for an acceptance (a `gungnir-api` write path, so
-    human-owned); the node authorizing `coverage.accept_gap` against the signed-in
-    commander, journaling and auditing it; D-118's re-opening run on the node, with the
-    laydown in force reaching it, since the node knows no laydown today; accepted gaps
-    marked on the `/v2` and `/v3` coverage answer; a cut-off desktop's acceptances
-    forwarded when its node answers, as D-55's decisions are.
+    The desktop half of D-131 and D-134: the link reading `GET /v3/coverage` with its
+    acceptance marks; a linked desktop's PN-11 listing the node's gaps and posting to
+    `POST /v3/coverage/acceptances`; a cut-off desktop's acceptances forwarded when its
+    node answers, a refused one re-opened with the node's reason.
   ref: >-
     Found building GAP-106 (`../../record/2026-09-26/a-coverage-gap-accepted-and-a-plan-s.md`)
   history:
@@ -11372,6 +11370,18 @@
       to L: the node has no laydown to re-open against, and getting the laydown in force
       to it is part of the build. See
       `../../record/2026-10-23/the-owner-s-walk-of-2026-10-23.md`.
+  - date: 2026-10-24
+    status: In progress
+    note: >-
+      **The node half built (D-131, D-134).** `POST /v3/coverage/acceptances`, a
+      `gungnir-api` write path, takes a signed-in commander's acceptance and hands it to
+      the node loop, which judges it against its own coverage answer, stamps it with its
+      own baseline revision and current laydown, journals and audits it, re-opens it by
+      DN-33 §5, folds the ledger from the journal at start and keeps its sessions from
+      retention; `GET /v3/coverage` marks each accepted gap. The owner chose each detail on
+      2026-10-24 (D-134). The desktop half is the second pull request. The route and the
+      transport types are human-owned; see docs/signatures.md. See
+      `../../record/2026-10-24/the-node-holds-coverage-gap-acceptances.md`.
 - id: GAP-195
   name: PN-07's degraded-condition acknowledgement is on no record
   type: Technical
