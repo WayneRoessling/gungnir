@@ -33,6 +33,11 @@
 //! naming who accepted it, when and on which desktop. When the node answers, an acceptance
 //! it holds stands here too; one it refuses re-opens here with the node's reason, journaled
 //! and audited, so no console shows an acceptance the node does not hold.
+//!
+//! **A forward is owed until the node answers it, across a restart** (GAP-202): the ledger
+//! keeps what it owes, owes every recovered acceptance again at start on the connected
+//! profile, and [`forward_owed`] keeps each in the link's outbox while a commander is
+//! signed in. `already-accepted` settles a forward like a recording does.
 
 use crate::state::AppState;
 use gungnir_analytics::{
@@ -67,9 +72,27 @@ pub struct GapAcceptances {
     /// and the session it is in.
     pub(crate) highest: u64,
     pub(crate) highest_session: Option<SessionId>,
+    /// The acceptances this desktop owes its node a forward of, until the node answers
+    /// (GAP-202): each made here while cut off, and at start every one recovered from the
+    /// journal on the connected profile, since the outbox that held their forwards did not
+    /// survive the restart. [`forward_owed`] keeps each in the link's outbox.
+    owed: Vec<GapAcceptanceId>,
 }
 
 impl GapAcceptances {
+    /// Owe the node a forward of every standing acceptance: what a desktop on the
+    /// connected profile does with the ledger it recovered at start (GAP-202). One the
+    /// node already holds is answered `already-accepted`, which settles it.
+    pub fn owe_all(&mut self) {
+        self.owed = self.standing.iter().map(|(a, _)| a.id).collect();
+    }
+
+    /// The acceptances still owed a forward, oldest first.
+    #[must_use]
+    pub fn owed(&self) -> &[GapAcceptanceId] {
+        &self.owed
+    }
+
     /// The sessions retention must keep (`crate::retention::protected`): each standing
     /// acceptance's, and the one holding the highest identifier, which the serial
     /// continues past.
@@ -195,29 +218,73 @@ pub fn accept(
         return Ok(Accepted::SentToNode);
     }
     let id = record_here(state, gap, reason, &session)?;
-    // Cut off from a node this desktop is linked to: forwarded when it answers (D-131).
-    if let Some(link) = state.link.as_ref() {
-        if let Some((acceptance, _)) = state
+    // Cut off from a node this desktop is linked to: owed a forward, sent when it answers
+    // (D-131), and still owed after a restart (GAP-202).
+    if state.link.is_some() {
+        state.gap_acceptances.owed.push(id);
+        forward_owed(state);
+    }
+    Ok(Accepted::Recorded(id))
+}
+
+/// Keep every acceptance owed a forward in the link's outbox (GAP-202). Called every frame
+/// from `update::tick` and when one is made; costs nothing while nothing is owed.
+///
+/// **Only while a commander is signed in**: the route takes a forward under the signed-in
+/// operator's token and refuses a role without `coverage.accept_gap`, and that refusal is
+/// about who is signed in, not about the acceptance. An owed acceptance that no longer
+/// stands here -- re-opened for a reason of its own -- is owed nothing and is dropped.
+pub fn forward_owed(state: &mut AppState) {
+    if state.gap_acceptances.owed.is_empty() {
+        return;
+    }
+    let standing: Vec<GapAcceptanceId> = state
+        .gap_acceptances
+        .standing
+        .iter()
+        .map(|(a, _)| a.id)
+        .collect();
+    state
+        .gap_acceptances
+        .owed
+        .retain(|id| standing.contains(id));
+    let may_forward = state
+        .signed_in()
+        .is_some_and(|s| role_permits(s.role, ACCEPT_COVERAGE_GAP));
+    let Some(link) = state.link.as_ref().filter(|_| may_forward) else {
+        return;
+    };
+    let in_flight: Vec<GapAcceptanceId> = link
+        .acceptances_in_flight()
+        .iter()
+        .filter_map(|o| o.local)
+        .collect();
+    let origin = crate::session::origin_of(state);
+    for id in &state.gap_acceptances.owed {
+        if in_flight.contains(id) {
+            continue;
+        }
+        let Some((acceptance, _)) = state
             .gap_acceptances
             .standing
             .iter()
-            .find(|(a, _)| a.id == id)
-        {
-            link.accept_gap(gungnir_remote::coverage::OutboundAcceptance {
-                gap: acceptance.gap.clone(),
-                reason: acceptance.reason.clone(),
-                accepted_offline: Some(gungnir_remote::coverage::OfflineAcceptance {
-                    operator: acceptance.operator.clone(),
-                    role: acceptance.role.clone(),
-                    at: acceptance.at,
-                    origin: crate::session::origin_of(state),
-                }),
-                local: Some(id),
-                attempts: 0,
-            });
-        }
+            .find(|(a, _)| a.id == *id)
+        else {
+            continue;
+        };
+        link.accept_gap(gungnir_remote::coverage::OutboundAcceptance {
+            gap: acceptance.gap.clone(),
+            reason: acceptance.reason.clone(),
+            accepted_offline: Some(gungnir_remote::coverage::OfflineAcceptance {
+                operator: acceptance.operator.clone(),
+                role: acceptance.role.clone(),
+                at: acceptance.at,
+                origin: origin.clone(),
+            }),
+            local: Some(*id),
+            attempts: 0,
+        });
     }
-    Ok(Accepted::Recorded(id))
 }
 
 /// Record `gap` on this desktop's own ledger, against its own live report.
@@ -423,11 +490,9 @@ pub fn answers_from_node(state: &mut AppState) {
     let outcomes = link.take_acceptance_outcomes();
     let now = state.clock.now();
     for outcome in outcomes {
+        use gungnir_remote::coverage::{AcceptanceAnswer, GapAcceptanceRefused};
         let sentence = outcome.answer.sentence();
-        let refused = !matches!(
-            outcome.answer,
-            gungnir_remote::coverage::AcceptanceAnswer::Recorded(_)
-        );
+        let refused = !matches!(outcome.answer, AcceptanceAnswer::Recorded(_));
         let Some(local) = outcome.local else {
             state.alerts.push(if refused {
                 format!("Gap not accepted by the node: {sentence}")
@@ -436,11 +501,28 @@ pub fn answers_from_node(state: &mut AppState) {
             });
             continue;
         };
-        if !refused {
-            state.alerts.push(format!(
-                "Gap acceptance {local}, made while cut off, forwarded: {sentence}"
-            ));
-            continue;
+        match &outcome.answer {
+            // GAP-202: a forward the node already holds -- sent before a restart, or by
+            // another console -- is as settled as one it records now.
+            AcceptanceAnswer::Recorded(_)
+            | AcceptanceAnswer::Refused(GapAcceptanceRefused::AlreadyAccepted { .. }) => {
+                state.gap_acceptances.owed.retain(|id| *id != local);
+                state.alerts.push(format!(
+                    "Gap acceptance {local}, made while cut off, forwarded: {sentence}"
+                ));
+                continue;
+            }
+            // Refused for who is signed in, not for the acceptance: still owed, sent again
+            // once a commander is ([`forward_owed`]).
+            AcceptanceAnswer::Rejected {
+                status: 401 | 403, ..
+            } => {
+                state.alerts.push(format!(
+                    "Gap acceptance {local}, made while cut off, is not forwarded yet: {sentence}"
+                ));
+                continue;
+            }
+            _ => state.gap_acceptances.owed.retain(|id| *id != local),
         }
         let Some(at) = state
             .gap_acceptances
