@@ -1077,7 +1077,11 @@ pub fn start_as_machine(
     endpoint: &RemoteEndpoint,
     handle: &tokio::runtime::Handle,
 ) -> Result<NodeLink, RemoteError> {
-    if endpoint.tls.identity_pem.is_none() {
+    // Either identity a host can hold: one issued from its own key provider, or the
+    // configured PEM. Until D-135 this looked at the PEM alone, so a node's issued peer
+    // identity -- what `host_tls` gives it when nothing is configured -- never started a
+    // peer link at all.
+    if !endpoint.tls.has_identity() {
         return Err(RemoteError::InvalidEndpoint(format!(
             "{}: a machine link needs a client certificate (D-02); none is held",
             endpoint.url

@@ -1993,7 +1993,7 @@ struct Partnership {
 
 impl Partnership {
     fn new(dir: &std::path::Path) -> Self {
-        let node = gungnir_remote::identity::issue_for_client("gungnir-node")
+        let node = gungnir_remote::identity::issue_for_server("gungnir-node")
             .expect("the node's identity");
         let partner =
             gungnir_remote::identity::issue_for_client(PARTNER).expect("the partner's identity");

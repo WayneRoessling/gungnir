@@ -206,48 +206,91 @@ fn record_launch_warnings(
     Ok(())
 }
 
-/// What this host presents to a partner (D-02): an identity issued from its own key
-/// provider, preferred, and the environment-supplied certificate as a fallback for
-/// whichever half is missing (GAP-060).
+/// What this node presents to a peer it connects to (D-02, D-135).
 ///
-/// **The provider is ephemeral, and deliberately still is (2026-09-08).** The
-/// OS-keystore path GAP-057 admitted for this node's account store has since been
-/// generalised to key material (GAP-060's remaining slice: `PersistentKeyProvider::
-/// open_or_create_via_os_keystore` now takes `service` as a parameter), and
-/// `spawn_tls_from_provider` uses that generalisation for the node's *serving*
-/// identity. This function -- the node's own outbound, peer-link identity -- was left
-/// untouched on purpose: whether it should persist too, and whether it should then be
-/// the *same* identity as the serving one or a third, separately named entry, is real
-/// design surface the register leaves open (ARCHITECTURE.md item 105), and closing it
-/// silently by picking one here is not this change's to do. So this remains a new
-/// identity every start, exactly as before.
-fn host_tls(config: &ConfigBaseline) -> gungnir_remote::LinkTls {
-    let identity_pem = match (
-        std::env::var("GUNGNIR_TLS_CERT").ok(),
-        std::env::var("GUNGNIR_TLS_KEY").ok(),
+/// **The operator's certificate first.** `GUNGNIR_TLS_CERT` and `GUNGNIR_TLS_KEY`, when
+/// both are set and readable, are what the node presents, and nothing is issued: a
+/// deployment that runs its own certificate authority gets its certificate used.
+/// Until D-135 the issued identity always won, so a configured certificate was read and
+/// never presented. One that is set and cannot be read is said, and the node falls back
+/// to its own identity rather than to none.
+///
+/// **Otherwise the node's own peer identity** (D-135): its own key, separate from the
+/// serving one, named `node-peer-<fingerprint>`, limited to client authentication. It is
+/// persisted when the baseline uses the operating system's keystore, so a peer pins it
+/// once, and its public certificate is written beside the journal as
+/// `node-peer-identity.pem` for operators to pin; ephemeral otherwise, and named so, for
+/// the reason `gungnir-app`'s `issue_identity` gives a desktop the same gate -- a node
+/// that never opted into the keystore is not made to leave an entry in it.
+fn host_tls(config: &ConfigBaseline, data_dir: &std::path::Path) -> gungnir_remote::LinkTls {
+    let configured = match (
+        std::env::var("GUNGNIR_TLS_CERT"),
+        std::env::var("GUNGNIR_TLS_KEY"),
     ) {
-        (Some(cert), Some(key)) => {
-            match (
-                std::fs::read_to_string(&cert),
-                std::fs::read_to_string(&key),
-            ) {
-                (Ok(cert), Ok(key)) => Some(format!("{cert}\n{key}")),
-                _ => None,
-            }
-        }
+        (Ok(cert), Ok(key)) => Some(
+            std::fs::read_to_string(&cert)
+                .and_then(|cert| std::fs::read_to_string(&key).map(|key| format!("{cert}\n{key}")))
+                .map_err(|err| err.to_string()),
+        ),
         _ => None,
     };
-    // Issued wins over the PEM fallback (`LinkTls`'s own rule); reading both and letting
-    // `client_config` choose is the same shape `gungnir-app`'s `link_tls_for` uses.
-    let issued = gungnir_remote::identity::issue_for_client("gungnir-node")
-        .map_err(|err| {
+    host_tls_with(config, data_dir, configured)
+}
+
+/// [`host_tls`] over what the environment configured: nothing, the certificate and key
+/// as one PEM, or why they could not be read.
+fn host_tls_with(
+    config: &ConfigBaseline,
+    data_dir: &std::path::Path,
+    configured: Option<Result<String, String>>,
+) -> gungnir_remote::LinkTls {
+    let trust_roots_pem = config.security.tls.trust_roots_pem.clone();
+    match configured {
+        Some(Ok(pem)) => {
+            tracing::info!("presenting the configured certificate on this node's peer links");
+            return gungnir_remote::LinkTls {
+                trust_roots_pem,
+                issued: None,
+                identity_pem: Some(pem),
+            };
+        }
+        Some(Err(err)) => tracing::error!(
+            %err,
+            "GUNGNIR_TLS_CERT or GUNGNIR_TLS_KEY is set and could not be read; presenting \
+             this node's own peer identity instead"
+        ),
+        None => {}
+    }
+    let issued = match &config.security.key_provider {
+        gungnir_config::KeyProviderConfig::OperatingSystemKeystore { .. } => {
+            gungnir_remote::identity::issue_node_peer_identity(data_dir)
+        }
+        _ => gungnir_remote::identity::issue_node_peer_identity_ephemeral(),
+    };
+    let issued = match issued {
+        Ok(identity) => {
+            tracing::info!(
+                name = %identity.name,
+                persisted = identity.persisted,
+                "this node's peer-link identity"
+            );
+            if identity.persisted {
+                let pem_path = data_dir.join("node-peer-identity.pem");
+                if let Err(err) = std::fs::write(&pem_path, &identity.certificate_pem) {
+                    tracing::warn!(%err, "the peer identity could not be written; peers must pin it another way");
+                }
+            }
+            Some(identity.key)
+        }
+        Err(err) => {
             tracing::warn!(%err, "this node could not issue its own peer-link identity");
-        })
-        .ok();
+            None
+        }
+    };
     gungnir_remote::LinkTls {
-        trust_roots_pem: config.security.tls.trust_roots_pem.clone(),
+        trust_roots_pem,
         issued,
-        identity_pem,
+        identity_pem: None,
     }
 }
 
@@ -257,8 +300,9 @@ fn bind_peers(
     config: &ConfigBaseline,
     gateway: &mut IngestGateway,
     handle: &tokio::runtime::Handle,
+    data_dir: &std::path::Path,
 ) -> Vec<BoundPeer> {
-    let tls = host_tls(config);
+    let tls = host_tls(config, data_dir);
     let mut bound = Vec::new();
     for peer in &config.peers {
         let Some(endpoint) = config.endpoints.iter().find(|e| e.name == peer.endpoint) else {
@@ -378,6 +422,7 @@ impl FeedReports {
 fn build_gateway(
     config: &ConfigBaseline,
     handle: &tokio::runtime::Handle,
+    data_dir: &std::path::Path,
 ) -> (
     IngestGateway,
     Vec<gungnir_ingest::adapters::asterix::ServiceObservationSink>,
@@ -398,7 +443,7 @@ fn build_gateway(
         geoid: geoid_line,
     };
     if !config.peers.is_empty() {
-        reports.peers = bind_peers(config, &mut gateway, handle);
+        reports.peers = bind_peers(config, &mut gateway, handle, data_dir);
         tracing::info!(
             peers = config.peers.len(),
             bound = reports.peers.len(),
@@ -1577,11 +1622,8 @@ async fn spawn_tls_from_provider(
     // Moved to `gungnir-remote` on 2026-09-06 (GAP-060) so the desktop can issue one the
     // same way. The node used to own this; two binaries cannot depend on each other, so
     // leaving it here meant a second copy on the desktop that would drift.
-    let identity = match gungnir_remote::identity::issue_node_serving_identity(
-        identity_dir,
-        names,
-        "gungnir-node",
-    ) {
+    let identity = match gungnir_remote::identity::issue_node_serving_identity(identity_dir, names)
+    {
         Ok(identity) => identity,
         Err(err) => {
             tracing::error!(%err, "the node's identity could not be issued; not serving");
@@ -1879,7 +1921,8 @@ async fn run(
         tracing::warn!("no algorithm configuration is in force");
     }
 
-    let (mut gateway, service_sinks, feed_reports, sapient) = build_gateway(&config, &handle);
+    let (mut gateway, service_sinks, feed_reports, sapient) =
+        build_gateway(&config, &handle, std::path::Path::new(&node_cfg.data_dir));
     let mut sensors = build_registry(&config);
     // GAP-004: attach the SAPIENT task adapters bound above, one per taskable feed,
     // routed by sensor id since the registry holds a single adapter slot for all of
@@ -2891,7 +2934,8 @@ mod tests {
             ..ConfigBaseline::default()
         };
         let rt = tokio::runtime::Runtime::new().expect("a throwaway runtime for the handle");
-        let (_gateway, _sinks, reports, _sapient) = build_gateway(&config, rt.handle());
+        let (_gateway, _sinks, reports, _sapient) =
+            build_gateway(&config, rt.handle(), &std::env::temp_dir());
         assert_eq!(
             reports.radar.len(),
             1,
@@ -2941,7 +2985,8 @@ mod tests {
             ..ConfigBaseline::default()
         };
         let rt = tokio::runtime::Runtime::new().expect("a throwaway runtime for the handle");
-        let (_gateway, _sinks, reports, _sapient) = build_gateway(&config, rt.handle());
+        let (_gateway, _sinks, reports, _sapient) =
+            build_gateway(&config, rt.handle(), &std::env::temp_dir());
         assert_eq!(
             reports.radar.len(),
             1,
@@ -3093,10 +3138,12 @@ mod tests {
         }
     }
 
-    /// GAP-060: the node's outbound peer-link identity is provider-issued, the same as
-    /// its serving identity, rather than only ever coming from the environment.
+    /// GAP-060, D-135: with nothing configured the node presents its own peer identity --
+    /// ephemeral, since this baseline does not use the operating-system keystore, and named
+    /// so from its key -- with the configured trust roots. A configured certificate is
+    /// presented in its place, and one that cannot be read falls back to the node's own.
     #[test]
-    fn host_tls_issues_its_own_identity_and_carries_the_configured_trust_roots() {
+    fn host_tls_presents_the_configured_certificate_first_and_its_own_peer_identity_otherwise() {
         let config = ConfigBaseline {
             security: gungnir_config::SecurityConfig {
                 tls: gungnir_config::TlsClientConfig {
@@ -3108,13 +3155,32 @@ mod tests {
             },
             ..ConfigBaseline::default()
         };
-        let tls = host_tls(&config);
+        let dir = std::env::temp_dir();
+
+        let own = host_tls_with(&config, &dir, None);
+        let issued = own
+            .issued
+            .as_ref()
+            .expect("an ephemeral provider always issues");
+        let name =
+            gungnir_api::tls::subject_common_name(issued.cert[0].as_ref()).expect("a common name");
+        assert!(name.starts_with("node-peer-ephemeral-"), "{name}");
+        assert!(own.identity_pem.is_none());
+        assert_eq!(own.trust_roots_pem, config.security.tls.trust_roots_pem);
+
+        let configured = host_tls_with(&config, &dir, Some(Ok("operator pem".into())));
         assert!(
-            tls.issued.is_some(),
-            "an ephemeral provider should always be able to issue"
+            configured.issued.is_none(),
+            "the configured certificate wins"
         );
-        assert!(tls.has_identity());
-        assert_eq!(tls.trust_roots_pem, config.security.tls.trust_roots_pem);
+        assert_eq!(configured.identity_pem.as_deref(), Some("operator pem"));
+
+        let unreadable = host_tls_with(&config, &dir, Some(Err("no such file".into())));
+        assert!(
+            unreadable.issued.is_some(),
+            "falls back to its own, not to none"
+        );
+        assert!(unreadable.identity_pem.is_none());
     }
 
     /// GAP-004, both directions. Outbound: a SAPIENT feed with a `destination_id` gets
