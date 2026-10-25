@@ -114,12 +114,12 @@ struct Metadata {
     truth_tick_s: f64,
 }
 
-fn read(path: &Path) -> Result<String, MlError> {
+pub(crate) fn read(path: &Path) -> Result<String, MlError> {
     std::fs::read_to_string(path)
         .map_err(|e| MlError::ManifestInvalid(format!("{}: {e}", path.display())))
 }
 
-fn lines<T: serde::de::DeserializeOwned>(path: &Path) -> Result<Vec<T>, MlError> {
+pub(crate) fn lines<T: serde::de::DeserializeOwned>(path: &Path) -> Result<Vec<T>, MlError> {
     read(path)?
         .lines()
         .filter(|l| !l.trim().is_empty())

@@ -1006,10 +1006,11 @@ Counts: 184 gaps, 3 mission, 181 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.3 Reports and measures; CAP-5.7 Model governance.
 - History:
   - 2026-09-06, In progress: **Built 2026-09-06.** `gungnir_ml::dataset::extract_set` turns a test-track set into the ML-01 rows of `data-pipeline.md` §2 -- the truth as the track proxy, labels from the truth, the sensor columns from the detections each entity caused -- split by scenario per §3, with the set's four input versions and a content hash per §5, in the Arrow form the catalogue names (`gungnir.ml.classification-rows`). Journals as a source wait on real sessions. Plan 09 needs labelled datasets split by scenario and entity rather than by row, with provenance and retention; nothing extracts them from the sample sets or the journals.
+  - 2026-10-25, In progress: **The ML-04 anomaly rows are built.** One row per source and one per track per twenty-second window, in the new catalogue entry `gungnir.ml.anomaly-rows`: detection rate, unassociated fraction, residual, a clock-skew estimate a live node can compute, receipt gap, speed and three cooperative features, nullable where a feature does not apply. Labels come from each set's `environment.json` and `entities.json` and land exactly on the planted anomalies in all eleven committed sets. Rows from session journals still wait on real sessions. See `../../record/2026-10-25/gap-079-the-ml-04-anomaly-rows.md`.
 - Evidence: `gungnir-ml/src/dataset.rs`; `gungnir-interop/src/dataset.rs`; `gungnir-ml/tests/dataset.rs`.
 - Severity: 2. Reach: 1 threads. Effort: M. Priority: 2.
 - Impact: No model can be trained or evaluated, and an ad hoc extraction would leak entities across the split and overstate accuracy.
-- Closing action: Rows from session journals once any exist at scale; the ML-04 anomaly rows.
+- Closing action: Rows from session journals once any exist at scale; the ML-04 anomaly rows. **The ML-04 anomaly rows are built 2026-10-25**: `gungnir_ml::anomaly` extracts one row per source and one per track per window into the catalogue's `gungnir.ml.anomaly-rows`, labelled from each set's `environment.json` and `entities.json` (`../../record/2026-10-25/gap-079-the-ml-04-anomaly-rows.md`). Rows from session journals remain.
 - Target: I3. Owner: Services engineer. Status: In progress.
 - Reference: `docs/ml/data-pipeline.md`.
 - Depends on: GAP-046.

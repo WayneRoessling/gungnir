@@ -35,6 +35,7 @@
 //! this crate yet: the consumers take model output through their existing traits, and
 //! wiring them is GAP-080's promotion, not this crate's construction.
 
+pub mod anomaly;
 pub mod dataset;
 pub mod features;
 #[cfg(feature = "onnx-runtime")]
