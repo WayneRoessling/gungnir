@@ -494,8 +494,10 @@ fn wire_coverage(name: &str) -> Option<WireCoverage> {
 ///
 /// The suite refuses to pass an entry nobody has decided about, which is the same rule
 /// `every_catalogue_entry_is_checked_against_a_corpus` applies to corpora. Two entries
-/// are covered today, `gungnir.TrackView` and `gungnir.Envelope`, which are the schemas
-/// behind the only exchange items with a producer: tracks, and health.
+/// are covered today, `gungnir.TrackView` and `gungnir.Envelope`, the schemas behind
+/// tracks; health is checked beside them. Warnings, reports and handoffs have had
+/// producers since 2026-09-08 and have no catalogue entry, and nothing checks their
+/// bodies over a wire yet -- GAP-065's remaining item.
 #[test]
 fn every_catalogue_entry_says_whether_it_is_checked_over_the_wire() {
     let catalogue = SchemaCatalog::builtin();

@@ -37,8 +37,12 @@
 //! * **`gungnir.detections.arrow`, `gungnir.ml.classification-rows`,
 //!   `gungnir.GlobalEntityId`, `asterix.cat048`, `asterix.cat034`, `ais.m1371`** have no
 //!   producer on this transport.
-//! * **`stanag.4676`** has no corpus and no decoder at all (D-09), which is the other
-//!   half of GAP-063 and is still blocked on an owner decision.
+//! * **`stanag.4676`** has no corpus and no decoder at all, and is descoped from this
+//!   release by D-44.
+//! * **Warnings, reports and handoffs** have had producers since 2026-09-08, after this
+//!   file was written, and are not checked here. `gungnir-api/tests/exchange.rs` serves
+//!   them over real TLS and compares ids and counts on placeholder bodies; a byte-for-byte
+//!   check of their real bodies is GAP-065's remaining item.
 //!
 //! `gungnir-interop/tests/conformance.rs` states the same table entry by entry, so a new
 //! catalogue entry fails there until somebody says which of these it is. This file
