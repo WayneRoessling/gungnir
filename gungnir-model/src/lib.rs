@@ -147,7 +147,7 @@ pub use rhythm::{
 pub use time::MissionTime;
 pub use uas_identification::{
     OperationalRisk, UasAltitudeReference, UasCertificationCategory, UasIdentificationReport,
-    EGM2008_MAX_ABS_SEPARATION_M,
+    EGM2008_MAX_ABS_SEPARATION_M, UNKNOWN_UAS_HEIGHT_BOUND_M,
 };
 pub use uas_platform::{EnuPoint, UasPlatformReport};
 pub use ui_settings::{LayoutNode, RoleLayout, ThemeVariant, UiSettings};

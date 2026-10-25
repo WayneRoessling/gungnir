@@ -44,6 +44,10 @@ pub struct TrackTableView<'a> {
     /// in the warning colour, so a height that is not on the ellipsoid is never read as
     /// one from this table.
     pub msl_heights: &'a [TrackId],
+    /// Tracks whose last ASTERIX Category 129 report gave no height anybody could place
+    /// (GAP-199, D-130): their U is marked "unknown" in the warning colour, so a height
+    /// held at 0 is never read as a measured one from this table.
+    pub unknown_heights: &'a [TrackId],
     /// The words this deployment uses (D-12). Not optional: every domain value on this
     /// table goes through it, so there is no path that shows a variant name.
     pub vocabulary: &'a Vocabulary,
@@ -152,7 +156,14 @@ fn render_rows(
         );
         ui.label(theme::numeral(palette, format!("{e:.1}")));
         ui.label(theme::numeral(palette, format!("{n:.1}")));
-        render_up(ui, palette, u, view.msl_heights.contains(&track.id));
+        let height = if view.unknown_heights.contains(&track.id) {
+            UpMark::Unknown
+        } else if view.msl_heights.contains(&track.id) {
+            UpMark::AboveMsl
+        } else {
+            UpMark::Ellipsoidal
+        };
+        render_up(ui, palette, u, height);
         ui.label(theme::numeral(palette, format!("{:.1}", track.speed_mps())));
         ui.label(
             RichText::new(view.vocabulary.classification(track.classification))
@@ -189,24 +200,45 @@ fn render_rows(
     clicked
 }
 
+/// What a track's up is measured from, as far as this table marks it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UpMark {
+    Ellipsoidal,
+    /// GAP-196: above mean sea level, uncorrected.
+    AboveMsl,
+    /// GAP-199: no height anybody could place.
+    Unknown,
+}
+
 /// The up coordinate, marked when a Category 129 report put it above mean sea level
-/// rather than the WGS-84 ellipsoid (GAP-196): the number is still shown, because it is
-/// what the picture holds, and the mark says what it is measured from.
-fn render_up(ui: &mut egui::Ui, palette: &theme::Palette, up: f64, above_msl: bool) {
-    if above_msl {
-        ui.label(
-            theme::numeral(palette, format!("{up:.1} MSL"))
-                .color(palette.warning_color)
-                .strong(),
-        )
-        .on_hover_text(
+/// rather than the WGS-84 ellipsoid (GAP-196), or gave no height at all (GAP-199): the
+/// number is still shown, because it is what the picture holds, and the mark says what it
+/// is measured from.
+fn render_up(ui: &mut egui::Ui, palette: &theme::Palette, up: f64, mark: UpMark) {
+    let (suffix, hover) = match mark {
+        UpMark::Ellipsoidal => {
+            ui.label(theme::numeral(palette, format!("{up:.1}")));
+            return;
+        }
+        UpMark::AboveMsl => (
+            "MSL",
             "the last UAS report (ASTERIX Category 129) stated this height above mean sea \
              level and no geoid model corrected it: it is off the WGS-84 ellipsoid by the \
              local geoid separation",
-        );
-    } else {
-        ui.label(theme::numeral(palette, format!("{up:.1}")));
-    }
+        ),
+        UpMark::Unknown => (
+            "unknown",
+            "the last UAS report (ASTERIX Category 129) gave no height above mean sea \
+             level, and no DEM placed its height above ground: the height is held at 0 \
+             and is not a measurement",
+        ),
+    };
+    ui.label(
+        theme::numeral(palette, format!("{up:.1} {suffix}"))
+            .color(palette.warning_color)
+            .strong(),
+    )
+    .on_hover_text(hover);
 }
 
 /// Age, coloured by the staleness the tracker already decided.
@@ -251,6 +283,7 @@ mod tests {
             }),
             selected: None,
             msl_heights: &[],
+            unknown_heights: &[],
             vocabulary,
         }
     }

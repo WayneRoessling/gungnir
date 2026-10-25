@@ -858,6 +858,7 @@ fn the_track_table_draws_the_score_column_as_unavailable() {
         }),
         selected: None,
         msl_heights: &[],
+        unknown_heights: &[],
         vocabulary: &vocab,
     };
     let probe = RenderProbe::new();
@@ -1048,6 +1049,7 @@ fn the_panels_survive_a_narrow_slot() {
         }),
         selected: None,
         msl_heights: &[],
+        unknown_heights: &[],
         vocabulary: &vocab,
     };
     let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &table));
@@ -1099,6 +1101,7 @@ fn the_track_table_draws_the_deployments_words() {
         }),
         selected: None,
         msl_heights: &[],
+        unknown_heights: &[],
         vocabulary: &defaults,
     };
     let probe = RenderProbe::new();
@@ -1156,9 +1159,12 @@ fn the_track_table_marks_a_height_above_mean_sea_level() {
         mission_time: MissionTime(0.0),
         releasability: Releasability::default(),
     };
-    let tracks = [track(1), track(2)];
+    let tracks = [track(1), track(2), track(3)];
     let vocab = Vocabulary::default();
     let flagged = [TrackId(2)];
+    // GAP-199 (D-130): and one whose last report gave no height anybody could place is
+    // marked "unknown".
+    let unknown = [TrackId(3)];
     let view = TrackTableView {
         tracks: &tracks,
         now: MissionTime(0.0),
@@ -1169,12 +1175,19 @@ fn the_track_table_marks_a_height_above_mean_sea_level() {
         }),
         selected: None,
         msl_heights: &flagged,
+        unknown_heights: &unknown,
         vocabulary: &vocab,
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &view));
     let marked = frame.texts.iter().filter(|t| t.ends_with(" MSL")).count();
     assert_eq!(marked, 1, "{}", frame.joined());
+    let unknown = frame
+        .texts
+        .iter()
+        .filter(|t| t.ends_with(" unknown"))
+        .count();
+    assert_eq!(unknown, 1, "{}", frame.joined());
 }
 
 /// The status strip shows the joint control-status term, which is the case where the
@@ -1861,6 +1874,8 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
             unknown_radar: 0,
             uas_heights_geoid_corrected: 0,
             uas_heights_msl_uncorrected: 0,
+            uas_heights_terrain_placed: 0,
+            uas_heights_unknown: 0,
         }],
     );
     assert!(
@@ -1878,6 +1893,8 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
             unknown_radar: 1,
             uas_heights_geoid_corrected: 0,
             uas_heights_msl_uncorrected: 0,
+            uas_heights_terrain_placed: 0,
+            uas_heights_unknown: 0,
         }],
     );
     assert!(
@@ -1897,11 +1914,35 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
             unknown_radar: 0,
             uas_heights_geoid_corrected: 4,
             uas_heights_msl_uncorrected: 6,
+            uas_heights_terrain_placed: 0,
+            uas_heights_unknown: 0,
         }],
     );
     assert!(
         text.contains("4 UAS heights corrected to the ellipsoid (EGM2008)")
             && text.contains("6 UAS heights above mean sea level, not corrected"),
+        "{text}"
+    );
+    // GAP-199: a height above ground placed on the DEM is said, and one nobody could
+    // place is a counted loss.
+    let text = draw_with(
+        &[],
+        &[FeedLine {
+            name: "uas-gateway",
+            datagrams: 10,
+            detections: 10,
+            service_reports: 0,
+            not_decoded: 0,
+            unknown_radar: 0,
+            uas_heights_geoid_corrected: 0,
+            uas_heights_msl_uncorrected: 0,
+            uas_heights_terrain_placed: 3,
+            uas_heights_unknown: 7,
+        }],
+    );
+    assert!(
+        text.contains("3 UAS heights above ground placed on the DEM")
+            && text.contains("7 UAS heights unknown, held at 0"),
         "{text}"
     );
 

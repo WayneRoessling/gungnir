@@ -346,6 +346,16 @@ impl FeedReports {
                         s.uas_heights_msl_uncorrected
                     );
                 }
+                // GAP-199 (D-130): this node loads no terrain, so a Category 129 height
+                // stated only above ground is unknown here, and counted the same way.
+                if s.uas_heights_unknown > 0 {
+                    use std::fmt::Write as _;
+                    let _ = write!(
+                        line,
+                        ", {} UAS heights unknown, held at 0",
+                        s.uas_heights_unknown
+                    );
+                }
                 line
             })
             .collect();
@@ -2924,6 +2934,11 @@ mod tests {
             line.contains("3 UAS heights above mean sea level, not corrected to the ellipsoid"),
             "{line}"
         );
+        // GAP-199 (D-130): and a height above ground, which this node cannot place.
+        assert!(!line.contains("unknown"), "{line}");
+        stats.lock().expect("stats").uas_heights_unknown = 2;
+        let line = &reports.summary()[0];
+        assert!(line.contains("2 UAS heights unknown, held at 0"), "{line}");
     }
 
     /// GAP-198 (D-129): a node with no grid to read -- a build without `crs`, or one whose

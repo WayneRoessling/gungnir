@@ -204,6 +204,20 @@ does state one, a baseline that contradicts it is refused. A DEM's heights must 
 metres (a `VerticalGeoKey` of 6360 or 8228 is refused at load); a point cloud's are
 scaled from the unit the file states.
 
+A UAS that reports its height only above ground (ASTERIX Category 129's I129/100, with no
+I129/090) is placed on the desktop's DEM, at the ground's height plus its own, when the
+DEM covers it and the baseline states the DEM's vertical error, one standard deviation in
+metres, as its producer gives it (GAP-199, D-130):
+
+```json
+{ "terrain": { "path": "...", "frame": "epsg:32633", "vertical": "epsg:3855",
+               "vertical_sigma_m": 4.0 } }
+```
+
+Without that error, without a loaded DEM, off its edge, and always on the node, which
+loads no terrain, such a height is carried as unknown: held at 0, marked on PN-03, counted
+on PN-09, and weighed as unknown to within 10 km.
+
 ### NAD83 positions and the frame epoch
 
 A DEM or point cloud whose horizontal system is NAD83 -- most United States data -- is
