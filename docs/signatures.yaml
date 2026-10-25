@@ -3385,3 +3385,20 @@
   commit: 1242cb1bd1be945ddc20e7cdce0f3d015d2de8d5
   pre_repository: false
   record: "GAP-194; D-131; D-134; docs/record/2026-10-24/the-node-holds-coverage-gap-acceptances.md; PR #209"
+
+- date: 2026-10-25
+  signer: Owner
+  subject: >-
+    GAP-060's human-owned code, built to D-135: the node's own persisted peer-link identity
+    (`issue_node_peer_identity`, its own keystore service and file, never the serving key);
+    every node identity named from its key (`node_name`: `node-`, `node-peer-`, with
+    `-ephemeral-` for a key that does not survive a restart); every certificate limited to
+    one role by its extended key usage (`Usage`: serverAuth or clientAuth); and
+    `issue_for_server` for harnesses (`gungnir-remote/src/identity.rs`, the TLS identity
+    path).
+  kind: code
+  paths:
+  - gungnir-remote/src/identity.rs
+  commit: 7b40f3e5ea9219755151106446a3683634f38cb1
+  pre_repository: false
+  record: "GAP-060; D-135; docs/record/2026-10-25/a-node-presents-its-own-persisted-peer-identity.md; PR #213"
