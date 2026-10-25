@@ -3332,3 +3332,20 @@
   commit: e1c2da97e457a187794e15c9a9d87b36e5b895c7
   pre_repository: false
   record: "GAP-193; GAP-195; D-132; D-65; docs/record/2026-10-23/a-decision-s-acknowledgements-reach-the-node.md; PR #201"
+
+- date: 2026-10-24
+  signer: Owner
+  subject: >-
+    D-133's human-owned code: `p256` 0.14 in `gungnir-security`, keys drawn from the system
+    RNG through `Generate` in place of the deprecated `random(&mut OsRng)`, points through
+    `ToSec1Point`, and the escrow nonce from `aes-gcm`'s own `OsRng`
+    (`gungnir-security/src/asymmetric.rs`); and the managed-service tests generating their
+    keys the same way (`gungnir-security/src/managed_service.rs`). No signature, key or wire
+    format changes (RUSTSEC-2026-0387).
+  kind: code
+  paths:
+  - gungnir-security/src/asymmetric.rs
+  - gungnir-security/src/managed_service.rs
+  commit: 101a8bf8c77eea7dc3233f8ff411d49cb55942cc
+  pre_repository: false
+  record: "D-133; D-22; docs/record/2026-10-24/p256-moves-to-0-14-for-a-constant.md; PR #205"
