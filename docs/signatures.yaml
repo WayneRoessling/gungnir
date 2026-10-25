@@ -3418,3 +3418,23 @@
   commit: f8f545674bbc3c65e144c72036b0f1e8b51761ec
   pre_repository: false
   record: "GAP-084; D-48; docs/record/2026-10-25/gap-084-the-wrapped-secret-records-its-master.md; PR #216"
+
+- date: 2026-10-25
+  signer: Owner
+  subject: >-
+    GAP-015's human-owned code, built to D-46: the dense-group filter chosen in a promoted
+    baseline. `PipelineSettings::from_baseline` takes the baseline's dense-group section
+    (`DenseGroupBaselineFields`: the filter, `gm-phd` by default or `gm-cphd`, and the
+    sensor's detection probability, clutter density and birth weight), refuses a filter or
+    figure the mode cannot run as `BaselineError::UnsupportedDenseGroupFilter` or
+    `InvalidDenseGroup` rather than substituting the default, and leaves the mode off when
+    the baseline names none; `DenseGroupFilter::from_name` and the PHD default's recorded
+    reason (`gungnir-fusion-async/src/pipeline.rs`, `dense_group.rs`, `lib.rs`).
+  kind: code
+  paths:
+  - gungnir-fusion-async/src/pipeline.rs
+  - gungnir-fusion-async/src/dense_group.rs
+  - gungnir-fusion-async/src/lib.rs
+  commit: 5960a29238519d2f262e0f0d8baa8923507404d7
+  pre_repository: false
+  record: "GAP-015; D-46; docs/record/2026-10-25/d-46-the-dense-group-filter-is-chosen.md; PR #218"
