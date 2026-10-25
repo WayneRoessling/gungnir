@@ -159,6 +159,13 @@ impl SchemaCatalog {
                     version: dataset::DATASET_VERSION,
                     kind: SchemaKind::Arrow,
                 },
+                // GAP-079: the ML-04 anomaly rows, beside the ML-01 rows and for the same
+                // reason.
+                SchemaEntry {
+                    name: dataset::ANOMALY_ROWS.into(),
+                    version: dataset::DATASET_VERSION,
+                    kind: SchemaKind::Arrow,
+                },
                 // GAP-069: identities are UUID v7 (RFC 9562, which supersedes RFC 4122).
                 // Registered so a peer knows how to read one before it reads a document
                 // that carries one. Written in this textual form since GAP-175 (D-101);

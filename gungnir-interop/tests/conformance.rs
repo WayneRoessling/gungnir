@@ -159,6 +159,15 @@ fn every_catalogue_entry_is_checked_against_a_corpus() {
                     arrow::record_batch::RecordBatch::new_empty(std::sync::Arc::new(schema));
                 assert_eq!(empty.num_rows(), 0);
             }
+            (SchemaKind::Arrow, gungnir_interop::dataset::ANOMALY_ROWS) => {
+                // GAP-079: as above, for the ML-04 rows.
+                let schema = gungnir_interop::dataset::anomaly_rows_schema();
+                assert_eq!(schema.fields().len(), 22);
+                assert_eq!(entry.version, gungnir_interop::dataset::DATASET_VERSION);
+                let empty =
+                    arrow::record_batch::RecordBatch::new_empty(std::sync::Arc::new(schema));
+                assert_eq!(empty.num_rows(), 0);
+            }
             (SchemaKind::Arrow, _) => {
                 let batch = detections_to_record_batch(&detections).expect("to arrow");
                 let back = record_batch_to_detections(&batch).expect("from arrow");
@@ -467,7 +476,9 @@ fn wire_coverage(name: &str) -> Option<WireCoverage> {
         "gungnir.PlanView" => WireCoverage::NotCovered(
             "a plan is a recommendation for this deployment's own effectors and no exchange item covers it, so `NodeApi::snapshot_for` withholds it from every party (DN-18 §5); it crosses no wire to a peer to be checked on",
         ),
-        "gungnir.detections.arrow" | gungnir_interop::dataset::CLASSIFICATION_ROWS => {
+        "gungnir.detections.arrow"
+        | gungnir_interop::dataset::CLASSIFICATION_ROWS
+        | gungnir_interop::dataset::ANOMALY_ROWS => {
             WireCoverage::NotCovered(
                 "an Arrow dataset is written to a file for training, not served on the v3 transport; it has no producer on a wire",
             )

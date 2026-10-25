@@ -298,6 +298,12 @@ lossless form (D-102), and a partner-bound body writes a non-finite float as DN-
 "value unavailable" object (D-103). See
 [the record](../record/2026-09-26/an-identity-written-as-text-and-no-float.md).
 
+**Landed 2026-10-25, GAP-079**: the catalogue gained `gungnir.ml.anomaly-rows` version 1
+(`gungnir_interop::dataset::anomaly_rows_schema`), the ML-04 training rows of
+`../ml/data-pipeline.md` §2, beside the ML-01 rows. It is a dataset written to a file, not
+a wire payload, so no type in `gungnir-model` changed and `SCHEMA_VERSION` is unchanged.
+See [the record](../record/2026-10-25/gap-079-the-ml-04-anomaly-rows.md).
+
 `SnapshotResponse` gains `assets`, `predictions`, `engagements`, `requirements`,
 `hazards`, and `control_status`, and is filtered per caller by DN-17. The filtering is a
 behaviour change on an existing endpoint and is gated on the caller having a configured

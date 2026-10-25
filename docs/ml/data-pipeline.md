@@ -37,9 +37,42 @@ form.
 | **`label_side`** | utf8 | Truth `side`, used to check the friendly-recall target |
 | `split` | utf8 | train, validation, or test |
 
-**ML-04 anomaly rows**, one per source per window and one per track per window, with the
-planted-anomaly flag from the scenario's `events.jsonl` and `expected` block as the
-label.
+**ML-04 anomaly rows**, one per source per window and one per track per window
+(`gungnir.ml.anomaly-rows`, built by `gungnir_ml::anomaly::extract_anomaly_set`). A window is
+ten truth ticks, and windows do not overlap. A feature that does not apply to a row's kind,
+or has nothing to measure in its window, is null rather than zero:
+
+| Column | Type | Rows | From |
+|---|---|---|---|
+| `dataset_version`, `feature_schema_version` | uint32 | both | The pipeline |
+| `source_set`, `scenario`, `seed` | utf8, utf8, uint64 | both | The set's `metadata.json` |
+| `subject_kind`, `subject_id` | utf8 | both | `source` and the sensor id, or `track` and the entity id |
+| `window_start`, `window_end` | float64 | both | The window |
+| `detections` | uint32 | both | The sensor's detections, or the ones the entity caused |
+| `detections_per_scan` | float32 | source | Against the sensor's `update_period_s` in `sensors.json` |
+| `unassociated_fraction` | float32 | source | Detections `detections-truth.jsonl` maps to no entity |
+| `residual_rms_m` | float32 | both | Associated detections against the entity's true position at the stamped source time |
+| `clock_skew_s` | float32 | source | Mean receipt time minus source time, less the sensor's configured mean latency |
+| `receipt_gap_s` | float32 | source | Since the source's last receipt |
+| `speed_mps` | float32 | track | The truth |
+| `cooperative_present`, `cooperative_residual_m`, `cooperative_gap_s` | bool, float32, float32 | track | Detections from a sensor `sensors.json` marks `cooperative` (AIS, ADS-B) |
+| **`label_anomaly`**, **`label_kind`** | bool, utf8 | both | `none`, or the planted anomalies active in the window joined with `+` |
+| `split` | utf8 | both | As for ML-01 |
+
+The labels are the planted truth, from the set's own records rather than the scenario's
+`expected` block, which gives only a count:
+
+- **A source's** come from `environment.json`, the per-sensor form of the scenario's events:
+  `ea_skew` is `clock-skew`, `ea_dropout` is `dropout`, `sensor_lost` is `sensor-lost`.
+- **A track's** come from `entities.json`: an AIS spoofing offset is `spoofed-position`, an
+  intermittent ADS-B transponder is `intermittent-transponder`, and a cooperative signal
+  switched off is `cooperative-silent`. The last is derived, because the set records the
+  emission and not the switch: the entity emits `none` where another of its platform in
+  the set emits `ais` or `adsb`.
+
+The truth stands in for the tracker, as it does for the ML-01 rows. Two of ML-04's
+per-track inputs are not columns yet: consistency with the declared class's envelopes, and
+dwell inside a sensitive area. A set carries neither the envelopes nor the areas.
 
 ## 3. Splits
 
