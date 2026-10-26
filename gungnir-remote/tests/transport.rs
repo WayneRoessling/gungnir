@@ -475,6 +475,185 @@ async fn a_dense_group_announced_after_connecting_reaches_the_desktop_live() {
     .await;
 }
 
+/// A live control-status change, as the node journals it (GAP-203).
+fn status_change(
+    layer: gungnir_model::EffectorLayer,
+    status: gungnir_model::WeaponsControlStatus,
+    at: f64,
+) -> gungnir_model::ControlStatusChange {
+    gungnir_model::ControlStatusChange {
+        layer,
+        status,
+        previous: gungnir_model::WeaponsControlStatus::Free,
+        reason: "deconfliction with friendly air".into(),
+        operator: "13".into(),
+        role: "Supervisor".into(),
+        confirmed_by: Some(gungnir_model::ConfirmingOperator {
+            operator: "15".into(),
+            role: "Commander".into(),
+        }),
+        revision: 3,
+        origin: Some("desktop-a".into()),
+        at: MissionTime(at),
+        request: Some(gungnir_model::RequestId::new("console-a/1").expect("a key")),
+    }
+}
+
+/// **GAP-203, the wire.** The request and both answers of
+/// `POST /v3/policy/control-status` cross the wire byte for byte, in the form every body
+/// a desktop reads takes, and the request's `Debug` never carries the passphrase.
+#[test]
+fn the_control_status_request_and_answers_cross_the_wire_byte_for_byte() {
+    use gungnir_eventing::nonfinite::{from_line, to_faithful_line};
+    use gungnir_remote::policy::{
+        ControlStatusRecorded, ControlStatusRefused, ControlStatusRequest, WithdrawnItem,
+    };
+
+    let request = ControlStatusRequest {
+        request: gungnir_model::RequestId::new("console-a/1").expect("a key"),
+        layer: gungnir_model::EffectorLayer::Area,
+        status: gungnir_model::WeaponsControlStatus::Hold,
+        reason: "deconfliction with friendly air".into(),
+        confirmation: Some(gungnir_api::v3::ConfirmationRequest {
+            operator: 15,
+            passphrase: PASSPHRASE.into(),
+        }),
+    };
+    let line = to_faithful_line(&request).expect("encodes");
+    assert_eq!(
+        from_line::<ControlStatusRequest>(&line).expect("decodes"),
+        request
+    );
+    assert!(
+        line.contains(PASSPHRASE),
+        "the wire carries it, as the session route's does"
+    );
+    let debug = format!("{request:?}");
+    assert!(!debug.contains(PASSPHRASE), "{debug}");
+    assert!(debug.contains("<redacted>"), "{debug}");
+    // A body without a confirmation is the body a deployment with the rule off sends.
+    let bare = ControlStatusRequest {
+        confirmation: None,
+        ..request
+    };
+    let line = to_faithful_line(&bare).expect("encodes");
+    assert!(!line.contains("confirmation"), "{line}");
+    assert_eq!(
+        from_line::<ControlStatusRequest>(&line).expect("decodes"),
+        bare
+    );
+
+    let recorded = ControlStatusRecorded {
+        change: status_change(
+            gungnir_model::EffectorLayer::Area,
+            gungnir_model::WeaponsControlStatus::Hold,
+            120.5,
+        ),
+        withdrawn: vec![WithdrawnItem {
+            item: gungnir_model::PendingApprovalId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_61c3),
+            plan: gungnir_model::PlanId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_61c4),
+        }],
+    };
+    let line = to_faithful_line(&recorded).expect("encodes");
+    assert_eq!(
+        from_line::<ControlStatusRecorded>(&line).expect("decodes"),
+        recorded
+    );
+
+    for refused in [
+        ControlStatusRefused::Unchanged {
+            layer: gungnir_model::EffectorLayer::Point,
+            status: gungnir_model::WeaponsControlStatus::Tight,
+        },
+        ControlStatusRefused::TwoPersonRequired,
+        ControlStatusRefused::ConfirmationRejected,
+        ControlStatusRefused::ConfirmationNotPermitted {
+            role: "Operator".into(),
+        },
+        ControlStatusRefused::SameOperator,
+    ] {
+        let line = to_faithful_line(&refused).expect("encodes");
+        assert!(line.contains("\"refused\":"), "{line}");
+        assert_eq!(
+            from_line::<ControlStatusRefused>(&line).expect("decodes"),
+            refused
+        );
+        assert!(!refused.sentence().is_empty());
+    }
+}
+
+/// **GAP-203, the projection.** The snapshot's `control_status` and its changes populate
+/// the projection on connection, a `PolicyEvent::ControlStatusSet` frame updates the map
+/// and adds the change live, and a replayed frame does not add it twice.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_desktop_receives_the_nodes_control_status_and_follows_it_live() {
+    use gungnir_model::{EffectorLayer, WeaponsControlStatus};
+    let held = status_change(EffectorLayer::Area, WeaponsControlStatus::Hold, 120.5);
+    let api = authenticating(
+        snapshot(Vec::new()).with_control_status(
+            [(EffectorLayer::Area, WeaponsControlStatus::Hold)]
+                .into_iter()
+                .collect(),
+            vec![held.clone()],
+        ),
+    );
+    let url = serve(Arc::clone(&api)).await;
+    let handle = tokio::runtime::Handle::current();
+    let (_tracking, _intercept, link) =
+        connect_with_link(&RemoteEndpoint::plain(url), credential(), &handle)
+            .expect("the link starts");
+    let mut changes = link.changes();
+    until_changed(
+        &mut changes,
+        || link.control_status().is_some(),
+        "the link to report connected",
+    )
+    .await;
+    assert_eq!(
+        link.control_status()
+            .expect("connected")
+            .get(&EffectorLayer::Area),
+        Some(&WeaponsControlStatus::Hold),
+        "the snapshot's status reached the desktop"
+    );
+    assert_eq!(link.control_status_changes(), vec![held.clone()]);
+
+    // Connected is not subscribed: publish until the stream follows.
+    let tightened = status_change(EffectorLayer::Point, WeaponsControlStatus::Tight, 130.0);
+    for seq in (3_000u64..).take(100) {
+        api.publish_event(Envelope {
+            seq,
+            mission_time: MissionTime(130.0),
+            event: Event::Policy(gungnir_model::events::PolicyEvent::ControlStatusSet(
+                tightened.clone(),
+            )),
+        })
+        .expect("published");
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        if link
+            .control_status()
+            .is_some_and(|s| s.get(&EffectorLayer::Point) == Some(&WeaponsControlStatus::Tight))
+        {
+            break;
+        }
+    }
+    let status = link.control_status().expect("connected");
+    assert_eq!(
+        status.get(&EffectorLayer::Point),
+        Some(&WeaponsControlStatus::Tight)
+    );
+    assert_eq!(
+        status.get(&EffectorLayer::Area),
+        Some(&WeaponsControlStatus::Hold),
+        "the other layer stands"
+    );
+    assert_eq!(
+        link.control_status_changes(),
+        vec![held, tightened],
+        "the frame was published up to a hundred times and taken once"
+    );
+}
+
 /// A track initiated on the node after the desktop connected reaches it over the event
 /// stream, without another snapshot request.
 #[tokio::test(flavor = "multi_thread")]

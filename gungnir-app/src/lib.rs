@@ -22,6 +22,7 @@ pub mod anomaly;
 pub mod audit;
 pub mod audit_record;
 pub mod bearings;
+pub mod control_status;
 pub mod cooperative;
 pub mod decisions;
 pub mod deliveries;

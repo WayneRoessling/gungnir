@@ -693,6 +693,52 @@ fn command_events() -> Vec<CommandEvent> {
             to_role: "Supervisor".into(),
             at: T2,
         },
+        CommandEvent::Withdrawn {
+            item: PendingApprovalId(0x0199_5a3b_7c2d_7e4f_8a1b_2c3d_9f3a_0004),
+            plan: plan_id(),
+            layer: EffectorLayer::Area,
+            status: gungnir_model::WeaponsControlStatus::Hold,
+            at: T2,
+        },
+    ]
+}
+
+/// GAP-203: a live status change, with and without the second person and the request key.
+fn policy_events() -> Vec<gungnir_model::events::PolicyEvent> {
+    use gungnir_model::events::PolicyEvent;
+    use gungnir_model::{ConfirmingOperator, ControlStatusChange, WeaponsControlStatus};
+    vec![
+        PolicyEvent::ControlStatusSet(ControlStatusChange {
+            layer: EffectorLayer::Area,
+            status: WeaponsControlStatus::Hold,
+            previous: WeaponsControlStatus::Tight,
+            reason: "deconfliction with friendly air".into(),
+            operator: "7".into(),
+            role: "Supervisor".into(),
+            confirmed_by: Some(ConfirmingOperator {
+                operator: "9".into(),
+                role: "Commander".into(),
+            }),
+            revision: 4,
+            origin: Some("desktop-1".into()),
+            at: T1,
+            request: Some(
+                gungnir_model::RequestId::new("console-1:42").expect("a short key reads"),
+            ),
+        }),
+        PolicyEvent::ControlStatusSet(ControlStatusChange {
+            layer: EffectorLayer::Point,
+            status: WeaponsControlStatus::Free,
+            previous: WeaponsControlStatus::Hold,
+            reason: "raid in progress".into(),
+            operator: "7".into(),
+            role: "Commander".into(),
+            confirmed_by: None,
+            revision: 4,
+            origin: None,
+            at: T2,
+            request: None,
+        }),
     ]
 }
 
@@ -1203,6 +1249,15 @@ impl Variant for CommandEvent {
             Self::Expired { .. } => "Expired",
             Self::Queued { .. } => "Queued",
             Self::Escalated { .. } => "Escalated",
+            Self::Withdrawn { .. } => "Withdrawn",
+        }
+    }
+}
+
+impl Variant for gungnir_model::events::PolicyEvent {
+    fn variant(&self) -> &'static str {
+        match self {
+            Self::ControlStatusSet(_) => "ControlStatusSet",
         }
     }
 }
@@ -1447,6 +1502,10 @@ fn event_tables() -> BTreeMap<&'static str, BTreeSet<String>> {
         (
             "CommandEvent",
             enum_round_trip("CommandEvent", &command_events()),
+        ),
+        (
+            "PolicyEvent",
+            enum_round_trip("PolicyEvent", &policy_events()),
         ),
         (
             "EngagementEvent",

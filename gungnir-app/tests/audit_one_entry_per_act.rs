@@ -561,6 +561,13 @@ fn every_audit_site_is_an_act_this_file_or_another_performs() {
             1,
             "an effector report",
         ),
+        (
+            "gungnir-approval/src/control_status.rs",
+            "host.audit(",
+            1,
+            "a weapons control status change (tests/control_status.rs; the withdrawals it \
+             causes are nobody's act and write no entry of their own)",
+        ),
     ];
     for (file, call, expected, act) in sites {
         let text =

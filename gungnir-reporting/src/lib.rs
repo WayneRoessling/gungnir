@@ -147,6 +147,17 @@ pub struct EventCounts {
     pub decisions_expired: u64,
     /// Items offered upward for want of authority or attention.
     pub decisions_escalated: u64,
+    /// Items a live weapons-control-status change took off the queue (GAP-203). Neither
+    /// a decision nor an expiry: the policy changed under them. Defaulted so a report
+    /// written before the field existed still reads, and left out at zero so a journal
+    /// written before the field existed still renders byte for byte what it rendered
+    /// then (`gungnir-app/tests/pre_uuid_v7_journal.rs`).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub decisions_withdrawn: u64,
+    /// Live weapons-control-status changes, each a recorded decision of its own
+    /// (DN-09 §6, §10). Defaulted and left out at zero for the same reasons.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub control_status_changes: u64,
     /// Sensor mode changes (GAP-003). Counted because a coverage answer that changed
     /// during a session is the thing an after-action review asks about, and the mode
     /// changes are what changed it.
@@ -320,6 +331,12 @@ fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
             Event::Command(CommandEvent::Decided { .. }) => counts.decisions += 1,
             Event::Command(CommandEvent::Expired { .. }) => counts.decisions_expired += 1,
             Event::Command(CommandEvent::Escalated { .. }) => counts.decisions_escalated += 1,
+            // GAP-203: a status change ending an item is neither a decision nor an expiry,
+            // and MOE-01 must not read it as either; counted on its own.
+            Event::Command(CommandEvent::Withdrawn { .. }) => counts.decisions_withdrawn += 1,
+            Event::Policy(gungnir_model::events::PolicyEvent::ControlStatusSet(_)) => {
+                counts.control_status_changes += 1;
+            }
             Event::Sensor(SensorEvent::ModeChanged { .. }) => {
                 counts.sensor_mode_changes += 1;
             }

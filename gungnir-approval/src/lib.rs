@@ -37,6 +37,7 @@
 //! `gungnir-policy`'s and the permissions are `gungnir-security`'s.
 
 pub mod chain;
+pub mod control_status;
 pub mod deliveries;
 pub mod engagements;
 pub mod handoffs;
@@ -47,6 +48,7 @@ pub use chain::{
     ladder_roles, may_override, offer_to, with_chain, Offering, PolicyChainReport, CHAIN_ENGINES,
     DECISION_ACTION,
 };
+pub use control_status::Withdrawn;
 pub use deliveries::{
     http_address_in, DeliveryAnswer, HandoffInFlight, HandoffTransport, PendingHandoff, HTTP_KIND,
     RETRY_AFTER_S,

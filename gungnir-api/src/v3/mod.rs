@@ -23,10 +23,18 @@
 
 use gungnir_model::events::VerdictSummary;
 use gungnir_model::{
-    BearingRayView, CollectionRequirement, DecisionId, DenseGroupView, DetectionView,
-    EffectorLayer, ExchangeItem, HeldLayerView, MissionTime, PendingApprovalId, PipelineStatsView,
-    PlanId, PlanStandingView, PlanView, Releasability, SystemHealth, TrackView, SCHEMA_VERSION,
+    BearingRayView, CollectionRequirement, ControlStatusChange, DecisionId, DenseGroupView,
+    DetectionView, EffectorLayer, ExchangeItem, HeldLayerView, MissionTime, PendingApprovalId,
+    PipelineStatsView, PlanId, PlanStandingView, PlanView, Releasability, RequestId, SystemHealth,
+    TrackView, WeaponsControlStatus, SCHEMA_VERSION,
 };
+use std::collections::BTreeMap;
+
+/// How many of this run's control-status changes a snapshot carries, oldest first
+/// (GAP-203). A desktop reads the whole history from the node's journal; what the
+/// snapshot is for is the changes a console linking mid-watch needs in front of it, and
+/// the key a retry is matched against.
+pub const CONTROL_STATUS_CHANGES_CARRIED: usize = 64;
 
 pub use gungnir_eventing::Envelope as EventFrame;
 
@@ -129,6 +137,27 @@ pub struct SnapshotResponse {
     /// ambiguity this field has, and the same one `plan_standing`'s `None` has.
     #[serde(default)]
     pub held_layers: Vec<HeldLayerView>,
+    /// **The weapons control status in force on this node, per layer** (GAP-203;
+    /// DN-09 §10): the baseline's, with every live change folded over it. Kept live
+    /// between snapshots by `PolicyEvent::ControlStatusSet`; carried here so a desktop
+    /// that links after a change draws the status the node decides by rather than the
+    /// one its own copy of the baseline says.
+    ///
+    /// **Additive and defaulted**, as `held_layers` is: empty from a node that does not
+    /// say, which a desktop reads as "the baseline's", the same ambiguity `held_layers`
+    /// carries and for the same reason. **Withheld from a machine party**: what this
+    /// deployment decides by is internal, as its queue is.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub control_status: BTreeMap<EffectorLayer, WeaponsControlStatus>,
+    /// **This run's live changes, oldest first, at most
+    /// [`CONTROL_STATUS_CHANGES_CARRIED`]** (GAP-203): what the node folded from its
+    /// journal at start and what it recorded since. Each carries its client request key,
+    /// which is how `POST /v3/policy/control-status` answers a retry with the change it
+    /// already recorded rather than recording a second one.
+    ///
+    /// Additive, defaulted and withheld from a machine party, as `control_status` is.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub control_status_changes: Vec<ControlStatusChange>,
 }
 
 impl SnapshotResponse {
@@ -157,7 +186,30 @@ impl SnapshotResponse {
             plan_standing: None,
             // GAP-183: said by the node's desk, attached by the publisher.
             held_layers: Vec::new(),
+            // GAP-203: said by the node's baseline and its folded changes, attached by
+            // the publisher. Empty is "the node does not say", never "every layer free".
+            control_status: BTreeMap::new(),
+            control_status_changes: Vec::new(),
         }
+    }
+
+    /// Attach the control status in force and this run's changes (GAP-203; DN-09 §10).
+    ///
+    /// The changes are kept to the newest [`CONTROL_STATUS_CHANGES_CARRIED`], oldest
+    /// first, so a long watch cannot grow the snapshot without bound; the node's journal
+    /// holds the rest.
+    #[must_use]
+    pub fn with_control_status(
+        mut self,
+        in_force: BTreeMap<EffectorLayer, WeaponsControlStatus>,
+        mut changes: Vec<ControlStatusChange>,
+    ) -> Self {
+        if changes.len() > CONTROL_STATUS_CHANGES_CARRIED {
+            changes.drain(..changes.len() - CONTROL_STATUS_CHANGES_CARRIED);
+        }
+        self.control_status = in_force;
+        self.control_status_changes = changes;
+        self
     }
 
     /// Attach the node's approval queue (DN-31 §5.3, GAP-132), the same builder idiom
@@ -389,6 +441,128 @@ impl GapAcceptanceRefused {
             }
             GapAcceptanceRefused::AlreadyAccepted { gap, acceptance } => {
                 format!("{gap} is already accepted on the node ({acceptance})")
+            }
+        }
+    }
+}
+
+/// What `POST /v3/policy/control-status` takes (GAP-203; DN-09 §10; D-140): a signed-in
+/// supervisor or commander puts one layer at a status, live, and says why.
+///
+/// **No operator, no role, no revision.** The person is whoever the token says, the role
+/// is the one that token carries, and the baseline revision the change is made under is
+/// the node's own, read when the node records it. The one thing the body may name about a
+/// second person is a confirmation, which the node verifies against its own account store
+/// exactly as it verifies a sign-in; a confirmation that is only claimed is nothing.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ControlStatusRequest {
+    /// Chosen by the client and recorded with the change, so a retry after a `504` is
+    /// answered with the change it recorded rather than recording a second one (the
+    /// decision route's rule, DN-31 §5.2).
+    pub request: RequestId,
+    pub layer: EffectorLayer,
+    pub status: WeaponsControlStatus,
+    /// Why, in the person's words. Required: an empty reason is refused `400`.
+    pub reason: String,
+    /// The second person, where the baseline's two-person rule is on (D-140). Absent
+    /// where it is off; refused `409 two-person-required` where it is on and this is
+    /// absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmation: Option<ConfirmationRequest>,
+}
+
+/// The second person's credential (D-140): the same pair `POST /v3/session` takes, and
+/// verified the same way. **Debug redacts the passphrase**, as a request that reaches a
+/// log line must.
+#[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ConfirmationRequest {
+    pub operator: u64,
+    pub passphrase: String,
+}
+
+impl std::fmt::Debug for ConfirmationRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConfirmationRequest")
+            .field("operator", &self.operator)
+            .field("passphrase", &"<redacted>")
+            .finish()
+    }
+}
+
+/// `201`: the change this request recorded, or recorded before under the same `request`,
+/// and the queue items the new status took off the queue (GAP-203; DN-09 §10).
+///
+/// `withdrawn` is empty on a retry: the first answer carried them, and nothing was
+/// withdrawn a second time.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ControlStatusRecorded {
+    pub change: ControlStatusChange,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub withdrawn: Vec<WithdrawnItem>,
+}
+
+/// One queue item a status change ended, named by its item and its plan so PN-06 can say
+/// which row left and why (GAP-203). The change itself is on the stream as
+/// `PolicyEvent::ControlStatusSet`, and each withdrawal as `CommandEvent::Withdrawn`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct WithdrawnItem {
+    pub item: PendingApprovalId,
+    pub plan: PlanId,
+}
+
+/// Why the node recorded no change (GAP-203; DN-09 §10; D-140). Nothing is journaled or
+/// published for any of these; the refusal's own audit entry is written under
+/// `weapons.control_status` naming the requester.
+///
+/// Tagged `refused`, as [`GapAcceptanceRefused`] and [`DecisionRefused`] are, so a desktop
+/// reads every refusal body on this transport the same way. The confirmation refusals are
+/// `403`, because they are about who is asking; the other two are `409`, because they are
+/// about the node's state.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "refused", rename_all = "kebab-case")]
+pub enum ControlStatusRefused {
+    /// The layer is already at that status: there is no change to record, and recording
+    /// one would put a decision nobody needed on the record.
+    Unchanged {
+        layer: EffectorLayer,
+        status: WeaponsControlStatus,
+    },
+    /// The baseline's `policy.two_person.control_status` is on and no confirmation came.
+    TwoPersonRequired,
+    /// The confirmation did not verify: an unknown operator or a wrong passphrase,
+    /// **deliberately indistinguishable**, as a sign-in's refusal is.
+    ConfirmationRejected,
+    /// The confirming account verified and its role does not hold
+    /// `weapons.control_status`: a second person is a second person who could have made
+    /// the change alone.
+    ConfirmationNotPermitted { role: String },
+    /// The confirmer is the requester. Two credentials for one person is one person.
+    SameOperator,
+}
+
+impl ControlStatusRefused {
+    /// The refusal in words, for the caller's panel and the audit entry.
+    #[must_use]
+    pub fn sentence(&self) -> String {
+        match self {
+            ControlStatusRefused::Unchanged { layer, status } => {
+                format!("the {layer:?} layer is already at {status:?}; nothing was changed")
+            }
+            ControlStatusRefused::TwoPersonRequired => {
+                "this deployment needs a second person to confirm a control-status change \
+                 (D-140), and none confirmed it"
+                    .to_owned()
+            }
+            ControlStatusRefused::ConfirmationRejected => {
+                "the confirming credential was rejected".to_owned()
+            }
+            ControlStatusRefused::ConfirmationNotPermitted { role } => {
+                format!("the confirming account's role, {role}, may not set weapons control status")
+            }
+            ControlStatusRefused::SameOperator => {
+                "the confirming operator is the requesting operator; a second person is \
+                 somebody else"
+                    .to_owned()
             }
         }
     }
@@ -703,6 +877,14 @@ pub enum DecisionRefused {
     },
     /// The window closed (DN-10 §6). **Not a rejection**: nobody chose.
     Expired { at: MissionTime },
+    /// A live status change took the item off the queue (GAP-203, DN-09 §10): the layer
+    /// named was put at a status that refuses the plan. Not a rejection and not an
+    /// expiry; the change itself is on the stream as `PolicyEvent::ControlStatusSet`.
+    Withdrawn {
+        layer: EffectorLayer,
+        status: WeaponsControlStatus,
+        at: MissionTime,
+    },
 }
 
 /// A decision as the machine that took it recorded it (DN-31 §5.2: "identifiers, plan,

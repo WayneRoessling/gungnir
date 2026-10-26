@@ -181,6 +181,10 @@ pub fn tick(state: &mut AppState) {
     crate::gap_acceptance::answers_from_node(state);
     // GAP-202: and every acceptance still owed a forward kept in the link's outbox.
     crate::gap_acceptance::forward_owed(state);
+    // GAP-203: while the link is up the node's weapons control status is the status in
+    // force here, and the node's answers to the changes this console sent are said.
+    crate::control_status::sync_from_node(state);
+    crate::control_status::answers_from_node(state);
 
     // 3g. Once per session, journal which algorithm configuration the deployment opened
     //     with (GAP-086). Here rather than in `AppState::with_config`, because that

@@ -78,6 +78,15 @@ pub enum OperatorDecision {
     Expired {
         at: MissionTime,
     },
+    /// The policy in force changed under the item: a layer its plan engages on was put at
+    /// a status that refuses it, and the item left the queue (GAP-203, DN-09 §10). **Not
+    /// a rejection and not an expiry**: nobody chose it and the window had not closed. The
+    /// status change that ended it is on the record as its own event, with who made it.
+    Withdrawn {
+        layer: gungnir_model::EffectorLayer,
+        status: gungnir_model::WeaponsControlStatus,
+        at: MissionTime,
+    },
 }
 
 /// Who took a decision, under what request, and where (DN-23 §5 rule 1; DN-31 §5.2).
@@ -195,6 +204,14 @@ impl DecisionRecord {
         matches!(self.decision, OperatorDecision::Expired { .. })
     }
 
+    /// Whether a status change ended the item with nobody deciding (GAP-203).
+    ///
+    /// Kept apart from [`Self::is_expiry`] because MOE-01 counts expiries and a
+    /// withdrawal is not one: the window was still open.
+    pub fn is_withdrawal(&self) -> bool {
+        matches!(self.decision, OperatorDecision::Withdrawn { .. })
+    }
+
     /// The event this record publishes.
     ///
     /// An expiry publishes `Expired`, not `Decided { accepted: false }`. Deriving the
@@ -205,6 +222,16 @@ impl DecisionRecord {
         match &self.decision {
             OperatorDecision::Expired { at } => CommandEvent::Expired {
                 plan: self.plan.id,
+                at: *at,
+            },
+            OperatorDecision::Withdrawn { layer, status, at } => CommandEvent::Withdrawn {
+                // A withdrawal always has an item, because it is the queue that withdraws;
+                // the zero identifier is never minted (UUID v7), so a reader can tell a
+                // record that lost its item from one that named it.
+                item: self.item.unwrap_or(PendingApprovalId(0)),
+                plan: self.plan.id,
+                layer: *layer,
+                status: *status,
                 at: *at,
             },
             OperatorDecision::Accepted
@@ -424,6 +451,26 @@ pub trait ApprovalWorkflow: Send + Sync {
         holds: &dyn Fn(&PendingApproval, &str) -> bool,
     ) -> Vec<Reoffered>;
 
+    /// Take an item off the queue because a layer its plan engages on was put at a
+    /// status that refuses it (GAP-203, DN-09 §10). The record it leaves is
+    /// [`OperatorDecision::Withdrawn`]: not actionable, naming no operator, so the
+    /// history can say what became of the item without inventing a person who decided.
+    ///
+    /// **Which items a status change refuses is the caller's question**, because the
+    /// rule is `gungnir-policy`'s control-status engine and this crate has no view on it;
+    /// the caller re-evaluates and withdraws by identifier.
+    ///
+    /// # Errors
+    ///
+    /// `CommandError::NotFound` when nothing in the queue answers to `id`.
+    fn withdraw(
+        &mut self,
+        id: PendingApprovalId,
+        layer: gungnir_model::EffectorLayer,
+        status: gungnir_model::WeaponsControlStatus,
+        now: MissionTime,
+    ) -> Result<DecisionRecord, CommandError>;
+
     /// Append-only history, oldest first.
     fn records(&self) -> &[DecisionRecord];
 
@@ -619,6 +666,46 @@ impl ApprovalWorkflow for InMemoryApprovalWorkflow {
             mission_time: now,
             acknowledged: who.acknowledged,
         };
+        self.records.push(record.clone());
+        Ok(record)
+    }
+
+    fn withdraw(
+        &mut self,
+        id: PendingApprovalId,
+        layer: gungnir_model::EffectorLayer,
+        status: gungnir_model::WeaponsControlStatus,
+        now: MissionTime,
+    ) -> Result<DecisionRecord, CommandError> {
+        let index = self
+            .queue
+            .iter()
+            .position(|p| p.id == id)
+            .ok_or(CommandError::NotFound(id))?;
+        let item = self.queue.remove(index);
+        let record = DecisionRecord {
+            id: DecisionId(mint()),
+            item: Some(id),
+            plan: item.plan,
+            verdict: item.verdict,
+            decision: OperatorDecision::Withdrawn {
+                layer,
+                status,
+                at: now,
+            },
+            // Nobody decided: the status change that ended the item names its own
+            // operator on its own event, and this record must not repeat it as a decision.
+            operator_id: None,
+            role: None,
+            request: None,
+            origin: None,
+            mission_time: now,
+            acknowledged: Vec::new(),
+        };
+        debug_assert!(
+            !record.is_actionable() && record.operator_id.is_none(),
+            "a withdrawal became actionable or named an operator"
+        );
         self.records.push(record.clone());
         Ok(record)
     }

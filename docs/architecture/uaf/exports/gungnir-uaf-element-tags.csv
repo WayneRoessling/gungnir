@@ -1133,10 +1133,18 @@ IE-concurrence,uafId,IE-concurrence
 IE-concurrence,uafKind,InformationElement
 IE-concurrence,registry.code,gungnir_model::Concurrence
 IE-concurrence,registry.domain,Battle rhythm & mission records
+IE-confirming-operator,uafId,IE-confirming-operator
+IE-confirming-operator,uafKind,InformationElement
+IE-confirming-operator,registry.code,gungnir_model::ConfirmingOperator
+IE-confirming-operator,registry.domain,"Policy, authority & settings"
 IE-conflict-side,uafId,IE-conflict-side
 IE-conflict-side,uafKind,InformationElement
 IE-conflict-side,registry.code,gungnir_model::ConflictSide
 IE-conflict-side,registry.domain,"Policy, authority & settings"
+IE-control-status-change,uafId,IE-control-status-change
+IE-control-status-change,uafKind,InformationElement
+IE-control-status-change,registry.code,gungnir_model::ControlStatusChange
+IE-control-status-change,registry.domain,"Policy, authority & settings"
 IE-control-status-settings,uafId,IE-control-status-settings
 IE-control-status-settings,uafKind,InformationElement
 IE-control-status-settings,registry.code,gungnir_model::ControlStatusSettings
@@ -1393,6 +1401,10 @@ IE-planning-event,uafId,IE-planning-event
 IE-planning-event,uafKind,InformationElement
 IE-planning-event,registry.code,gungnir_model::PlanningEvent
 IE-planning-event,registry.domain,Events & the record
+IE-policy-event,uafId,IE-policy-event
+IE-policy-event,uafKind,InformationElement
+IE-policy-event,registry.code,gungnir_model::PolicyEvent
+IE-policy-event,registry.domain,Events & the record
 IE-policy-settings,uafId,IE-policy-settings
 IE-policy-settings,uafKind,InformationElement
 IE-policy-settings,registry.code,gungnir_model::PolicySettings
@@ -1545,6 +1557,10 @@ IE-theme-variant,uafId,IE-theme-variant
 IE-theme-variant,uafKind,InformationElement
 IE-theme-variant,registry.code,gungnir_model::ThemeVariant
 IE-theme-variant,registry.domain,"Policy, authority & settings"
+IE-two-person-settings,uafId,IE-two-person-settings
+IE-two-person-settings,uafKind,InformationElement
+IE-two-person-settings,registry.code,gungnir_model::TwoPersonSettings
+IE-two-person-settings,registry.domain,"Policy, authority & settings"
 IE-uas-altitude-reference,uafId,IE-uas-altitude-reference
 IE-uas-altitude-reference,uafKind,InformationElement
 IE-uas-altitude-reference,registry.code,gungnir_model::UasAltitudeReference

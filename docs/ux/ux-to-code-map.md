@@ -54,7 +54,7 @@ needs a docking crate, a §2.9 sign-off recorded when GAP-075 lands.
 | FL-05 Disconnected fallback | `gungnir-remote`, `gungnir-resilience`, `gungnir-collab` | GAP-041, GAP-050 |
 | FL-06 Assistant | `gungnir-agent` (plan 08), `gungnir-security` (audit) | GAP-044 |
 | FL-07 Identity declaration | `gungnir-identification`, `gungnir-policy` (per-class criteria) | GAP-018, GAP-073 |
-| FL-08 Weapons control status | `gungnir-policy`, `gungnir-config` (policy section) | GAP-033, GAP-052 |
+| FL-08 Weapons control status | `gungnir-ui::panels::control_status_dialog` (the dialog), `gungnir-ui::panels::status_strip` (the chip), `gungnir-app::control_status` (the desktop's act), `gungnir-approval::control_status` (what both binaries run), `gungnir-api` `POST /v3/policy/control-status` (the node's) | GAP-033, GAP-052, GAP-203 |
 
 ## 4. Design system to code
 

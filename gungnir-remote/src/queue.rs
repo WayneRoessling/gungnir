@@ -113,6 +113,14 @@ pub enum Ended {
     /// The window closed with nobody deciding. **Not a rejection**: nobody chose
     /// (DN-10 §6).
     Expired { at: MissionTime },
+    /// A live status change took it off the node's queue (GAP-203, DN-09 §10): the
+    /// layer named was put at a status that refuses the plan. Not a rejection and not an
+    /// expiry; the change itself arrives as `PolicyEvent::ControlStatusSet`.
+    Withdrawn {
+        layer: gungnir_model::EffectorLayer,
+        status: gungnir_model::WeaponsControlStatus,
+        at: MissionTime,
+    },
 }
 
 /// One item that has left the node's queue, and what became of it.
@@ -230,6 +238,22 @@ impl NodeQueue {
                 },
             ),
             CommandEvent::Expired { plan, at } => self.end(*plan, Ended::Expired { at: *at }),
+            // GAP-203: ends the item here and now like an expiry, with its own time; the
+            // status change that caused it is folded by the projection separately.
+            CommandEvent::Withdrawn {
+                plan,
+                layer,
+                status,
+                at,
+                ..
+            } => self.end(
+                *plan,
+                Ended::Withdrawn {
+                    layer: *layer,
+                    status: *status,
+                    at: *at,
+                },
+            ),
         }
     }
 
@@ -524,7 +548,9 @@ mod tests {
                 assert_eq!(role.as_deref(), Some("Operator"));
                 assert_eq!(*at, MissionTime(12.0));
             }
-            Ended::Expired { .. } => panic!("a decision is not an expiry"),
+            Ended::Expired { .. } | Ended::Withdrawn { .. } => {
+                panic!("a decision is not an expiry or a withdrawal")
+            }
         }
     }
 

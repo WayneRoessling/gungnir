@@ -269,6 +269,14 @@ pub enum DecidedBy<'a> {
     },
     /// The window closed with nobody deciding. **Not a rejection**: nobody chose.
     Expiry { at: MissionTime },
+    /// A live status change took it off the queue (GAP-203): the layer was put at a
+    /// status that refuses the plan. Not a rejection and not an expiry: the policy
+    /// changed under it.
+    Withdrawn {
+        layer: gungnir_model::EffectorLayer,
+        status: gungnir_model::WeaponsControlStatus,
+        at: MissionTime,
+    },
 }
 
 /// One item that has left the node's queue while this desktop was watching.
@@ -477,6 +485,16 @@ fn draw_decided(ui: &mut Ui, palette: &theme::Palette, view: &ApprovalQueueView<
             DecidedBy::Expiry { at } => (
                 format!(
                     "Plan #{} expired at T+{:.0} s with nobody deciding; not a rejection",
+                    row.plan.short(),
+                    at.0
+                ),
+                palette.warning_color,
+            ),
+            // The same colour and the same care: the policy changed, nobody chose.
+            DecidedBy::Withdrawn { layer, status, at } => (
+                format!(
+                    "Plan #{} withdrawn at T+{:.0} s: the {layer:?} layer was put at \
+                     {status:?}; not a rejection",
                     row.plan.short(),
                     at.0
                 ),

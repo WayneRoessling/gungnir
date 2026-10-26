@@ -73,6 +73,27 @@ class "StalenessSettings" as StalenessSettings <<InformationElement>> {
 class "ControlStatusSettings" as ControlStatusSettings <<InformationElement>> {
   by_layer: BTreeMap<EffectorLayer, WeaponsControlStatus>
 }
+class "ConfirmingOperator" as ConfirmingOperator <<InformationElement>> {
+  operator: String
+  role: String
+}
+class "ControlStatusChange" as ControlStatusChange <<InformationElement>> {
+  layer: EffectorLayer
+  status: WeaponsControlStatus
+  previous: WeaponsControlStatus
+  reason: String
+  operator: String
+  role: String
+  confirmed_by: Option<ConfirmingOperator>
+  revision: u32
+  origin: Option<String>
+  at: MissionTime
+  request: Option<crate::RequestId>
+}
+class "TwoPersonSettings" as TwoPersonSettings <<InformationElement>> {
+  control_status: bool
+  override_plan: bool
+}
 class "HeldLayerView" as HeldLayerView <<InformationElement>> {
   layer: EffectorLayer
   refused: u64
@@ -111,6 +132,7 @@ class "PolicySettings" as PolicySettings <<InformationElement>> {
   authority: AuthoritySettings
   decisions: DecisionSettings
   delegation: DelegationSettings
+  two_person: TwoPersonSettings
   fires: FiresSettings
 }
 enum "LayoutNode" as LayoutNode <<InformationElement>> {
@@ -147,6 +169,10 @@ ConflictSide --> MissionTime : at
 ConflictSide --> SideOutcome : outcome
 ControlStatusSettings --> EffectorLayer : by_layer
 ControlStatusSettings --> WeaponsControlStatus : by_layer
+ControlStatusChange --> ConfirmingOperator : confirmed_by
+ControlStatusChange --> EffectorLayer : layer
+ControlStatusChange --> MissionTime : at
+ControlStatusChange --> WeaponsControlStatus : status, previous
 HeldLayerView --> EffectorLayer : layer
 HeldLayerView --> MissionTime : since
 AuthorityRule --> EffectorLayer : layer
@@ -160,6 +186,7 @@ PolicySettings --> DelegationSettings : delegation
 PolicySettings --> FiresSettings : fires
 PolicySettings --> IdentificationSettings : identification
 PolicySettings --> StalenessSettings : staleness
+PolicySettings --> TwoPersonSettings : two_person
 RoleLayout --> LayoutNode : main
 UiSettings --> RoleLayout : layouts
 @enduml

@@ -148,6 +148,31 @@ pub trait SessionAuthority: Send + Sync {
     /// Takes the time because expiry happens on the clock, not on an event: a caller that
     /// asked without one would be told a session is live because nothing had touched it.
     fn state(&self, now: MissionTimeSeconds) -> SessionState;
+
+    /// Verify another person's credential without establishing a session: the second
+    /// person of D-140's two-person rule (GAP-203), who confirms an act at a console
+    /// somebody else is signed in to.
+    ///
+    /// The role the credential's account carries, so the caller can ask whether that
+    /// person may confirm the act. Nothing about the signed-in session changes, and the
+    /// same back-off as [`SessionAuthority::sign_in`] applies, so a confirmation field is
+    /// not a faster place to guess a passphrase than the sign-in form.
+    ///
+    /// The default refuses as unavailable: an authority that cannot verify a second
+    /// person says so rather than confirming one it never checked.
+    ///
+    /// # Errors
+    ///
+    /// [`AuthFailure`], as for a sign-in.
+    fn verify_credential(
+        &mut self,
+        operator: OperatorId,
+        passphrase: &str,
+        now: MissionTimeSeconds,
+    ) -> Result<Role, AuthFailure> {
+        let _ = (operator, passphrase, now);
+        Err(AuthFailure::Unavailable)
+    }
 }
 
 /// The back-off schedule after failed attempts.
@@ -576,6 +601,32 @@ impl SessionAuthority for LocalAccountAuthority {
 
     fn sign_out(&mut self, _now: MissionTimeSeconds) {
         self.state = SessionState::NobodySignedIn;
+    }
+
+    fn verify_credential(
+        &mut self,
+        operator: OperatorId,
+        passphrase: &str,
+        now: MissionTimeSeconds,
+    ) -> Result<Role, AuthFailure> {
+        if let Some(retry_after_s) = self.owed(operator, now) {
+            return Err(AuthFailure::TooFast { retry_after_s });
+        }
+        match verify_account(self.store.as_ref(), operator, passphrase) {
+            Ok(account) => {
+                self.failures.remove(&operator);
+                Ok(account.role)
+            }
+            // The store's fault is reported as a fault, as `sign_in` does; the session
+            // state is left alone, because nobody was signing in.
+            Err(AuthFailure::Unavailable) => Err(AuthFailure::Unavailable),
+            Err(failure) => {
+                let entry = self.failures.entry(operator).or_insert((0, now));
+                entry.0 = entry.0.saturating_add(1);
+                entry.1 = now;
+                Err(failure)
+            }
+        }
     }
 
     fn state(&self, now: MissionTimeSeconds) -> SessionState {

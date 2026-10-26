@@ -300,7 +300,9 @@ IE-bearing-ray-view,Information Elements,InformationElement,BearingRayView,"A be
 IE-calibration-event,Information Elements,InformationElement,CalibrationEvent,A sensor's report of an object whose true position is already known (../../docs/mission/gap-analysis/gap-register.md GAP-014).,Class
 IE-collection-requirement,Information Elements,InformationElement,CollectionRequirement,"A collection requirement, owned by the intelligence analyst (MT-08).",Class
 IE-concurrence,Information Elements,InformationElement,Concurrence,"Who concurred with tasking a requirement, or declined it.",Class
+IE-confirming-operator,Information Elements,InformationElement,ConfirmingOperator,The second person who confirmed a two-person act (D-140).,Class
 IE-conflict-side,Information Elements,InformationElement,ConflictSide,"One side of a conflicting decision, as its journal recorded it (GAP-050).",Class
+IE-control-status-change,Information Elements,InformationElement,ControlStatusChange,"One live change to a layer's weapons control status, as it is journaled, audited and shown (GAP-203; docs/design/DN-09-authority-and-control-status.md \u00a710).",Class
 IE-control-status-settings,Information Elements,InformationElement,ControlStatusSettings,Weapons control status per effector layer.,Class
 IE-cooperative-settings,Information Elements,InformationElement,CooperativeSettings,"Tuning for the cooperative detector: when a cooperative report counts as lost, and how far it may sit from the track it claims to be before the two disagree.",Class
 IE-decision-attribution,Information Elements,InformationElement,DecisionAttribution,"Who decided, when, and on what basis.",Class
@@ -365,6 +367,7 @@ IE-plan-id,Information Elements,InformationElement,PlanId,Identifier of one plan
 IE-plan-kind,Information Elements,InformationElement,PlanKind,What a plan proposes. Intercept is the behaviour that existed before fires.,Class
 IE-plan-standing-view,Information Elements,InformationElement,PlanStandingView,"What a planner says about its answer to the current picture, as a node puts it on the wire (GAP-157, D-94; docs/design/DN-04-effector-model.md \u00a711).",Class
 IE-planning-event,Information Elements,InformationElement,PlanningEvent,"The planning record (GAP-106, GAP-107): a commander accepting a coverage gap, the acceptance re-opening, and a laydown rehearsed (docs/design/DN-33-accepting-a-coverage-gap.md \u00a78, docs/design/DN-26-laydown-options.md \u00a711).",Class
+IE-policy-event,Information Elements,InformationElement,PolicyEvent,"What this deployment decides by, as it changes while it runs (GAP-203; DN-09 \u00a710).",Class
 IE-policy-settings,Information Elements,InformationElement,PolicySettings,"Everything about how this deployment decides, in one versioned place.",Class
 IE-product-kind,Information Elements,InformationElement,ProductKind,Which product a ScheduledProduct entry produces on its cycle.,Class
 IE-rehearsal-basis,Information Elements,InformationElement,RehearsalBasis,"What a laydown rehearsal ran under (docs/design/DN-26-laydown-options.md \u00a711 item 3, D-119): five SHA-256 digests, each over the canonical JSON of one part of what the throwaway desktop took from the deployment (DN-32 \u00a714, D-113). Two rehearsals ran under the same thing exactly when every part is equal.",Class
@@ -403,6 +406,7 @@ IE-staleness-settings,Information Elements,InformationElement,StalenessSettings,
 IE-term,Information Elements,InformationElement,Term,A domain value the interface has to put a word to.,Class
 IE-test-track-number,Information Elements,InformationElement,TestTrackNumber,"One of the eleven committed test-track scenarios (docs/test-tracks/scenario-library.md), naming which fixture a rehearsal replayed a laydown against (GAP-045): the ten plan-07 scenarios, one per mission vignette, and TT-11, usability round 1's raid down its own declared approach, which a round-1 laydown rehearsal re-observes (GAP-147, D-112).",Class
 IE-theme-variant,Information Elements,InformationElement,ThemeVariant,"Which colour variant the chrome renders (D-35, DS-07; GAP-095).",Class
+IE-two-person-settings,Information Elements,InformationElement,TwoPersonSettings,D-140: whether an act needs a second signed-in person to confirm it.,Class
 IE-uas-altitude-reference,Information Elements,InformationElement,UasAltitudeReference,"What a Category 129 report's height is measured from (GAP-196; D-123 decides the correction, D-124 what happens without it).",Class
 IE-uas-certification-category,Information Elements,InformationElement,UasCertificationCategory,"I129/120's UCC subfield (edition 1.2 \u00a75.2.12). Unlike the AEC subfield beside it, all four wire codes are exhaustively defined by the specification itself.",Class
 IE-uas-identification-report,Information Elements,InformationElement,UasIdentificationReport,"What a UAS Identification and Target Report (ASTERIX Category 129, edition 1.2) says about one UAS, from one message.",Class

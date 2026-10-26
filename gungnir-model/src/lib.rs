@@ -128,9 +128,10 @@ pub use plans::{
     FiresPlan, PendingApprovalId, PlanKind, RequestId, REQUEST_ID_MAX_LEN,
 };
 pub use policy_settings::{
-    AuthorityRule, AuthoritySettings, ControlStatusSettings, DecisionSettings, DelegationSettings,
-    FiresSettings, HeldLayerView, IdentificationSettings, PolicySettings, StalenessSettings,
-    ValidityWindow, WeaponsControlStatus,
+    AuthorityRule, AuthoritySettings, ConfirmingOperator, ControlStatusChange,
+    ControlStatusSettings, DecisionSettings, DelegationSettings, FiresSettings, HeldLayerView,
+    IdentificationSettings, PolicySettings, StalenessSettings, TwoPersonSettings, ValidityWindow,
+    WeaponsControlStatus,
 };
 pub use profiles::{AlgorithmBaselineId, MissionProfile};
 pub use provenance::{Provenance, RehearsalOrigin, SourceAuthentication};

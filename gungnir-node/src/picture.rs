@@ -530,6 +530,57 @@ pub fn publish_picture(
     held_layers: Vec<gungnir_model::HeldLayerView>,
     envelopes: impl IntoIterator<Item = Envelope>,
 ) -> usize {
+    publish_picture_with_control_status(
+        api,
+        tracks,
+        bearing_rays,
+        pipeline_stats,
+        dense_group,
+        plan,
+        standing,
+        health,
+        queue,
+        held_layers,
+        ControlStatusPicture::default(),
+        envelopes,
+    )
+}
+
+/// The weapons control status that goes out with the picture (GAP-203; DN-09 §10): the
+/// status in force per layer, and this run's changes, oldest first.
+///
+/// Empty is what a harness that holds no `NodeControlStatus` publishes, and reads on a
+/// desktop as "the node does not say": the same honest default `held_layers` has.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ControlStatusPicture {
+    pub in_force: std::collections::BTreeMap<
+        gungnir_model::EffectorLayer,
+        gungnir_model::WeaponsControlStatus,
+    >,
+    pub changes: Vec<gungnir_model::ControlStatusChange>,
+}
+
+/// [`publish_picture`], carrying the control status in force (GAP-203).
+///
+/// A second door rather than a wider first one, because every harness that calls
+/// `publish_picture` -- the backend-parity row's, the audit record's, the plan-standing
+/// row's -- builds its picture without a `NodeControlStatus`, and an empty
+/// [`ControlStatusPicture`] is what each of them honestly has. The binary calls this one.
+#[allow(clippy::too_many_arguments)]
+pub fn publish_picture_with_control_status(
+    api: &Arc<NodeApi>,
+    tracks: &[gungnir_model::TrackView],
+    bearing_rays: &[gungnir_model::BearingRayView],
+    pipeline_stats: PipelineStats,
+    dense_group: Option<&gungnir_model::DenseGroupView>,
+    plan: &PlanView,
+    standing: Option<&PlanStandingView>,
+    health: SystemHealth,
+    queue: Vec<gungnir_api::v3::QueueItemView>,
+    held_layers: Vec<gungnir_model::HeldLayerView>,
+    control_status: ControlStatusPicture,
+    envelopes: impl IntoIterator<Item = Envelope>,
+) -> usize {
     let mut snapshot =
         SnapshotResponse::new(tracks.to_vec(), Some(plan.clone()), health, Vec::new())
             .with_bearing_data(
@@ -541,7 +592,12 @@ pub fn publish_picture(
             .with_queue(queue)
             // GAP-183: the layers at hold refusing every plan, beside the queue they are
             // keeping empty.
-            .with_held_layers(held_layers);
+            .with_held_layers(held_layers)
+            // GAP-203: the status those layers are at, and the live changes that put them
+            // there, beside the held layers they explain. Published every tick so a
+            // retry of `POST /v3/policy/control-status` is answered off the same picture
+            // a desktop reads.
+            .with_control_status(control_status.in_force, control_status.changes);
     if let Some(standing) = standing {
         snapshot = snapshot.with_plan_standing(standing.clone());
     }

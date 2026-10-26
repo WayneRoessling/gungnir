@@ -20,7 +20,26 @@ use crate::panels::status_strip::DelegationLine;
 use crate::panels::unavailable::{draw_unavailable, Unavailable};
 use crate::theme;
 use egui::{RichText, Ui};
-use gungnir_model::{MissionTime, Vocabulary};
+use gungnir_model::{EffectorLayer, MissionTime, Vocabulary, WeaponsControlStatus};
+
+/// One live change to a layer's weapons control status, as the commander reads it
+/// (GAP-203; DN-09 §7's PN-17 row and §10). A view of `ControlStatusChange`: the app
+/// maps one to the other, and this crate takes plain borrowed views.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ControlStatusChangeLine<'a> {
+    pub layer: EffectorLayer,
+    pub status: WeaponsControlStatus,
+    pub previous: WeaponsControlStatus,
+    /// The operator id in its decimal spelling, as every record names one.
+    pub operator: &'a str,
+    pub role: &'a str,
+    pub at: MissionTime,
+    pub reason: &'a str,
+    /// The second person's id, when the two-person rule was in force (D-140).
+    pub confirmed_by: Option<&'a str>,
+    /// The console the change was made on, when it was not this one.
+    pub origin: Option<&'a str>,
+}
 
 /// Approval-queue statistics from `gungnir-command`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -227,6 +246,11 @@ pub struct CommanderSummaryView<'a> {
     /// from the same rules: a commander and an operator must not be able to read two
     /// different answers to "what is delegated right now".
     pub delegations: &'a [DelegationLine<'a>],
+    /// The live control status changes this session, **in record order, oldest first**
+    /// (GAP-203, DN-09 §7's PN-17 row): the panel draws them newest first. Empty means
+    /// none was made, which the panel says rather than drawing nothing, because the
+    /// baseline's statuses being in force is a finding at a shift change.
+    pub control_status_changes: &'a [ControlStatusChangeLine<'a>],
     pub accepted_gaps: Result<&'a [AcceptedGap<'a>], Unavailable<'a>>,
     pub plan: Option<PlanInForce<'a>>,
     /// Engagement outcomes for the session (GAP-043, DN-06 §7).
@@ -397,6 +421,9 @@ pub fn render_commander_summary(
     }
     ui.separator();
 
+    draw_control_status_changes(ui, palette, view);
+    ui.separator();
+
     ui.strong("Accepted coverage gaps");
     draw_warnings(ui, palette, view.warnings);
 
@@ -436,6 +463,53 @@ pub fn render_commander_summary(
     }
 
     action
+}
+
+/// The status changes in the period, with who made them (GAP-203; DN-09 §7's PN-17
+/// row). Drawn under the delegations because the two together are the whole of what
+/// has been done to the baseline's authorities since it was applied.
+///
+/// Newest first, because the one a commander coming on watch needs is the latest; the
+/// second person and the console are said where the record carries them (D-140, §10).
+fn draw_control_status_changes(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &CommanderSummaryView<'_>,
+) {
+    ui.strong("Control status changes this session");
+    if view.control_status_changes.is_empty() {
+        ui.label(
+            RichText::new(
+                "No control status change this session; the baseline's statuses are in \
+                 force.",
+            )
+            .color(palette.muted_text_color()),
+        );
+        return;
+    }
+    for c in view.control_status_changes.iter().rev() {
+        let confirmed = c
+            .confirmed_by
+            .map_or_else(String::new, |who| format!(", confirmed by {who}"));
+        let origin = c
+            .origin
+            .map_or_else(String::new, |from| format!(", from {from}"));
+        ui.label(
+            RichText::new(format!(
+                "{}: {} to {} by operator {} ({}) at T+{:.0} s: {}{confirmed}{origin}",
+                view.vocabulary.layer(c.layer),
+                view.vocabulary.control_status(c.previous),
+                view.vocabulary.control_status(c.status),
+                c.operator,
+                c.role,
+                c.at.0,
+                c.reason
+            ))
+            .color(crate::panels::status_strip::control_status_color(
+                palette, c.status,
+            )),
+        );
+    }
 }
 
 /// The handover section (DN-21 §5 and §7, GAP-054).

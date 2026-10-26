@@ -515,6 +515,9 @@ pub struct AppState {
     /// (GAP-106, `docs/design/DN-33-accepting-a-coverage-gap.md`), folded from the journal
     /// at start.
     pub gap_acceptances: crate::gap_acceptance::GapAcceptances,
+    /// Who set each layer's weapons control status and when, folded from the journal at
+    /// start and kept for the session (GAP-203, DN-09 §10).
+    pub control_status_ledger: crate::control_status::ControlStatusLedger,
 
     pub(crate) journal: FileEventJournal,
     pub(crate) journal_rx: Receiver<Envelope>,
@@ -642,6 +645,18 @@ impl AppState {
             launch_warning_session,
         );
         crate::retention::announce(&config);
+        // GAP-203: the weapons control status in force is the baseline's value overridden
+        // by the latest journaled change made under this baseline's revision (the owner's
+        // choice of 2026-10-26: folded, never written back to the file). Shadowed mutable
+        // here because the fold is the one thing at start that changes what was loaded.
+        let mut config = config;
+        let control_status_ledger =
+            crate::control_status::ControlStatusLedger::recover(&journal, &mut config);
+        if let Some(reason) = &control_status_ledger.unreadable {
+            alerts.push(format!(
+                "the weapons control status fold is partial: {reason}"
+            ));
+        }
         // GAP-142: an outage this desktop was in when it last stopped. Recovered before
         // anything else reads the fallback, because what it changes is what this desktop
         // is: a console that is cut off, not one that has simply not linked yet.
@@ -851,6 +866,7 @@ impl AppState {
             rehearsal_records: std::collections::HashMap::new(),
             rehearsals: planning.rehearsals,
             gap_acceptances: planning.acceptances,
+            control_status_ledger,
             journal,
             journal_rx,
             journal_failed: false,

@@ -194,6 +194,8 @@ impl eframe::App for App {
             // is detached, `draw_detached` draws the dialog there instead.
             action = self.draw_decision_dialog(ui.ctx()).or(action);
         }
+        // GAP-203: the status dialog FL-08 belongs to the main window, as the strip does.
+        action = self.draw_control_status_dialog(ui.ctx()).or(action);
         self.draw_evidence_card(ui.ctx());
         self.draw_viewport(ui);
         action = self.draw_detached(ui.ctx()).or(action);
@@ -241,6 +243,7 @@ impl App {
             let strip_data = gungnir_app::status::StatusStripData::from_state(&self.state);
             let view = gungnir_app::status::status_strip_view(&self.state, &strip_data);
             let mut clicked = false;
+            let mut strip_action = None;
             egui::Panel::top("status_strip").show_inside(ui, |ui| {
                 // Right to left, so the strip keeps the eight elements in the
                 // left-to-right order `information-architecture.md` §2 specifies and the
@@ -251,7 +254,7 @@ impl App {
                         .on_hover_text("Copyright, licence and warranty notices")
                         .clicked();
                     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        gungnir_ui::panels::status_strip::render_status_strip(
+                        strip_action = gungnir_ui::panels::status_strip::render_status_strip(
                             ui,
                             &self.state.palette,
                             &view,
@@ -259,10 +262,20 @@ impl App {
                     });
                 });
             });
-            clicked
+            (clicked, strip_action)
         };
+        let (toggled, strip_action) = toggled;
         if toggled {
             self.about_open = !self.about_open;
+        }
+        // GAP-203, FL-08: a chip opens the status dialog on its layer.
+        if let Some(gungnir_ui::panels::status_strip::StatusStripAction::ChangeControlStatus(
+            layer,
+        )) = strip_action
+        {
+            self.sustainment.control_status_dialog = Some(
+                gungnir_ui::panels::control_status_dialog::ControlStatusDialogState::open(layer),
+            );
         }
     }
 
@@ -532,6 +545,70 @@ impl App {
         action
     }
 
+    /// GAP-203, FL-08: apply the dialog's draft. A recorded or sent change closes the
+    /// dialog; a refusal keeps it open beside the fields that caused it, and says why.
+    fn apply_control_status(
+        &mut self,
+        draft: gungnir_ui::panels::control_status_dialog::ControlStatusDraft,
+    ) {
+        use gungnir_app::control_status::{self, SetOutcome};
+        match control_status::set(&mut self.state, control_status::request_from(draft)) {
+            Ok(SetOutcome::Recorded { change, withdrawn }) => {
+                self.state.alerts.push(format!(
+                    "Control status of the {:?} layer set to {:?} (was {:?}); {withdrawn} queued \
+                     item(s) withdrawn",
+                    change.layer, change.status, change.previous
+                ));
+                self.sustainment.control_status_dialog = None;
+            }
+            Ok(SetOutcome::SentToNode) => {
+                self.state
+                    .alerts
+                    .push("Control status change sent to the node".to_owned());
+                self.sustainment.control_status_dialog = None;
+            }
+            Err(refused) => self
+                .state
+                .alerts
+                .push(format!("Control status not changed: {refused}")),
+        }
+    }
+    /// GAP-203: the status dialog FL-08, a window over the strip, shown while a chip has
+    /// opened it and closed by Cancel, by a recorded change, or by the window's own
+    /// close. Closing records nothing. The draft the dialog returns is applied after the
+    /// frame, like a decision, because a tightening withdraws queue items and that must
+    /// not happen mid-draw.
+    fn draw_control_status_dialog(&mut self, ctx: &egui::Context) -> Option<PanelAction> {
+        use gungnir_ui::panels::control_status_dialog::{
+            render_control_status_dialog, ControlStatusDialogAction,
+        };
+        let mut dialog = self.sustainment.control_status_dialog.take()?;
+        let would = gungnir_app::control_status::would_withdraw_each(&self.state, dialog.layer);
+        let view = gungnir_app::control_status::dialog_view(&self.state, dialog.layer, &would);
+        let mut action = None;
+        let mut open = true;
+        egui::Window::new("Weapons control status")
+            .open(&mut open)
+            .collapsible(false)
+            .show(ctx, |ui| {
+                action = render_control_status_dialog(ui, &self.state.palette, &view, &mut dialog);
+            });
+        match action {
+            Some(ControlStatusDialogAction::Set(draft)) => {
+                // The dialog stays open until the change is recorded or sent, so a refusal
+                // is read beside the fields that caused it.
+                self.sustainment.control_status_dialog = Some(dialog);
+                Some(PanelAction::SetControlStatus(draft))
+            }
+            Some(ControlStatusDialogAction::Cancel) => None,
+            None => {
+                if open {
+                    self.sustainment.control_status_dialog = Some(dialog);
+                }
+                None
+            }
+        }
+    }
     /// GAP-073: PN-04 is an on-demand panel -- `information-architecture.md` §1 opens
     /// it *on selection* rather than docking it -- so it is a window over the viewport,
     /// shown only while a track is selected and only for the roles whose layout may
@@ -776,6 +853,15 @@ impl App {
                         .push(format!("Gap not accepted: {refused}")),
                 }
             }
+            // GAP-203, FL-08: open the status dialog on a layer; apply a draft from it.
+            PanelAction::ChangeControlStatus(layer) => {
+                self.sustainment.control_status_dialog = Some(
+                    gungnir_ui::panels::control_status_dialog::ControlStatusDialogState::open(
+                        layer,
+                    ),
+                );
+            }
+            PanelAction::SetControlStatus(draft) => self.apply_control_status(draft),
             PanelAction::Requirement(a) => self.apply_requirement(a),
             PanelAction::Replay(a) => self.apply_replay(a),
             PanelAction::Reports(a) => self.apply_reports(a),

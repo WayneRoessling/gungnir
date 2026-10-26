@@ -598,6 +598,30 @@ pub enum CommandEvent {
         to_role: String,
         at: MissionTime,
     },
+    /// The item left the queue because the policy in force changed under it: a layer it
+    /// engages on was put at a status that refuses it (GAP-203, DN-09 §10). **Not a
+    /// decision and not an expiry**: nobody chose, and the window had not closed; the
+    /// status change the record names is what ended it. Added under the compatibility
+    /// rule `PlanStanding` cites, so `SCHEMA_VERSION` stands.
+    Withdrawn {
+        item: PendingApprovalId,
+        plan: PlanId,
+        layer: EffectorLayer,
+        /// The status the layer was put at.
+        status: crate::WeaponsControlStatus,
+        at: MissionTime,
+    },
+}
+
+/// What this deployment decides by, as it changes while it runs (GAP-203; DN-09 §10).
+///
+/// A fifth family beside the command events rather than a variant among them: a status
+/// change is a recorded decision (DN-09 §6) but it decides no plan, and the readers that
+/// fold decisions (`gungnir_resilience`, `gungnir_reporting`) must not count it as one.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum PolicyEvent {
+    /// A signed-in supervisor or commander put a layer at a status, with a reason, live.
+    ControlStatusSet(crate::ControlStatusChange),
 }
 
 /// Engagement lifecycle, for the journal and the after-action measures

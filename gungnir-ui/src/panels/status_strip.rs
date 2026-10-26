@@ -123,13 +123,80 @@ pub enum OperatorLine<'a> {
 }
 
 /// Weapons control status for one effector layer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ControlStatusLine {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ControlStatusLine<'a> {
     pub layer: EffectorLayer,
     pub status: WeaponsControlStatus,
     /// Whether a baseline actually set this layer. `false` means the status shown is
     /// the safe default rather than somebody's decision.
     pub configured: bool,
+    /// The live change that set this status, when one did (GAP-203, DN-09 §7 and §10):
+    /// FL-08 ends with the chip showing "who and when on every layout", and this is
+    /// where it comes from. `None` means the baseline, or the default, is what is in
+    /// force.
+    pub set_by: Option<SetBy<'a>>,
+    /// Whether this console may open the status dialog from the chip (GAP-203): the
+    /// signed-in role holds `weapons.control_status` and the write path is reachable.
+    /// When false the chip is a label, because a control that does nothing is worse
+    /// than none.
+    pub can_change: bool,
+}
+
+/// Who last set a layer's status live, from the recorded `ControlStatusChange`
+/// (GAP-203, DN-09 §10).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SetBy<'a> {
+    /// The operator id in its decimal spelling, as every record names one.
+    pub operator: &'a str,
+    pub role: &'a str,
+    pub at: MissionTime,
+    pub reason: &'a str,
+}
+
+impl ControlStatusLine<'_> {
+    /// What the chip says on hover: who set the status and why, or that the baseline
+    /// did, or that nobody has.
+    #[must_use]
+    pub fn hover_text(&self, vocabulary: &Vocabulary) -> String {
+        match self.set_by {
+            Some(by) => format!(
+                "Set to {} by operator {} ({}) at T+{:.0} s: {}",
+                vocabulary.control_status(self.status),
+                by.operator,
+                by.role,
+                by.at.0,
+                by.reason
+            ),
+            None if self.configured => "Set by the configuration baseline in force.".to_owned(),
+            None => {
+                "No baseline sets this layer. Hold is the safe default, not a decision.".to_owned()
+            }
+        }
+    }
+}
+
+/// What a person did on the strip (GAP-203). The strip itself changes nothing: the
+/// desktop opens the dialog, and the dialog is where the change is made.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusStripAction {
+    /// The chip for this layer was clicked; FL-08's status dialog opens for it.
+    ChangeControlStatus(EffectorLayer),
+}
+
+/// The colour a weapons control status is drawn in, everywhere it is drawn
+/// (`docs/ux/design-system.md` DS-02): free red, tight amber, hold green. Free is the
+/// permissive state, the one in which an engagement can happen without an approval, so
+/// it is the one that takes the red.
+#[must_use]
+pub fn control_status_color(
+    palette: &theme::Palette,
+    status: WeaponsControlStatus,
+) -> egui::Color32 {
+    match status {
+        WeaponsControlStatus::Free => palette.alert_color,
+        WeaponsControlStatus::Tight => palette.warning_color,
+        WeaponsControlStatus::Hold => palette.healthy_color(),
+    }
 }
 
 /// A pre-delegated authority in force (decision D-15).
@@ -243,7 +310,7 @@ pub struct StatusStripView<'a> {
     /// owed it.
     pub clock_skew_s: Option<f64>,
     pub health: SystemHealth,
-    pub control_status: &'a [ControlStatusLine],
+    pub control_status: &'a [ControlStatusLine<'a>],
     pub delegations: &'a [DelegationLine<'a>],
     pub alerts: AlertSummary,
     pub role: &'a str,
@@ -540,39 +607,41 @@ fn draw_health(ui: &mut Ui, palette: &theme::Palette, health: SystemHealth) {
 }
 
 /// The weapons control status element: one chip per effector layer.
+///
+/// Returns the layer whose chip was clicked, when the chip was a control (GAP-203,
+/// FL-08). A chip the console may not act on is a label with the same words and the
+/// same hover text, so what a person reads does not depend on what they may do.
 fn draw_control_status(
     ui: &mut Ui,
     palette: &theme::Palette,
-    lines: &[ControlStatusLine],
+    lines: &[ControlStatusLine<'_>],
     vocabulary: &Vocabulary,
-) {
+) -> Option<EffectorLayer> {
     if lines.is_empty() {
         ui.label(RichText::new("Control status unknown").color(palette.muted_text_color()));
-        return;
+        return None;
     }
+    let mut clicked = None;
     for line in lines {
-        let colour = match line.status {
-            WeaponsControlStatus::Free => palette.alert_color,
-            WeaponsControlStatus::Tight => palette.warning_color,
-            WeaponsControlStatus::Hold => palette.healthy_color(),
-        };
-        let chip = ui.label(
-            RichText::new(format!(
-                "{} {}",
-                vocabulary.layer(line.layer),
-                vocabulary.control_status(line.status)
-            ))
-            .color(colour)
-            .strong(),
-        );
-        if line.configured {
-            chip.on_hover_text("Set by the configuration baseline in force.");
+        let text = RichText::new(format!(
+            "{} {}",
+            vocabulary.layer(line.layer),
+            vocabulary.control_status(line.status)
+        ))
+        .color(control_status_color(palette, line.status))
+        .strong();
+        let chip = if line.can_change {
+            let chip = ui.selectable_label(false, text);
+            if chip.clicked() {
+                clicked = Some(line.layer);
+            }
+            chip
         } else {
-            chip.on_hover_text(
-                "No baseline sets this layer. Hold is the safe default, not a decision.",
-            );
-        }
+            ui.label(text)
+        };
+        chip.on_hover_text(line.hover_text(vocabulary));
     }
+    clicked
 }
 
 /// The delegation element: the pre-delegated authorities in force (D-15).
@@ -721,7 +790,16 @@ fn draw_coverage(ui: &mut Ui, palette: &theme::Palette, coverage: CoverageStatus
 /// The elements are drawn left to right in the order
 /// `docs/ux/information-architecture.md` §2 lists them, each by its own function so
 /// that the order is visible here and the detail is not.
-pub fn render_status_strip(ui: &mut Ui, palette: &theme::Palette, view: &StatusStripView<'_>) {
+///
+/// Returns what a person did on it, which today is one thing: clicking a control
+/// status chip they may change (GAP-203, FL-08). The strip still writes nothing; the
+/// desktop opens the dialog.
+pub fn render_status_strip(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &StatusStripView<'_>,
+) -> Option<StatusStripAction> {
+    let mut action = None;
     ui.horizontal_wrapped(|ui| {
         draw_backend(ui, palette, view.backend);
         ui.separator();
@@ -781,7 +859,10 @@ pub fn render_status_strip(ui: &mut Ui, palette: &theme::Palette, view: &StatusS
         draw_health(ui, palette, view.health);
         ui.separator();
 
-        draw_control_status(ui, palette, view.control_status, view.vocabulary);
+        if let Some(layer) = draw_control_status(ui, palette, view.control_status, view.vocabulary)
+        {
+            action = Some(StatusStripAction::ChangeControlStatus(layer));
+        }
         ui.separator();
 
         draw_delegations(ui, palette, view.delegations, view.vocabulary);
@@ -794,6 +875,7 @@ pub fn render_status_strip(ui: &mut Ui, palette: &theme::Palette, view: &StatusS
 
         ui.label(RichText::new(view.role).strong());
     });
+    action
 }
 
 /// PN-01's words for two clocks that disagree (GAP-140).
@@ -872,6 +954,8 @@ mod tests {
             layer: EffectorLayer::Area,
             status: WeaponsControlStatus::Hold,
             configured: false,
+            set_by: None,
+            can_change: false,
         };
         let held = ControlStatusLine {
             configured: true,
@@ -879,6 +963,43 @@ mod tests {
         };
         assert_eq!(unset.status, held.status);
         assert_ne!(unset, held);
+    }
+
+    /// GAP-203, FL-08's closing line: the chip says who set the status and when, on
+    /// every layout, and the two older sentences stay for a layer nobody has set live.
+    #[test]
+    fn the_chips_hover_text_names_who_set_the_status() {
+        let vocabulary = Vocabulary::default();
+        let live = ControlStatusLine {
+            layer: EffectorLayer::Area,
+            status: WeaponsControlStatus::Hold,
+            configured: true,
+            set_by: Some(SetBy {
+                operator: "7",
+                role: "Supervisor",
+                at: MissionTime(120.0),
+                reason: "civil traffic in the sector",
+            }),
+            can_change: false,
+        };
+        assert_eq!(
+            live.hover_text(&vocabulary),
+            "Set to Weapons hold by operator 7 (Supervisor) at T+120 s: civil traffic in \
+             the sector"
+        );
+        let baseline = ControlStatusLine {
+            set_by: None,
+            ..live
+        };
+        assert_eq!(
+            baseline.hover_text(&vocabulary),
+            "Set by the configuration baseline in force."
+        );
+        let unset = ControlStatusLine {
+            configured: false,
+            ..baseline
+        };
+        assert!(unset.hover_text(&vocabulary).contains("not a decision"));
     }
 
     #[test]

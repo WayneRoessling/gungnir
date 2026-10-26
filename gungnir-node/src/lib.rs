@@ -19,12 +19,16 @@
 //! the journal, its verification at start and its retention, which
 //! `gungnir-node/tests/node_audit_record.rs` drives against a real journal. Since GAP-194,
 //! [`gap_acceptance`]: the coverage gap acceptances the node holds for its linked
-//! desktops (D-131), whose rules its unit tests hold. Everything
+//! desktops (D-131), whose rules its unit tests hold. Since GAP-203, [`control_status`]:
+//! the live weapons-control-status changes the node applies, journals and folds back at
+//! start (DN-09 §10), which `gungnir-node/tests/control_status.rs` drives over the real
+//! transport. Everything
 //! else -- the journal, the transport's start-up, the feeds, the account command -- stays
 //! in `main.rs`, because moving code here that nothing outside the binary calls would
 //! make the crate's surface a list of things nobody uses.
 
 pub mod approval;
 pub mod audit_record;
+pub mod control_status;
 pub mod gap_acceptance;
 pub mod picture;
