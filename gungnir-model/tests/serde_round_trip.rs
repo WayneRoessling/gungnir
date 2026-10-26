@@ -427,6 +427,8 @@ fn tracking_events() -> Vec<TrackingEvent> {
         TrackingEvent::TrackUpdated(track(2)),
         TrackingEvent::TrackCoasting(TrackId(3)),
         TrackingEvent::TrackDeleted(TrackId(4)),
+        TrackingEvent::DenseGroup(dense_groups().into_iter().next()),
+        TrackingEvent::DenseGroup(None),
     ]
 }
 
@@ -1090,6 +1092,7 @@ impl Variant for TrackingEvent {
             Self::TrackUpdated(_) => "TrackUpdated",
             Self::TrackCoasting(_) => "TrackCoasting",
             Self::TrackDeleted(_) => "TrackDeleted",
+            Self::DenseGroup(_) => "DenseGroup",
         }
     }
 }

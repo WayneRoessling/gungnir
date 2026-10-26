@@ -81,6 +81,38 @@ pub(crate) async fn idle_backoff() {
     tokio::time::sleep(IDLE_POLL).await;
 }
 
+/// Run `work` off the async executor thread and hand back what it returns
+/// (`docs/agentic-coding-standards.md` §2.2: "a PHD update over a large birth/clutter set
+/// ... must go through `tokio::task::spawn_blocking`"). `None` when the work panicked,
+/// which [`crate::ingest_with`] treats as the pipeline gone.
+///
+/// Under `cfg(loom)` the work runs in place: no model reaches it, because every model runs
+/// with the dense-group mode off, and a loom execution has no blocking pool to hand it to.
+#[cfg(not(all(test, loom)))]
+pub(crate) async fn off_executor<T, F>(work: F) -> Option<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    match tokio::task::spawn_blocking(work).await {
+        Ok(value) => Some(value),
+        Err(err) => {
+            tracing::error!(%err, "work handed off the executor thread did not finish");
+            None
+        }
+    }
+}
+
+#[cfg(all(test, loom))]
+#[allow(clippy::unused_async)]
+pub(crate) async fn off_executor<T, F>(work: F) -> Option<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    Some(work())
+}
+
 // `async` with nothing to await, deliberately: the call site is `.await`ed inside
 // `ingest_with` and that loop is not rewritten to suit the model checks. A loom
 // scheduling point is the whole of what this needs to be.

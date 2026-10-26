@@ -94,11 +94,14 @@ the filter built to fix it. The pipeline's default cap is therefore 400, sized f
 document's own Scenario 4 figure of 200 tracks: one component per target plus one birth
 per detection.
 
-**Hundreds of milliseconds an epoch is past the per-frame budget above, and it lands on
-the `tokio` executor thread.** `docs/agentic-coding-standards.md` §2.2 names exactly this
-case -- "a PHD update over a large birth/clutter set" -- as needing `spawn_blocking`, and
-this build runs it inline. That is why the mode is off unless a deployment asks for it,
-and switching the default on waits on that plumbing (GAP-015).
+**Hundreds of milliseconds an epoch is past the per-frame budget above.**
+`docs/agentic-coding-standards.md` §2.2 names exactly this case -- "a PHD update over a
+large birth/clutter set" -- as needing `spawn_blocking`, and since 2026-10-26
+`gungnir_fusion_async::ingest_with` applies the pipeline on the blocking pool whenever the
+mode is configured, so the work no longer lands on the `tokio` executor thread (GAP-015).
+What it still costs is latency: during a raid the picture runs about an epoch's work
+behind. That is why the mode is off unless a deployment asks for it; whether the default
+should now be on is a decision about that cost, recorded in GAP-015.
 
 The caution below applies to these figures as much as to the ones above: they are an
 order of magnitude, not a regression baseline.

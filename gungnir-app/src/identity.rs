@@ -178,6 +178,9 @@ impl IdentityState {
                             TrackingEvent::TrackCoasting(id) | TrackingEvent::TrackDeleted(id) => {
                                 state.seen_tracks.insert(Sighting::new(session, *id));
                             }
+                            // GAP-015: a dense group names no track and carries no
+                            // identity, so there is nothing in it to correlate or count.
+                            TrackingEvent::DenseGroup(_) => {}
                         }
                     }
                     state.sessions.push(session);

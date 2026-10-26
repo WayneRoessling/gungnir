@@ -43,7 +43,7 @@ Diagrams (rendered under `rendered/information/` by the render scripts in the UA
 | `EffectorLayer` | enum | Plans, effectors & handoff | `Area`<br>`Point`<br>`SelfDefence`<br>`NonKinetic` | `gungnir-model/src/effectors.rs` |
 | `RelativeCost` | tuple struct | Plans, effectors & handoff | `pub f64` | `gungnir-model/src/effectors.rs` |
 | `Magazine` | struct | Plans, effectors & handoff | `rounds_available: u32`<br>`reserve: u32` | `gungnir-model/src/effectors.rs` |
-| `TrackingEvent` | enum | Events & the record | `TrackInitiated(TrackView)`<br>`TrackUpdated(TrackView)`<br>`TrackCoasting(TrackId)`<br>`TrackDeleted(TrackId)` | `gungnir-model/src/events.rs` |
+| `TrackingEvent` | enum | Events & the record | `TrackInitiated(TrackView)`<br>`TrackUpdated(TrackView)`<br>`TrackCoasting(TrackId)`<br>`TrackDeleted(TrackId)`<br>`DenseGroup(Option<crate::DenseGroupView>)` | `gungnir-model/src/events.rs` |
 | `InterceptEvent` | enum | Events & the record | `PlanProposed(PlanView)`<br>`PlanApproved(PlanView)`<br>`PlanSuperseded(PlanView)`<br>`PlanEvaluated { plan: PlanId, verdict: VerdictSummary, engines: Vec<String>, }`<br>`PlanStanding(crate::PlanStandingView)`<br>`HeldLayers(Vec<crate::HeldLayerView>)` | `gungnir-model/src/events.rs` |
 | `IngestEvent` | enum | Events & the record | `Accepted(DetectionView)`<br>`Quarantined { sensor: SensorId, reason: String, }`<br>`NotAccepted { sensor: SensorId, reason: String, }` | `gungnir-model/src/events.rs` |
 | `SensorEvent` | enum | Events & the record | `ModeChanged { sensor: crate::SensorId, from: crate::SensorMode, to: crate::SensorMode, at: MissionTime, }` | `gungnir-model/src/events.rs` |

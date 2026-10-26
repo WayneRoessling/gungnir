@@ -19,6 +19,16 @@ pub enum TrackingEvent {
     TrackUpdated(TrackView),
     TrackCoasting(TrackId),
     TrackDeleted(TrackId),
+    /// The dense group the tracker could not resolve into tracks, published whenever it
+    /// changes, and `None` when it is released because the scene is resolvable again
+    /// (GAP-015). By whichever machine runs the pipeline, so a linked desktop draws the
+    /// node's group as it changes rather than as it stood at the last snapshot; on the
+    /// record it says when a raid outgrew the tracker and when it stopped. **Not a track
+    /// event about any track**: the group carries no identity.
+    ///
+    /// Added under the compatibility rule `InterceptEvent::PlanStanding` was
+    /// (`docs/gungnir-api-v1.md`: "Enum variants may be added").
+    DenseGroup(Option<crate::DenseGroupView>),
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

@@ -314,6 +314,8 @@ pub struct Announcer {
     health: SnapshotHealthMonitor,
     /// Whether the plan answers the current picture, as last published (GAP-157).
     last_standing: Option<PlanStandingView>,
+    /// The dense group as last published (GAP-015), `None` while none is.
+    last_dense_group: Option<gungnir_model::DenseGroupView>,
 }
 
 impl Announcer {
@@ -342,6 +344,33 @@ impl Announcer {
         for event in self.lifecycle.changes(tracks) {
             bus.publish(now, Event::Tracking(event))?;
         }
+        Ok(())
+    }
+
+    /// Put the dense group on the bus when it differs from the one last published, and
+    /// its release when it goes (GAP-015): a linked desktop reads the group live from these,
+    /// as it reads the tracks, rather than as the last snapshot held it. A tick on which
+    /// nothing changed publishes nothing.
+    ///
+    /// # Errors
+    ///
+    /// When the bus refuses the event.
+    pub fn dense_group(
+        &mut self,
+        bus: &dyn EventBus,
+        now: MissionTime,
+        group: Option<&gungnir_model::DenseGroupView>,
+    ) -> Result<(), EventingError> {
+        if self.last_dense_group.as_ref() == group {
+            return Ok(());
+        }
+        bus.publish(
+            now,
+            Event::Tracking(gungnir_model::events::TrackingEvent::DenseGroup(
+                group.cloned(),
+            )),
+        )?;
+        self.last_dense_group = group.cloned();
         Ok(())
     }
 

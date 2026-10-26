@@ -1202,7 +1202,13 @@
     through `PipelineSettings::from_baseline`, so the `TrackingConfig` vocabulary item above
     is done
     (`../../record/2026-10-25/d-46-the-dense-group-filter-is-chosen.md`). The
-    `spawn_blocking` plumbing and a consumer for the estimate remain.
+    `spawn_blocking` plumbing and a consumer for the estimate remain. **Both
+    built 2026-10-26**: with the mode configured, `ingest_with` applies the pipeline on the
+    blocking pool, and a node announces its group on the stream so a linked desktop's is
+    live (`../../record/2026-10-26/gap-015-the-dense-group-off-the-executor.md`). What
+    remains is a decision, not a build: whether the mode should now be on by default,
+    which costs a picture about an epoch late during a raid. The delta-GLMB stays refused
+    by name.
   ref: "`ARCHITECTURE.md` §10, the tracking math itself"
   history:
   - date: 2026-09-15
@@ -1465,6 +1471,17 @@
       with the mean count, filter and epoch, aged stale by the track staleness rule, and
       PN-08 alerts when it appears and goes. Still open: the `spawn_blocking` plumbing.
       See `../../record/2026-10-26/gap-015-the-dense-group-on-the-picture.md`.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      **The dense group runs off the executor and reaches a linked desktop live.** With the
+      mode configured, `ingest_with` hands the pipeline to `spawn_blocking` in batches, as
+      §2.2 requires, and a test proves no dense-group step runs on the executor thread;
+      with it off the loop is unchanged, and the loom models pass. A node now announces
+      `TrackingEvent::DenseGroup` on each change and on release, which a linked desktop
+      applies live and a partner never receives. Left: the owner's decision whether the
+      mode is on by default. See
+      `../../record/2026-10-26/gap-015-the-dense-group-off-the-executor.md`.
 - id: GAP-016
   name: Scenario generator
   type: Technical

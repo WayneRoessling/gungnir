@@ -1336,7 +1336,8 @@ impl NodeApi {
     ///
     /// The two `Received` and `Refused` variants are never released: they are this
     /// deployment's record of what *its* peers told it, and forwarding them would let a
-    /// partner read our peer list off the stream.
+    /// partner read our peer list off the stream. Nor is `TrackingEvent::DenseGroup`
+    /// (GAP-015): it is the internal sensor picture the snapshot withholds too.
     #[must_use]
     pub fn releases(&self, party: &str, envelope: &Envelope) -> bool {
         use gungnir_model::events::{LaunchWarningEvent, TrackingEvent};
@@ -3750,6 +3751,54 @@ mod tests {
             SystemHealth::default(),
             Vec::new(),
         ))
+    }
+
+    /// GAP-015: a party whose agreement sends tracks receives a released track on the
+    /// stream and never the dense group, which is the internal sensor picture the
+    /// snapshot withholds too -- live or not, it does not leave the deployment.
+    #[test]
+    fn a_partys_stream_never_carries_the_dense_group() {
+        use gungnir_model::events::TrackingEvent;
+        let api = api().with_exchange(gungnir_model::ExchangeSet {
+            agreements: vec![gungnir_model::ExchangeAgreement {
+                party: "sector-north".into(),
+                inbound: Vec::new(),
+                outbound: vec![ExchangeItem::Tracks],
+                format: gungnir_model::ExchangeFormat::Canonical,
+            }],
+        });
+        let at = |event| Envelope {
+            seq: 1,
+            mission_time: MissionTime(1.0),
+            event: gungnir_eventing::Event::Tracking(event),
+        };
+        let track = gungnir_model::TrackView {
+            id: gungnir_model::TrackId(3),
+            status: gungnir_model::TrackStatus::Confirmed,
+            state: nalgebra::SVector::zeros(),
+            covariance: nalgebra::SMatrix::identity(),
+            classification: gungnir_model::Classification::Unknown,
+            provenance: gungnir_model::Provenance::default(),
+            quality: gungnir_model::Quality::default(),
+            mission_time: MissionTime(1.0),
+            releasability: gungnir_model::Releasability::AllPeers,
+        };
+        assert!(
+            api.releases("sector-north", &at(TrackingEvent::TrackUpdated(track))),
+            "the control: a released track goes"
+        );
+        let group = gungnir_model::DenseGroupView {
+            epoch: MissionTime(1.0),
+            expected_targets: 12.5,
+            most_probable_count: None,
+            count_distribution: Vec::new(),
+            components: Vec::new(),
+            filter: "gm-phd".into(),
+            scan_size: 14,
+            is_stale: false,
+        };
+        assert!(!api.releases("sector-north", &at(TrackingEvent::DenseGroup(Some(group)))));
+        assert!(!api.releases("sector-north", &at(TrackingEvent::DenseGroup(None))));
     }
 
     /// `from_seq` 0 means "everything from now", which is an empty backlog rather than
