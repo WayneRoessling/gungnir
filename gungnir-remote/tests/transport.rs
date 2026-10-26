@@ -387,6 +387,94 @@ async fn a_desktop_receives_the_nodes_dense_group() {
     assert_eq!(tracking.tracks().len(), 1, "and the group is not a track");
 }
 
+/// GAP-015, live: a group the node announces after the desktop connected reaches it over
+/// the event stream, and so does its release, without another snapshot -- where before
+/// this a connected desktop held the group its last snapshot carried.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dense_group_announced_after_connecting_reaches_the_desktop_live() {
+    let api = authenticating(snapshot(Vec::new()));
+    let url = serve(Arc::clone(&api)).await;
+    let handle = tokio::runtime::Handle::current();
+    let (mut tracking, _intercept) =
+        connect(&RemoteEndpoint::plain(url), credential(), &handle).expect("the link starts");
+    until(
+        || {
+            tracking.poll(MissionTime(0.0));
+            tracking.is_healthy()
+        },
+        "the link to report connected",
+    )
+    .await;
+    assert!(
+        tracking.dense_group().is_none(),
+        "the snapshot held no group"
+    );
+
+    let group = |epoch: f64| gungnir_model::DenseGroupView {
+        epoch: MissionTime(epoch),
+        expected_targets: 12.5,
+        most_probable_count: None,
+        count_distribution: Vec::new(),
+        components: Vec::new(),
+        filter: "gm-phd".into(),
+        scan_size: 14,
+        is_stale: false,
+    };
+    // Connected is not subscribed (see the test below): publish until the stream follows.
+    let mut seq = 2_000u64;
+    for _ in 0..100 {
+        api.publish_event(Envelope {
+            seq,
+            mission_time: MissionTime(5.0),
+            event: Event::Tracking(TrackingEvent::DenseGroup(Some(group(5.0)))),
+        })
+        .expect("published");
+        seq += 1;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        tracking.poll(MissionTime(5.0));
+        if tracking.dense_group().is_some() {
+            break;
+        }
+    }
+    assert_eq!(
+        tracking.dense_group(),
+        Some(&group(5.0)),
+        "the announced group did not reach the desktop live"
+    );
+
+    // A later epoch replaces it, and the release clears it.
+    api.publish_event(Envelope {
+        seq,
+        mission_time: MissionTime(6.0),
+        event: Event::Tracking(TrackingEvent::DenseGroup(Some(group(6.0)))),
+    })
+    .expect("published");
+    until(
+        || {
+            tracking.poll(MissionTime(6.0));
+            tracking
+                .dense_group()
+                .is_some_and(|g| g.epoch == MissionTime(6.0))
+        },
+        "the next epoch's group to replace the first",
+    )
+    .await;
+    api.publish_event(Envelope {
+        seq: seq + 1,
+        mission_time: MissionTime(7.0),
+        event: Event::Tracking(TrackingEvent::DenseGroup(None)),
+    })
+    .expect("published");
+    until(
+        || {
+            tracking.poll(MissionTime(7.0));
+            tracking.dense_group().is_none()
+        },
+        "the release to clear the group",
+    )
+    .await;
+}
+
 /// A track initiated on the node after the desktop connected reaches it over the event
 /// stream, without another snapshot request.
 #[tokio::test(flavor = "multi_thread")]

@@ -310,6 +310,12 @@ field; `SnapshotResponse` gained a defaulted `dense_group`, withheld from a part
 counted. Additive and defaulted throughout, so `SCHEMA_VERSION` is unchanged. See
 [the record](../record/2026-10-26/gap-015-the-dense-group-on-the-picture.md).
 
+**Landed 2026-10-26, GAP-015 again**: `TrackingEvent` gained `DenseGroup(Option<DenseGroupView>)`,
+published by a node when its group changes and `None` on release, so a linked desktop's
+group is live between snapshots. An added variant (`../gungnir-api-v1.md`), so
+`SCHEMA_VERSION` is unchanged; a partner's stream never carries it. See
+[the record](../record/2026-10-26/gap-015-the-dense-group-off-the-executor.md).
+
 `SnapshotResponse` gains `assets`, `predictions`, `engagements`, `requirements`,
 `hazards`, and `control_status`, and is filtered per caller by DN-17. The filtering is a
 behaviour change on an existing endpoint and is gated on the caller having a configured

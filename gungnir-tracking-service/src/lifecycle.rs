@@ -125,7 +125,7 @@ mod tests {
                     }
                 }
                 TrackingEvent::TrackDeleted(id) => held.retain(|h| h.id != *id),
-                TrackingEvent::TrackCoasting(_) => {}
+                TrackingEvent::TrackCoasting(_) | TrackingEvent::DenseGroup(_) => {}
             }
         }
     }

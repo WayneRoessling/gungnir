@@ -2174,6 +2174,9 @@ async fn run(
         // published one, and a desktop linked to this node kept the picture its sign-in
         // snapshot held for as long as the link stayed up.
         announcer.tracks(&bus, now, tracking.tracks())?;
+        // GAP-015: the dense group goes on the stream as it changes, so a linked desktop's
+        // group is live rather than as the last snapshot held it.
+        announcer.dense_group(&bus, now, tracking.dense_group())?;
 
         // GAP-019, edge (s): resolve cross-session identity and journal it. One event per
         // track rather than one per tick -- an identity is a claim about what a track is,

@@ -8,6 +8,7 @@ enum "TrackingEvent" as TrackingEvent <<InformationElement>> {
   TrackUpdated(TrackView)
   TrackCoasting(TrackId)
   TrackDeleted(TrackId)
+  DenseGroup(Option<crate::DenseGroupView>)
 }
 enum "InterceptEvent" as InterceptEvent <<InformationElement>> {
   PlanProposed(PlanView)
@@ -168,6 +169,8 @@ class "ConflictSide\n(see If-Sr-policy-authority-settings)" as ConflictSide <<Ex
 }
 class "DecisionId\n(see If-Sr-plans-effectors-handoff)" as DecisionId <<External>> #line.dashed {
 }
+class "DenseGroupView\n(see If-Sr-picture-tracking-vocabulary)" as DenseGroupView <<External>> #line.dashed {
+}
 class "DetectionView\n(see If-Sr-picture-tracking-vocabulary)" as DetectionView <<External>> #line.dashed {
 }
 enum "EffectorLayer\n(see If-Sr-plans-effectors-handoff)" as EffectorLayer <<External>> #line.dashed {
@@ -216,6 +219,7 @@ class "SessionId\n(see If-Sr-picture-tracking-vocabulary)" as SessionId <<Extern
 }
 class "TrackView\n(see If-Sr-picture-tracking-vocabulary)" as TrackView <<External>> #line.dashed {
 }
+TrackingEvent --> DenseGroupView : DenseGroup
 TrackingEvent --> TrackView : TrackInitiated, TrackUpdated
 InterceptEvent --> HeldLayerView : HeldLayers
 InterceptEvent --> PlanId : PlanEvaluated

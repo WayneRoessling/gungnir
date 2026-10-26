@@ -91,10 +91,10 @@ pub struct Projection {
     /// wire contract). Refreshed on the same cadence as `bearing_rays`, for the same
     /// reason.
     pub pipeline_stats: PipelineStatsView,
-    /// The node pipeline's dense-group estimate, as of the last snapshot (GAP-015).
-    /// Refreshed on the same per-(re)connect cadence as `bearing_rays`, for the same
-    /// reason: no envelope carries it between snapshots, so a connected desktop's group
-    /// is the one the node last published when this link asked, and says which epoch.
+    /// The node pipeline's dense-group estimate (GAP-015): the snapshot's on each
+    /// connection, then every `TrackingEvent::DenseGroup` on the stream, so it is live
+    /// between snapshots as the tracks are -- unlike `bearing_rays`, which no envelope
+    /// carries yet.
     pub dense_group: Option<gungnir_model::DenseGroupView>,
     /// True only once a node has answered. Cleared as soon as it stops.
     pub connected: bool,
@@ -2491,6 +2491,11 @@ fn apply(projection: &Arc<Mutex<Projection>>, envelope: &Envelope) -> Result<(),
         }
         Event::Tracking(TrackingEvent::TrackDeleted(id)) => {
             p.tracks.retain(|t| t.id != *id);
+        }
+        // GAP-015: the node's dense group as it changes, its release included. See
+        // `Projection::dense_group`.
+        Event::Tracking(TrackingEvent::DenseGroup(group)) => {
+            p.dense_group.clone_from(group);
         }
         Event::Intercept(
             InterceptEvent::PlanProposed(plan) | InterceptEvent::PlanApproved(plan),

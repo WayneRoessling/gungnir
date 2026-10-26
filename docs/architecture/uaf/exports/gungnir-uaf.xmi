@@ -34159,7 +34159,7 @@
         <persistentstyle value="DGS=On=0:CNT=8:W=120:H=40:SG=0:SGH=0:AEB=0:;AR=0;DCL=0;"/>
         <xrefs/>
         <elements>
-          <element geometry="Left=612;Top=4193;Right=805;Bottom=4307;" subject="EAID_4D51ADB8_2E61_ABC8_9A74_BDFA1E911AD6" seqno="1" style="HideIcon=0;DUID=27FDC7E4;"/>
+          <element geometry="Left=535;Top=4231;Right=882;Bottom=4361;" subject="EAID_4D51ADB8_2E61_ABC8_9A74_BDFA1E911AD6" seqno="1" style="HideIcon=0;DUID=27FDC7E4;"/>
           <element geometry="Left=2509;Top=179;Right=3087;Bottom=333;" subject="EAID_D17990FE_37CA_EA90_7482_0DD67D07CCD9" seqno="2" style="HideIcon=0;DUID=82A054E1;"/>
           <element geometry="Left=2617;Top=1236;Right=2979;Bottom=1341;" subject="EAID_7BB84A8B_ADA4_B8C9_3859_3D5B4C6C4F1B" seqno="3" style="HideIcon=0;DUID=AAB96E69;"/>
           <element geometry="Left=2410;Top=1783;Right=3186;Bottom=1847;" subject="EAID_D20478AB_69EF_1AB2_4D17_6BABB9E4EA9D" seqno="4" style="HideIcon=0;DUID=A288CC25;"/>

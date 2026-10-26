@@ -299,18 +299,19 @@ pub struct PipelineSettings {
     /// An engaged PHD epoch was measured on this development machine, release profile, at
     /// **about 6 ms added per epoch for a 20-target raid and about 200 ms for a
     /// 200-target one** (`DenseGroupSettings::phd` records the whole table). The
-    /// per-frame budget in `docs/performance-budgets.md` is p99 under 4 ms, and the
-    /// pipeline runs on the `tokio` executor thread that `crate::ingest_with` owns.
-    /// Work of that size on that thread is precisely the case
-    /// `docs/agentic-coding-standards.md` §2.2 names -- "a PHD update over a large
-    /// birth/clutter set" -- as needing `tokio::task::spawn_blocking`, and this build
-    /// runs it inline.
+    /// per-frame budget in `docs/performance-budgets.md` is p99 under 4 ms. Work of that
+    /// size is precisely the case `docs/agentic-coding-standards.md` §2.2 names -- "a PHD
+    /// update over a large birth/clutter set" -- as needing `tokio::task::spawn_blocking`,
+    /// and **since 2026-10-26 `crate::ingest_with` does exactly that whenever this is
+    /// `Some`**: the pipeline is applied on the blocking pool, so the executor thread is
+    /// never held for an epoch (GAP-015). With this `None` the loop stays inline and
+    /// nothing about it changed.
     ///
     /// So a deployment turns it on knowing the cost, rather than every deployment paying
-    /// it unasked. **Switching the default on waits on that §2.2 plumbing**, which
-    /// restructures how `ingest_with` drives an epoch and is a change to the concurrency
-    /// shape of this crate for every deployment including the ones not using the mode --
-    /// the owner's call, recorded in GAP-015 rather than taken here.
+    /// it unasked. The plumbing that once had to come first is built; **whether the
+    /// default should now be on is a decision about cost, not a missing piece**, and it
+    /// is the owner's, recorded in GAP-015 rather than taken here. Off the executor the
+    /// cost is no longer a stalled runtime but a picture an epoch late during a raid.
     ///
     /// While it is `None` the mode costs nothing at all: `run_dense_group` returns on the
     /// first line, before any comparison.

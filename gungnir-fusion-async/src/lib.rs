@@ -322,13 +322,28 @@ pub fn end_of_stream(pipeline: &mut FusionPipeline) -> Option<PipelineSnapshot> 
 /// emitted before the task stops. Dropping it would lose the last horizon of every
 /// session, and a replay would then end short of the recording it replayed.
 ///
-/// **Cancellation safety** (`docs/agentic-coding-standards.md` §2.2). The loop's only
-/// await is the idle back-off, reached when the inbound channel is empty, so a detection
-/// or bearing taken from the channel is always applied before the next suspension point:
-/// the pipeline is never left holding half of an update. Dropping the future drops the
-/// pipeline with it. What the reorder buffer still holds is lost and the end-of-stream
-/// flush above does not run; the consumer keeps every snapshot already sent, each built
-/// whole before it was sent.
+/// **Off the executor thread when the dense-group mode is configured** (GAP-015;
+/// `docs/agentic-coding-standards.md` §2.2). An engaged dense-group epoch is the case §2.2
+/// names -- "a PHD update over a large birth/clutter set" -- and was measured at hundreds of
+/// milliseconds for the specified raid (`PipelineSettings::dense_group`). So when the mode
+/// is configured, each submission taken from the channel is applied, together with
+/// whatever else is already waiting up to [`OFF_EXECUTOR_BATCH`], by
+/// `tokio::task::spawn_blocking`: the pipeline goes to the blocking pool with the batch and
+/// comes back with the result, and the executor thread only polls the channel and awaits.
+/// **With the mode off -- every deployment that has not asked for it -- the loop is exactly
+/// what it was**, inline, because a hop to the blocking pool per detection would buy
+/// nothing for a pipeline whose per-epoch work is a few Kalman updates.
+///
+/// **Cancellation safety** (`docs/agentic-coding-standards.md` §2.2). Inline, the loop's
+/// only await is the idle back-off, reached when the inbound channel is empty, so a
+/// detection or bearing taken from the channel is always applied before the next
+/// suspension point: the pipeline is never left holding half of an update. Off the
+/// executor, the second await is the blocking batch, and the pipeline is not in this
+/// future while it runs: dropping the future there lets the batch finish -- each submission
+/// applied whole, each snapshot sent whole -- and then drops the pipeline with the batch's
+/// result. Either way, dropping the future drops the pipeline. What the reorder buffer
+/// still holds is lost and the end-of-stream flush above does not run; the consumer keeps
+/// every snapshot already sent, each built whole before it was sent.
 ///
 /// Each submission is applied by [`step`] and the flush by [`end_of_stream`], the same
 /// two functions a lock-step host calls, with no `.await` inside either.
@@ -342,11 +357,35 @@ pub async fn ingest_with(
         ?pipeline,
         "fusion-async pipeline started: out-of-sequence buffering with global association"
     );
+    let off_executor = pipeline.settings().dense_group.is_some();
+    let (mut rx, mut out) = (rx, out);
     loop {
         match rx.try_recv() {
-            Ok(submission) => {
+            Ok(submission) if !off_executor => {
                 if let Some(snapshot) = step(&mut pipeline, submission) {
                     if out.send(snapshot).is_err() {
+                        tracing::warn!("track consumer is gone; stopping the pipeline");
+                        return;
+                    }
+                }
+            }
+            Ok(submission) => {
+                let Some((back, back_rx, back_out, flow)) = crate::sync::off_executor(move || {
+                    let flow = apply_batch(&mut pipeline, submission, &rx, &out);
+                    (pipeline, rx, out, flow)
+                })
+                .await
+                else {
+                    tracing::error!(
+                        "the pipeline's batch off the executor thread panicked; stopping the pipeline"
+                    );
+                    return;
+                };
+                (pipeline, rx, out) = (back, back_rx, back_out);
+                match flow {
+                    Batch::Open => {}
+                    Batch::Closed => break,
+                    Batch::ConsumerGone => {
                         tracing::warn!("track consumer is gone; stopping the pipeline");
                         return;
                     }
@@ -356,11 +395,69 @@ pub async fn ingest_with(
             Err(TryRecvError::Disconnected) => break,
         }
     }
-    if let Some(snapshot) = end_of_stream(&mut pipeline) {
+    let flushed = if off_executor {
+        let Some((back, snapshot)) = crate::sync::off_executor(move || {
+            let snapshot = end_of_stream(&mut pipeline);
+            (pipeline, snapshot)
+        })
+        .await
+        else {
+            tracing::error!("the pipeline's final flush off the executor thread panicked");
+            return;
+        };
+        pipeline = back;
+        snapshot
+    } else {
+        end_of_stream(&mut pipeline)
+    };
+    if let Some(snapshot) = flushed {
         let _ = out.send(snapshot);
     }
     tracing::info!(
         stats = ?pipeline.stats(),
         "fusion-async ingest task stopped: inbound channel closed and the buffer flushed"
     );
+}
+
+/// The most submissions one hand-off to the blocking pool applies before control returns
+/// to the executor, so a feed that never pauses still lets the ingest future be polled --
+/// and dropped -- between batches.
+pub const OFF_EXECUTOR_BATCH: usize = 256;
+
+/// How a batch off the executor thread ended.
+enum Batch {
+    /// The inbound channel is still open: empty, or the batch limit reached.
+    Open,
+    /// The inbound channel closed: flush and stop.
+    Closed,
+    /// The track consumer is gone: stop.
+    ConsumerGone,
+}
+
+/// Apply `first` and then whatever is already waiting on `rx`, up to [`OFF_EXECUTOR_BATCH`],
+/// sending each snapshot as [`ingest_with`]'s inline arm does. No submission is taken from
+/// the channel that is not applied before this returns.
+fn apply_batch(
+    pipeline: &mut FusionPipeline,
+    first: Submission,
+    rx: &Receiver<Submission>,
+    out: &Sender<PipelineSnapshot>,
+) -> Batch {
+    let mut submission = first;
+    for applied in 1.. {
+        if let Some(snapshot) = step(pipeline, submission) {
+            if out.send(snapshot).is_err() {
+                return Batch::ConsumerGone;
+            }
+        }
+        if applied >= OFF_EXECUTOR_BATCH {
+            return Batch::Open;
+        }
+        submission = match rx.try_recv() {
+            Ok(next) => next,
+            Err(TryRecvError::Empty) => return Batch::Open,
+            Err(TryRecvError::Disconnected) => return Batch::Closed,
+        };
+    }
+    Batch::Open
 }

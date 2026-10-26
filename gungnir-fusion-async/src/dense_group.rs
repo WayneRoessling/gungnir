@@ -474,6 +474,10 @@ impl DenseGroupState {
         births: &[GaussianComponent],
         detections: &[SVector<f64, 3>],
     ) -> Result<(), RfsError> {
+        #[cfg(test)]
+        if let Ok(mut threads) = tests::STEP_THREADS.lock() {
+            threads.push(std::thread::current().id());
+        }
         // Zero on the first step: a filter built this epoch has nothing to carry forward,
         // and a negative interval cannot arise because the pipeline refuses a detection
         // behind its cursor before an epoch is ever formed (`PushError::TooLate`).
@@ -539,6 +543,120 @@ impl DenseGroupState {
 
 #[cfg(test)]
 mod tests {
+    /// Every thread a dense-group step has run on in this test binary, so a test can say
+    /// where the work went without timing anything (GAP-015, §2.2).
+    pub(super) static STEP_THREADS: std::sync::Mutex<Vec<std::thread::ThreadId>> =
+        std::sync::Mutex::new(Vec::new());
+
+    #[cfg(not(loom))]
+    fn ran_on(thread: std::thread::ThreadId) -> bool {
+        STEP_THREADS
+            .lock()
+            .is_ok_and(|threads| threads.contains(&thread))
+    }
+
+    #[cfg(not(loom))]
+    /// A scan of eight targets 60 m apart, one scan a second for `scans` seconds.
+    fn raid(scans: u32) -> Vec<crate::Submission> {
+        let mut out = Vec::new();
+        for scan in 0..scans {
+            let t = f64::from(scan);
+            for target in 0..8u32 {
+                out.push(crate::Submission::Position(crate::Detection {
+                    sensor_id: 1,
+                    timestamp_s: t,
+                    measurement: SVector::<f64, 3>::new(
+                        120.0 * t,
+                        f64::from(target) * 60.0 + 30.0 * t,
+                        2_000.0,
+                    ),
+                }));
+            }
+        }
+        out
+    }
+
+    #[cfg(not(loom))]
+    fn engaged() -> crate::PipelineSettings {
+        crate::PipelineSettings {
+            dense_group: Some(DenseGroupSettings {
+                engage_above_detections: 4,
+                ..DenseGroupSettings::default()
+            }),
+            ..crate::PipelineSettings::default()
+        }
+    }
+
+    /// **§2.2, held rather than asserted** (GAP-015). With the dense-group mode configured,
+    /// `ingest_with` runs every dense-group step off the thread driving the executor: on a
+    /// current-thread runtime that thread is this one, so a step recorded here would be the
+    /// executor doing the matrix work §2.2 forbids. The control below proves the record
+    /// sees a step where it does run: the same pipeline in lock-step, on this thread,
+    /// records this thread.
+    // Not under loom: there the hand-off runs in place, having no blocking pool.
+    #[cfg(not(loom))]
+    #[test]
+    fn the_dense_group_step_runs_off_the_executor_thread() {
+        let here = std::thread::current().id();
+        let (tx, rx) = crate::sync::unbounded();
+        let (out_tx, out_rx) = crate::sync::unbounded();
+        for submission in raid(6) {
+            assert!(tx.send(submission).is_ok());
+        }
+        drop(tx);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        runtime.block_on(crate::ingest_with(rx, out_tx, engaged()));
+        let mut engaged_snapshots = 0;
+        while let Ok(snapshot) = out_rx.try_recv() {
+            engaged_snapshots += usize::from(snapshot.dense_group.is_some());
+        }
+        assert!(engaged_snapshots > 0, "the raid never engaged the mode");
+        assert!(
+            !ran_on(here),
+            "a dense-group step ran on the thread driving the executor"
+        );
+
+        // The control: lock-step on this thread is where the work belongs for a host that
+        // drives the pipeline itself, and the record sees it.
+        let mut pipeline = crate::FusionPipeline::new(engaged());
+        for submission in raid(6) {
+            let _ = crate::step(&mut pipeline, submission);
+        }
+        assert!(ran_on(here), "the record missed a step on this thread");
+    }
+
+    /// With the mode off, nothing goes to the blocking pool and the picture is what it
+    /// always was: tracks, and no group.
+    // Not under loom: there the hand-off runs in place, having no blocking pool.
+    #[cfg(not(loom))]
+    #[test]
+    fn with_the_mode_off_the_loop_is_unchanged() {
+        let (tx, rx) = crate::sync::unbounded();
+        let (out_tx, out_rx) = crate::sync::unbounded();
+        for submission in raid(6) {
+            assert!(tx.send(submission).is_ok());
+        }
+        drop(tx);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        runtime.block_on(crate::ingest_with(
+            rx,
+            out_tx,
+            crate::PipelineSettings::default(),
+        ));
+        let mut last = None;
+        while let Ok(snapshot) = out_rx.try_recv() {
+            last = Some(snapshot);
+        }
+        let last = last.expect("snapshots");
+        assert!(last.dense_group.is_none());
+        assert!(!last.tracks.is_empty());
+    }
     use super::*;
 
     fn model() -> (SMatrix<f64, 3, 6>, SMatrix<f64, 3, 3>) {
