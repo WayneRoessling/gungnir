@@ -3455,3 +3455,24 @@
   commit: 9e9fe9f5be7e191c17044475483722fe275463bd
   pre_repository: false
   record: "GAP-015; docs/record/2026-10-26/gap-015-the-dense-group-on-the-picture.md; PR #223"
+
+- date: 2026-10-26
+  signer: Owner
+  subject: >-
+    GAP-015's human-owned code, completing the dense-group mode's last two build items:
+    with the mode configured, `ingest_with` applies the pipeline on the blocking pool in
+    batches of up to `OFF_EXECUTOR_BATCH` through `crate::sync::off_executor` (coding
+    standard section 2.2), the inline loop unchanged with the mode off and the loom models
+    passing; the restated cancellation-safety note; a test-only record proving no
+    dense-group step runs on the executor thread; and `PipelineSettings::dense_group`'s
+    doc saying the default is now a decision about cost, not a missing piece
+    (`gungnir-fusion-async/src/lib.rs`, `sync.rs`, `dense_group.rs`, `pipeline.rs`).
+  kind: code
+  paths:
+  - gungnir-fusion-async/src/lib.rs
+  - gungnir-fusion-async/src/sync.rs
+  - gungnir-fusion-async/src/dense_group.rs
+  - gungnir-fusion-async/src/pipeline.rs
+  commit: d8554f683962f180367db877d3d8d62199c656ab
+  pre_repository: false
+  record: "GAP-015; docs/record/2026-10-26/gap-015-the-dense-group-off-the-executor.md; PR #225"
