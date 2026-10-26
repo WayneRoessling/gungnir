@@ -17,10 +17,13 @@ the generated sources own, and does not decide anything; it files what has to be
 
 **In scope.** All ten actions of the review's section 11, as the owner chose on
 2026-10-26, covering engineering, the operator interface and the acquisition documents.
-Thirty-eight gaps filed (GAP-203 to GAP-240) and nine decisions raised (D-136 to D-144),
-all in `../mission/gap-analysis/data/`. Action 1 of the ten, the stale-prose sweep,
-landed on `main` as pull request #227 before this plan was written and is recorded here
-as done.
+Forty gaps filed (GAP-203 to GAP-242) and nine decisions raised (D-136 to D-144), all in
+`../mission/gap-analysis/data/`. The owner walked the nine on 2026-10-26, four at a time
+with a recommended default each; seven were taken to the default and two past it (D-137
+added NFFI as a bearer, which filed GAP-241 and GAP-242; D-139 took the full 2525D set).
+The walk is `../record/2026-10-26/the-owner-s-walk-of-2026-10-26.md`. Action 1 of the
+ten, the stale-prose sweep, landed on `main` as pull request #227 before this plan was
+written and is recorded here as done.
 
 **Out of scope.** Implementation under this plan. No crate gains code by this change;
 every gap below is engineering the register sequences. Also out of scope: the business
@@ -46,8 +49,8 @@ remainder (GAP-015), none of which the review found blocking any of its outcomes
 |---|---|
 | This plan | `docs/plans/12-review-closure.md` |
 | The review it closes | `docs/review/2026-10-26-comprehensive-review.md` (committed with this plan so its citations resolve) |
-| Thirty-eight gaps, one per work package | `docs/mission/gap-analysis/data/gaps.yaml`, rendered into the five generated documents |
-| Nine open decisions with a recommended default each | `docs/mission/gap-analysis/data/decisions.yaml`, rendered into `decisions-needed.md` |
+| Forty gaps, one per work package | `docs/mission/gap-analysis/data/gaps.yaml`, rendered into the five generated documents |
+| Nine decisions, raised with a recommended default each and taken the same day | `docs/mission/gap-analysis/data/decisions.yaml`, rendered into `decisions-needed.md` |
 | One new design note (airspace control measures, DN-34) | `docs/design/`, written under GAP-217 when that tranche starts |
 | A cloud and multi-node design note | `docs/design/`, written under GAP-220 after D-138 |
 | A hazard analysis | `docs/safety/`, written under GAP-229 |
@@ -119,6 +122,8 @@ identity vocabulary before the bearer, the bearer before the measures.
 |---|---|---|---|
 | GAP-216 | `Classification` widened to STANAG 1241 | Services engineer | M |
 | GAP-090, GAP-091 | The Cursor-on-Target bearer, DN-25 (existing gaps, open) | Security engineer (human-owned), Services engineer | M, L |
+| GAP-241 | ASTERIX Category 062 encode for system tracks (D-137) | Services engineer | M |
+| GAP-242 | The NFFI bearer for friendly-force positions, inbound and outbound (D-137) | Services engineer | L |
 | GAP-217 | Polygon airspace control measures with altitude bands; both chains fed; status by zone (DN-34) | Security engineer (human-owned) | L |
 | GAP-218 | Global identity and originating node on the wire; re-ingest guard; covariance intersection for peer tracks | Services engineer | L |
 | GAP-219 | Engagement opened and closed published over the exchange | Services engineer | M |
@@ -127,7 +132,10 @@ identity vocabulary before the bearer, the bearer before the measures.
 | GAP-222 | Metrics export | Services engineer | S |
 
 Decisions: D-136 (identity vocabulary), D-137 (tactical data links beyond
-Cursor-on-Target), D-138 (cloud scaling model), D-141 (cross-node engagement visibility).
+Cursor-on-Target), D-138 (cloud scaling model), D-141 (cross-node engagement visibility),
+all taken 2026-10-26. D-137 went past the default: NFFI joins Category 062 as a bearer,
+so the tranche carries three bearers rather than one; J-series over JREAP-C and VMF are
+out of scope by decision rather than by silence.
 
 ### Tranche D: the operator interface
 
@@ -201,11 +209,10 @@ tranches edit them is the one way this tranche can cost more than it saves.
    of the thirty-eight gaps touch `gungnir-security`, `gungnir-policy`,
    `gungnir-command`, `gungnir-approval` or `gungnir-remote`'s identity path. They are
    sized small on purpose, so that each review is one sitting.
-4. **Decisions are walked, not assumed.** The nine decisions carry a recommended default
-   in their outcome field. A gap that depends on a decision does not start until the
-   decision is taken; a gap whose decision is only cited (GAP-203 and D-140) starts at
-   once. The owner has walked decisions four at a time with a recommended default each;
-   this plan is written for that cadence.
+4. **Decisions are walked, not assumed.** The nine decisions were raised with a
+   recommended default each and walked by the owner on 2026-10-26, four at a time; every
+   gap that depended on one is unblocked. A later decision this plan's work raises takes
+   the next D-id and the same cadence.
 5. **A verification row before a closure.** Every gap that changes behaviour names the
    `../verification-capability-table.md` §2 row it owes in its first pull request. Rows
    that need a new criterion are the owner's.
@@ -228,13 +235,13 @@ tranches edit them is the one way this tranche can cost more than it saves.
 
 ## Dependencies
 
-- Tranche A depends on nothing outside itself; GAP-207 waits on D-144 for the effector's
-  name and builds against the SAPIENT task path until then.
-- Tranche B's GAP-208 waits on D-142 and GAP-212 on D-143. The rest start at once.
-- Tranche C is a chain: D-136 before GAP-216, GAP-216 before the Cursor-on-Target bearer,
-  GAP-206 (tranche A) before GAP-218, GAP-218 and D-141 before GAP-219, D-138 before
-  GAP-220. GAP-217 and GAP-221 are independent of the chain.
-- Tranche D's GAP-227 waits on D-139; GAP-074 waits on GAP-223 to GAP-226.
+- Tranche A depends on nothing outside itself; D-144 named no partner, so GAP-207 builds
+  against the SAPIENT task path until one does.
+- Tranche B starts at once; D-142 and D-143 are taken.
+- Tranche C is a chain: GAP-216 before the three bearers (GAP-090 and GAP-091, GAP-241,
+  GAP-242), GAP-206 (tranche A) before GAP-218 and the two new bearers, GAP-218 before
+  GAP-219. GAP-217, GAP-220 and GAP-221 are independent of the chain.
+- Tranche D's GAP-074 waits on GAP-223 to GAP-226; GAP-227 starts at once under D-139.
 - Tranche E's GAP-231 waits on GAP-204 so the guide documents a provisioning path that
   exists. The rest start at once.
 - Tranche F's GAP-235 waits until tranches A and B have landed in the files it splits.

@@ -3365,8 +3365,8 @@
     `../../record/2026-10-25/a-node-presents-its-own-persisted-peer-identity.md`.
 
 # Raised by plan 12 (`../../../plans/12-review-closure.md`) from the comprehensive review
-# of 2026-10-26. Each is open; its outcome field holds the recommended default until the
-# owner takes it.
+# of 2026-10-26 and walked by the owner the same day, four at a time, each with a
+# recommended default (`../../../record/2026-10-26/the-owner-s-walk-of-2026-10-26.md`).
 
 - id: D-136
   decision: Identity vocabulary
@@ -3378,12 +3378,15 @@
   raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §7 finding 5"
   decider: Owner
   unblocks: GAP-216, GAP-090, GAP-091
+  resolved: 2026-10-26
   outcome: >-
-    Recommended default, not yet taken: widen the type. `Unknown` stays the default and
-    the only state a track can hold with no evidence; Pending, Assumed Friend and Suspect
-    enter the risk weight between Unknown and Hostile; Joker and Faker are carried for
-    exercises and never weighted. Mapping at each bearer would put the same table in three
-    crates.
+    **Taken by the owner, 2026-10-26, to the recommended default: widen the type.**
+    `Unknown` stays the default and the only state a track holds with no evidence;
+    Pending, Assumed Friend and Suspect enter the risk weight between Unknown and Hostile;
+    Joker and Faker are carried for exercises and never weighted; the schema version moves
+    under the compatibility rule. Rejected: mapping at each bearer (the same table in
+    three crates); leaving the exercise states out (a partner's exercise traffic would have
+    nowhere to land). See `../../record/2026-10-26/the-owner-s-walk-of-2026-10-26.md`.
 
 - id: D-137
   decision: Tactical data links beyond Cursor-on-Target
@@ -3394,13 +3397,18 @@
     062 are the bearers and the rest are a later increment?
   raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §4 finding 4"
   decider: Owner
-  unblocks: GAP-091
+  unblocks: GAP-091, GAP-241, GAP-242
+  resolved: 2026-10-26
   outcome: >-
-    Recommended default, not yet taken: out of scope for this release, recorded as such.
-    Cursor-on-Target (DN-25) reaches ATAK, WinTAK, TAK Server and, through existing
-    gateways, most Western command posts; Category 062 encode reaches surveillance
-    consumers. J-series needs a certified terminal and an interface the project cannot
-    test, so it stays a stated gap rather than an unmentioned one.
+    **Taken by the owner, 2026-10-26, past the recommended default: NFFI joins ASTERIX
+    Category 062 as a bearer in this release; Link 16 J-series over JREAP-C and VMF are
+    out of scope and recorded as such.** NFFI (STANAG 5527, ADatP-36) carries friendly
+    positions as XML over HTTP or TCP and needs no terminal, so it gives the friendly set
+    GAP-090 needs from partners that do not run TAK; Category 062 encode publishes system
+    tracks to surveillance consumers. The two bearers are GAP-241 and GAP-242; the NFFI
+    specification is pinned in `../../design/external-standards.md` first, since no NFFI
+    text is in the repository. Rejected: NFFI out of scope (the default); JREAP-C in scope
+    (cannot be tested without a terminal). See the record item.
 
 - id: D-138
   decision: Scaling and availability model for the cloud profile
@@ -3412,11 +3420,14 @@
   raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §4 finding 5"
   decider: Owner with the deployment owner
   unblocks: GAP-220
+  resolved: 2026-10-26
   outcome: >-
-    Recommended default, not yet taken: vertical scaling, one node per sector, with an
-    active/standby pair through journal shipping designed in a note before any of it is
-    built. A multi-node design would reopen the queue and authority questions D-55 settled
-    for one node.
+    **Taken by the owner, 2026-10-26, to the recommended default: vertical scaling, one
+    node per sector, with an active/standby pair through journal shipping, designed in a
+    note before any of it is built.** The note is GAP-220's first deliverable. Rejected:
+    vertical with no standby (a sector with one node and nothing beyond a restart);
+    a multi-node design (reopens the queue and authority questions D-55 settled for one
+    node). See the record item.
 
 - id: D-139
   decision: Symbology standard for the picture
@@ -3427,12 +3438,16 @@
   raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §8 finding 6"
   decider: Owner
   unblocks: GAP-227
+  resolved: 2026-10-26
   outcome: >-
-    Recommended default, not yet taken: MIL-STD-2525D frames, affiliation and the air,
-    surface and subsurface battle dimensions, derived from the widened identity (D-136);
-    no echelon or modifier fields until a unit model exists. The current glyphs already
-    follow the frame-plus-colour convention, so the step is the standard's shapes, not a
-    new scheme.
+    **Taken by the owner, 2026-10-26, past the recommended default: the full MIL-STD-2525D
+    symbol set.** Frames, affiliation and battle dimension derive from the widened identity
+    (D-136); icons from the classification the picture holds; the amplifiers the picture
+    already carries (speed, heading, altitude, identity, quality) draw from the first
+    build; echelon and unit modifiers are rendered blank until a unit model exists. The
+    point of taking the full set now is one pass over the glyph code rather than two.
+    Rejected: frames only (a second pass to add what operators expect); the custom glyphs.
+    See the record item.
 
 - id: D-140
   decision: Separation of duties on override and control status
@@ -3444,11 +3459,15 @@
   raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §5 finding 12"
   decider: Owner
   unblocks: GAP-203
+  resolved: 2026-10-26
   outcome: >-
-    Recommended default, not yet taken: single approval stays the rule and is recorded as
-    a decision rather than an omission; an optional two-person rule for override and
-    control-status changes is a baseline setting, off by default, so a deployment that
-    needs it has it without a code change.
+    **Taken by the owner, 2026-10-26, to the recommended default: single approval stays
+    the rule and is recorded as a decision rather than an omission; an optional two-person
+    rule for `OVERRIDE_PLAN` and `SET_CONTROL_STATUS` is a baseline setting, off by
+    default.** When it is on, both actions need a second signed-in role's confirmation and
+    the record carries both identities. The setting joins GAP-203's action. Rejected: on by
+    default (a single-operator site could not change status at all); no mechanism (a
+    deployment that needs it would need a code change). See the record item.
 
 - id: D-141
   decision: Cross-node engagement visibility and sector ownership
@@ -3459,11 +3478,14 @@
   raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §4 finding 3"
   decider: Owner
   unblocks: GAP-219
+  resolved: 2026-10-26
   outcome: >-
-    Recommended default, not yet taken: publish engagement opened and closed over the
-    exchange, keyed by the global identity, so a neighbour's engagement is on the track
-    before anyone proposes a second; defer sector ownership, which needs a unit model and
-    an airspace control order to be meaningful.
+    **Taken by the owner, 2026-10-26, to the recommended default: publish engagement
+    opened and closed over the exchange, keyed by the global identity, so a neighbour's
+    engagement is on the track before anyone proposes a second; defer sector ownership.**
+    Ownership needs a unit model and an airspace control order to be meaningful, and
+    neither exists. Rejected: ownership now; neither yet (leaving it to the radio). See
+    the record item.
 
 - id: D-142
   decision: Which key signs the desktop's audit anchors
@@ -3476,12 +3498,15 @@
   raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §5 finding 1"
   decider: Owner with the security engineer
   unblocks: GAP-208
+  resolved: 2026-10-26
   outcome: >-
-    Recommended default, not yet taken: a deployment `AuditSigning` purpose whose private
-    half is provisioned with the baseline and sealed under the deployment key the
-    operator session never unlocks (DN-22's custody profiles already distinguish them),
-    and anchors forwarded to the node whenever linked so the node holds an independent
-    head. Signing with the node's key alone leaves the disconnected desktop unsigned.
+    **Taken by the owner, 2026-10-26, to the recommended default: a deployment
+    `AuditSigning` purpose whose private half is provisioned with the baseline and sealed
+    under the deployment key the operator session never unlocks, with anchors forwarded
+    to the node whenever linked so the node holds an independent head.** Rejected: the
+    node's key alone (a disconnected desktop's record stays unsigned while cut off); the
+    escrow counterpart (routine verification would need the escrow officer). See the
+    record item.
 
 - id: D-143
   decision: Session lifetime maximum and idle timeout
@@ -3492,11 +3517,13 @@
   raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §5 finding 7"
   decider: Owner
   unblocks: GAP-212
+  resolved: 2026-10-26
   outcome: >-
-    Recommended default, not yet taken: a twelve-hour maximum and a fifteen-minute idle
-    lock, both configurable downward only; a locked screen keeps the picture and the queue
-    visible and refuses every action until re-authentication, so a shift change under a
-    raid is not a blank screen.
+    **Taken by the owner, 2026-10-26, to the recommended default: a twelve-hour maximum
+    and a fifteen-minute idle lock, both configurable downward only; a locked screen keeps
+    the picture and the queue visible and refuses every action until re-authentication.**
+    Rejected: twenty-four hours and thirty minutes; eight hours and five minutes. See the
+    record item.
 
 - id: D-144
   decision: The fixed-site field experiment that tranche A of plan 12 closes toward
@@ -3508,8 +3535,11 @@
   raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §6"
   decider: Owner
   unblocks: GAP-207
+  resolved: 2026-10-26
   outcome: >-
-    Recommended default, not yet taken: yes, a fixed-site trial with SAPIENT sensors and
-    one effector; the specific sensors and effector are named when the trial partner is,
-    and until then GAP-207's adapter is built against the SAPIENT task path that already
-    exists.
+    **Taken by the owner, 2026-10-26, to the recommended default: a fixed-site trial with
+    SAPIENT sensors and one effector.** The specific sensors and effector are named when
+    the trial partner is; until then GAP-207's adapter is built against the SAPIENT task
+    path that exists, and the trial radar under GAP-001 the same. Rejected: naming targets
+    now (no partner); a mobile unit first (adds a moving frame origin and own-position to
+    tranche A, a design question before it is a gap). See the record item.

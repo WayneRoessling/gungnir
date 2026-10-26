@@ -6119,6 +6119,11 @@
       never in the 2026-09-10 signature sweep, because nothing had queued it. The
       remaining, genuinely blocked half is GAP-091's: the codec, the inbound feed, the
       multicast sink, and any source a deployment could configure to make `Live` real.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      D-137 taken 2026-10-26: NFFI (GAP-242) joins Cursor-on-Target as a source of the
+      friendly set, so a partner that does not run TAK can still report its positions.
 
 - id: GAP-091
   name: No exchange bearer for a participant that holds no machine identity
@@ -6195,6 +6200,12 @@
       multicast bearer establishes no party, so it may carry only what is marked to a
       party this deployment has itself declared -- never `Internal`, and never
       `AllPeers`, which promises an authentication multicast cannot give.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      D-137 taken 2026-10-26: Cursor-on-Target stays the first bearer; Category 062
+      encode (GAP-241) and NFFI (GAP-242) are the other two in this release; J-series
+      over JREAP-C and VMF are out of scope by decision.
 
 - id: GAP-094
   name: >-
@@ -11875,6 +11886,12 @@
       Filed by plan 12 from the review's small-unit findings: the one control an
       operator must have during a raid is the one the desktop cannot give without a
       restart.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      D-140 taken 2026-10-26: single approval recorded; the optional two-person rule for
+      override and control status joins this action as a baseline setting, off by
+      default.
 
 - id: GAP-204
   name: The desktop cannot provision its own accounts
@@ -12013,6 +12030,11 @@
     note: >-
       Filed by plan 12. Which effector is the trial's is D-144; the adapter and the
       return path are the work.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      D-144 taken 2026-10-26: fixed site, SAPIENT sensors, one effector; the adapter is
+      built against the SAPIENT task path until a partner names its interface.
 
 - id: GAP-208
   name: The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks
@@ -12047,6 +12069,11 @@
     note: >-
       Filed by plan 12. GAP-163 put the head outside the file; the file it chose is one
       the same account can rewrite.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      D-142 taken 2026-10-26: a deployment `AuditSigning` purpose provisioned with the
+      baseline; anchors forwarded to the node when linked. The action stands.
 
 - id: GAP-209
   name: Reconciliation arbitration ranks a role string the desktop's own journal asserts
@@ -12180,6 +12207,11 @@
     note: >-
       Filed by plan 12 as one work package: five findings on the same token path, each
       small on its own.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      D-143 taken 2026-10-26: twelve hours maximum, fifteen minutes idle, both downward
+      only; a locked screen keeps the picture and refuses every action.
 
 - id: GAP-213
   name: Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll
@@ -12307,6 +12339,11 @@
     note: >-
       Filed by plan 12 ahead of the Cursor-on-Target build (GAP-090, GAP-091), which
       needs something to map its type letters to.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      D-136 taken 2026-10-26 to the recommended default: widen the type, `Unknown` the
+      default, three weighted states, two exercise states. The action stands as written.
 
 - id: GAP-217
   name: Airspace control measures are a circle with a flag, and the fires chain's deconfliction checks never evaluate
@@ -12407,6 +12444,11 @@
     status: Open
     note: >-
       Filed by plan 12.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      D-141 taken 2026-10-26 to the recommended default; sector ownership deferred. The
+      action stands.
 
 - id: GAP-220
   name: The cloud profile has no scaling or availability design
@@ -12438,6 +12480,11 @@
     status: Open
     note: >-
       Filed by plan 12.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      D-138 taken 2026-10-26: vertical, one node per sector, an active/standby pair
+      through journal shipping; the design note is this gap's first deliverable.
 
 - id: GAP-221
   name: Node budgets have no fan-out, snapshot-latency or recovery harness
@@ -12655,6 +12702,11 @@
     status: Open
     note: >-
       Filed by plan 12.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      D-139 taken 2026-10-26 past the default: the full MIL-STD-2525D set, echelon and
+      unit modifiers blank until a unit model exists. Effort stays L.
 
 - id: GAP-228
   name: No operator-initiated escalation
@@ -13036,3 +13088,71 @@
     status: Open
     note: >-
       Filed by plan 12.
+
+- id: GAP-241
+  name: No ASTERIX Category 062 encode for system tracks
+  type: Technical
+  caps: [CAP-7.2, CAP-7.4]
+  layer: "Productization: sensing and time"
+  sev: 3
+  effort: M
+  target: I4
+  owner: Services engineer
+  deps: [GAP-206, GAP-216]
+  impact: >-
+    The node decodes four ASTERIX categories and encodes none by design, because a fused
+    track is not a monoradar report. Category 062 is the system-track category that
+    surveillance consumers read, and it is absent, so the picture cannot reach an
+    air-traffic or air-defense consumer that speaks ASTERIX.
+  evidence: >-
+    `gungnir-interop/src/asterix/` (048, 034, 205, 129, decode only); `docs/unbuilt.md`
+    (encode refused for 048 and 205); `docs/design/external-standards.md` pins no
+    Category 062 edition
+  action: >-
+    Pin the Category 062 edition in `external-standards.md`; an encoder from `TrackView`
+    with the system track number from GAP-218's identity, gated against a public decoder
+    over a vendored sample; `ExchangeFormat::Asterix062` in place of the refused
+    `Asterix048`; an export sink per exchange agreement.
+  ref: >-
+    D-137; DN-18; DN-25 §1;
+    `../../review/2026-10-26-comprehensive-review.md` §4 finding 4
+  history:
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      Filed under D-137, taken the same day: Category 062 is one of the three bearers in
+      this release.
+
+- id: GAP-242
+  name: No NFFI bearer for friendly-force positions
+  type: Technical
+  caps: [CAP-1.6, CAP-4.5, CAP-7.4]
+  layer: "Productization: sensing and time"
+  sev: 3
+  effort: L
+  target: I4
+  owner: Services engineer
+  deps: [GAP-206, GAP-216]
+  impact: >-
+    The friendly set is only the friendlies a sensor detected (GAP-090). A partner that
+    does not run TAK has no way to report its positions, and the node has no way to
+    publish its own. NFFI (STANAG 5527, ADatP-36) is the NATO bearer for exactly that,
+    needs no terminal, and no reference to it exists anywhere in the repository.
+  evidence: >-
+    No match for NFFI, STANAG 5527 or ADatP-36 under `docs/` or in any source;
+    `docs/design/external-standards.md`; GAP-090's history
+  action: >-
+    Pin the NFFI specification and its interface profiles in `external-standards.md`
+    first; an inbound adapter that turns NFFI tracks into friendly `DetectionView`s with
+    provenance and the identity Friendly, through the ordinary gateway; an outbound
+    publication of own-force positions under an exchange agreement; both gated on a
+    public sample.
+  ref: >-
+    D-137; DN-16; GAP-090;
+    `../../review/2026-10-26-comprehensive-review.md` §4 finding 4
+  history:
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      Filed under D-137, taken the same day past the recommended default: the owner
+      judged the blue-force feed worth the specification pinning.

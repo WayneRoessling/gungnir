@@ -235,8 +235,10 @@ history, and an entry is never edited once it has merged.
 | GAP-238 | The workspace lints do not enforce the no-unsafe, no-unwrap and documented-items properties | Technical | CAP-6.5 | 1 | 1 | S | 1 | I4 | Services engineer | Open |
 | GAP-239 | The laydown rehearsal blocks the frame thread, and the event bus has no subscriber depth bound | Technical | CAP-5.10, CAP-5.2 | 2 | 8 | S | 16 | I4 | UI engineer | Open |
 | GAP-240 | Dependency-linkage notes and advisory ignores have drifted | Technical | CAP-6.5 | 1 | 1 | S | 1 | I4 | Services engineer | Open |
+| GAP-241 | No ASTERIX Category 062 encode for system tracks | Technical | CAP-7.2, CAP-7.4 | 3 | 5 | M | 15 | I4 | Services engineer | Open |
+| GAP-242 | No NFFI bearer for friendly-force positions | Technical | CAP-1.6, CAP-4.5, CAP-7.4 | 3 | 5 | L | 15 | I4 | Services engineer | Open |
 
-Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -1479,6 +1481,7 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.8 Fires tasks; CAP-4.5 Warn assets and authorities.
 - History:
   - 2026-09-15, Open: **Raised 2026-09-06 out of DN-25 §1; the policy half closed 2026-09-08, the bearer half stays GAP-091's.** GAP-036 gave DN-05 §5 rule 1 the context "the picture can honestly supply": friendly positions from the tracks carried as friendly. That is every friendly a sensor detected and GAP-018's engine declared. A dismounted section in a wood line, a fire group moving between firing points, and a patrol boat inside a radar's minimum range are none of them tracks, so none of them are in the set. **The defect was not a missing check.** It was that an empty friendly set read as "no friendly is there" when it meant "no friendly was detected", and those were the same value: rule 2 caught a configured source that had gone silent, and nothing caught the absence of the concept. **Built 2026-09-08.** `ReportedPosition` now exists in `gungnir-model` (`exchange.rs`), exactly to DN-25 §3's spec: it reuses `PeerOrigin` for timing and assigned quality rather than paralleling it, carries `reporter`, `position`, `claimed_accuracy_m` and `affiliation`, and nothing constructs one outside a test, because GAP-091's feed does not exist. `gungnir-policy`'s DN-05 rule 1 (`fires.rs`) reads a new `ReportedPositionSource<'a>` -- `NotConfigured`, `Silent`, or `Live(&[ReportedPosition])` -- beside the existing detected-friendly slice, and tells apart the three states DN-25 §5 rule 5 named: a detected or reported friendly inside the target's error ellipse denies; a live source reporting nobody passes and names the source it read; a silent or unconfigured source is a failed check with its own reason and **never** a pass, so an empty detected set can no longer stand in for an absent friendly. Staleness (DN-16's `is_stale_beyond`, reused through the embedded `PeerOrigin`) is checked and shown but never excuses a reported friendly from the ellipse test (DN-25 §5 rule 4), and only `Classification::Friendly` reports are ever compared against the keep-out (rule 3: "may lower risk and never raise it"). PN-05 already draws every check's `detail` string verbatim, so naming detected versus reported versus "no source configured" needed no panel code, only the wording rule 1 now produces. `gungnir-app`'s two `FiresContext` construction sites pass `ReportedPositionSource::NotConfigured` -- today's honest state -- and `PolicyChainReport` gained a fourth caveat naming that for PN-07, beside the three GAP-088/GAP-031 already left permanently failing. Net effect on a fires task's verdict: **none** -- the other three sources are already permanently missing, so the chain already denied every fires task before this change and still does; what changed is that the friendly-position line on PN-05 can no longer show a misleading pass. The `gungnir-policy` change is written and fully gated (unit tests, `clippy`, `fmt`) under `agentic-workflow.md`'s human-owned tier and is **signed by the owner 2026-09-15** (`../../../ARCHITECTURE.md` §10 item 130) -- the one item of this entry that was never in the 2026-09-10 signature sweep, because nothing had queued it. The remaining, genuinely blocked half is GAP-091's: the codec, the inbound feed, the multicast sink, and any source a deployment could configure to make `Live` real.
+  - 2026-10-26, Open: D-137 taken 2026-10-26: NFFI (GAP-242) joins Cursor-on-Target as a source of the friendly set, so a partner that does not run TAK can still report its positions.
 - Evidence: `../../design/DN-05-fires.md` §5 rule 1; `../../design/DN-25-cursor-on-target.md` §1, §3, §5 rules 2 through 5, §8 CAP-3.8 row; `docs/verification-capability-table.md` "Rows added by DN-25"; `gungnir-model/src/exchange.rs`; `gungnir-policy/src/fires.rs`; `gungnir-app/src/decisions.rs`; this register's GAP-036 and GAP-091 entries.
 - Severity: 4. Reach: 3 threads. Effort: M. Priority: 12.
 - Impact: Closed for the per-check honesty: the friendly-position line on PN-05 no longer reads as a false pass on an empty detected set, and a stale or non-friendly reported position no longer changes the result. Open for the underlying capability: no deployment can construct a live reported-position source yet, so every fires task's friendly-position check fails with "no source configured" rather than passing -- honest, and unchanged in overall effect, since the other three deconfliction checks (GAP-088, GAP-031) already deny every fires task regardless.
@@ -1493,6 +1496,7 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.4 Peer and coalition exchange; CAP-1.6 Peer early warning.
 - History:
   - 2026-09-09, Open: **Raised 2026-09-06 out of DN-25 §1.** GAP-009 and GAP-065 wired the exchange both ways, and both work only with a participant that can hold a machine identity in this deployment's trust roots and read the v2 contract: the peer link is a mutual-TLS client of another node's event stream, and the gates run for a machine caller whose party comes from its client certificate. Every needline they carry (`docs/architecture/uaf/operational/Op-Cn.md` NL-02, NL-06, NL-08, NL-12) also has participants who will never be that -- a mobile fire group, a port authority, a neighbouring unit on whatever its own ministry issued. `ExchangeFormat` already names two formats for a partner that is not another instance of this product and **neither exists**: STANAG 4676 has no obtainable specification (`../../design/external-standards.md` §2) and ASTERIX encode is refused by design, because a fused track is not a monoradar report. So MT-08 step 6 and MT-01 step 7 reach deployments of this product and nothing else. DN-25 adds SD-16 as a second bearer, and its §5 rule 1 is what keeps the addition from costing AP-09: a multicast bearer establishes no party, so it may carry only what is marked to a party this deployment has itself declared -- never `Internal`, and never `AllPeers`, which promises an authentication multicast cannot give.
+  - 2026-10-26, Open: D-137 taken 2026-10-26: Cursor-on-Target stays the first bearer; Category 062 encode (GAP-241) and NFFI (GAP-242) are the other two in this release; J-series over JREAP-C and VMF are out of scope by decision.
 - Evidence: `../../design/DN-25-cursor-on-target.md`; `docs/architecture/uaf/operational/Op-Cn.md` (NL-17, NL-18 and the bearer table); `docs/architecture/uaf/standards/Sd-Tx.md` (SD-16); `gungnir-model/src/exchange.rs`.
 - Severity: 4. Reach: 5 threads. Effort: L. Priority: 20.
 - Impact: The picture, warnings and handoffs stop at the boundary of participants who run this product, which is most of the people the mission threads name.
@@ -2891,6 +2895,7 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Capability: CAP-3.6 Rules of engagement; CAP-5.9 Role workspaces and workflow.
 - History:
   - 2026-10-26, Open: Filed by plan 12 from the review's small-unit findings: the one control an operator must have during a raid is the one the desktop cannot give without a restart.
+  - 2026-10-26, Open: D-140 taken 2026-10-26: single approval recorded; the optional two-person rule for override and control status joins this action as a baseline setting, off by default.
 - Evidence: `gungnir-model/src/policy_settings.rs` (`WeaponsControlStatus` defaults to `Hold`); `gungnir-app/src/sustainment.rs:921` (`SET_CONTROL_STATUS` gates a baseline apply only); `gungnir-app/src/main.rs:1039` ("takes effect when the desktop restarts"); no `control_status` route in `gungnir-api/src/transport.rs`; `../../ux/usability-round-1-session.md:71` (US-07 blocked).
 - Severity: 5. Reach: 10 threads. Effort: M. Priority: 50.
 - Impact: A raid that starts under `Hold` stays under `Hold` until an operator edits the baseline JSON and restarts the application. US-07 is blocked, and one layer at `Hold` refuses every plan on every layer (GAP-183, D-114), so a single operator at a site cannot run the live loop at all.
@@ -2943,6 +2948,7 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Capability: CAP-4.4 Handoff with provenance; CAP-4.6 Track engagements and effects.
 - History:
   - 2026-10-26, Open: Filed by plan 12. Which effector is the trial's is D-144; the adapter and the return path are the work.
+  - 2026-10-26, Open: D-144 taken 2026-10-26: fixed site, SAPIENT sensors, one effector; the adapter is built against the SAPIENT task path until a partner names its interface.
 - Evidence: `gungnir-app/src/handoff.rs:79-94` (`Manual` or a generic JSON endpoint); no `TcpListener::bind` in `gungnir-app/src`; GAP-040's history.
 - Severity: 4. Reach: 5 threads. Effort: L. Priority: 20.
 - Impact: No adapter speaks to a jammer or an interceptor. The `EffectorReport` route lives on the node only and the desktop binds no listener, so in the disconnected profile no effector outcome ever comes back by data: PN-05 reminds the operator to make a radio call and never learns what happened.
@@ -2957,6 +2963,7 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.3 Audit.
 - History:
   - 2026-10-26, Open: Filed by plan 12. GAP-163 put the head outside the file; the file it chose is one the same account can rewrite.
+  - 2026-10-26, Open: D-142 taken 2026-10-26: a deployment `AuditSigning` purpose provisioned with the baseline; anchors forwarded to the node when linked. The action stands.
 - Evidence: `gungnir-security/src/audit/anchor.rs:12-16` (the chain is unkeyed and the head is in the journal); `audit.rs:42-46`; `audit.rs:667-682` (`line_hash` is plain SHA-256); `keystore.rs:191-199`; `os_keystore.rs:161-169`.
 - Severity: 4. Reach: 9 threads. Effort: M. Priority: 36.
 - Impact: On a disconnected desktop the operator who can edit the audit file can also reseal the journal with a rewritten head, because the journal's sealing key is unlocked from that operator's own keystore. The chain finds a torn or edited line; it cannot find a rewrite by its own writer.
@@ -3010,6 +3017,7 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.1 Authenticate; CAP-6.2 Authorize by role, class, layer.
 - History:
   - 2026-10-26, Open: Filed by plan 12 as one work package: five findings on the same token path, each small on its own.
+  - 2026-10-26, Open: D-143 taken 2026-10-26: twelve hours maximum, fifteen minutes idle, both downward only; a locked screen keeps the picture and refuses every action.
 - Evidence: `gungnir-node/src/auth.rs:17,55-56`; `gungnir-security/src/token.rs:43-51,79-83,154-162`; `gungnir-api/src/transport.rs:309-361`; `gungnir-app/src/state.rs:1592-1596`; `gungnir-time/src/lib.rs:221-226`.
 - Severity: 3. Reach: 10 threads. Effort: M. Priority: 30.
 - Impact: The node's MAC key is whatever `GUNGNIR_TOKEN_KEY` holds past a length check; a token carries its role and is never re-read from the account store, so a demoted operator keeps authority until expiry; nothing revokes a token; expiry is compared on the wall clock, so a set-back clock re-accepts one; the disconnected session has no lifetime by default and no idle timeout; sign-in back-off is keyed by operator id alone.
@@ -3063,6 +3071,7 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Capability: CAP-2.6 Classify and identify; CAP-7.4 Peer and coalition exchange.
 - History:
   - 2026-10-26, Open: Filed by plan 12 ahead of the Cursor-on-Target build (GAP-090, GAP-091), which needs something to map its type letters to.
+  - 2026-10-26, Open: D-136 taken 2026-10-26 to the recommended default: widen the type, `Unknown` the default, three weighted states, two exercise states. The action stands as written.
 - Evidence: `gungnir-model/src/lib.rs:301-325`; `gungnir-identification/src/lib.rs:35-48`.
 - Severity: 4. Reach: 7 threads. Effort: M. Priority: 28.
 - Impact: `Classification` is `Unknown`, `Neutral`, `Friendly`, `Hostile`. Pending, Assumed Friend, Suspect, Joker and Faker do not exist, and the lethality weight of `Unknown` is 0.8, which an allied operator would read as Suspect without the word. Every outbound bearer (Cursor-on-Target's type letters first) needs the wider set.
@@ -3104,6 +3113,7 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Capability: CAP-4.6 Track engagements and effects; CAP-7.4 Peer and coalition exchange.
 - History:
   - 2026-10-26, Open: Filed by plan 12.
+  - 2026-10-26, Open: D-141 taken 2026-10-26 to the recommended default; sector ownership deferred. The action stands.
 - Evidence: `../../design/DN-31-node-approval-queue.md` §11; `gungnir-resilience/src/lib.rs:121-138`.
 - Severity: 4. Reach: 5 threads. Effort: M. Priority: 20.
 - Impact: DN-31 §11 scopes shared queues out and `BothActed` is keyed by a local `TrackId`, so nothing tells a node that its neighbour has opened an engagement on the same object.
@@ -3118,6 +3128,7 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.3 Three profiles; CAP-5.10 Performance budgets.
 - History:
   - 2026-10-26, Open: Filed by plan 12.
+  - 2026-10-26, Open: D-138 taken 2026-10-26: vertical, one node per sector, an active/standby pair through journal shipping; the design note is this gap's first deliverable.
 - Evidence: `gungnir-node/src/main.rs:2082-2323`; `main.rs:2236`; `deploy/README.md` (no manifests).
 - Severity: 3. Reach: 8 threads. Effort: L. Priority: 24.
 - Impact: One single-threaded loop owns ingest, tracking, planning, policy, the queue, audit, coverage (recomputed every tick), the journal and publication; every structure is in memory; tokens are minted in process; there is no replication, leader election or manifest. The cloud profile is the on-prem container on another host.
@@ -3210,6 +3221,7 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Capability: CAP-2.10 Terrain and map context; CAP-5.9 Role workspaces and workflow.
 - History:
   - 2026-10-26, Open: Filed by plan 12.
+  - 2026-10-26, Open: D-139 taken 2026-10-26 past the default: the full MIL-STD-2525D set, echelon and unit modifiers blank until a unit model exists. Effort stays L.
 - Evidence: `gungnir-viewport3d/src/interaction.rs:94-123`; `gungnir-viewport3d/src/tracks.rs:170-230`; no `2525` in any source; `gungnir-viewport3d/src/streaming/`.
 - Severity: 3. Reach: 10 threads. Effort: L. Priority: 30.
 - Impact: The picture is a top-down local projection on a metric grid with no tiles or imagery, no latitude, longitude or MGRS readout, custom frame-by-affiliation glyphs rather than a standard set, fixed-offset labels that overprint on a dense picture, and 3D Tiles streaming that is three `NotImplemented` stubs.
@@ -3387,4 +3399,32 @@ Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../.
 - Closing action: Refresh the resolution notes on the affected §2.9 rows, drop the three dead ignores, and track `vtkio`'s move off `nom` 3.
 - Target: I4. Owner: Services engineer. Status: Open.
 - Reference: D-20; `../../review/2026-10-26-comprehensive-review.md` §2 and §3 finding 8.
+
+**GAP-241 No ASTERIX Category 062 encode for system tracks**
+
+- Type: Technical.
+- Capability: CAP-7.2 Interop standards; CAP-7.4 Peer and coalition exchange.
+- History:
+  - 2026-10-26, Open: Filed under D-137, taken the same day: Category 062 is one of the three bearers in this release.
+- Evidence: `gungnir-interop/src/asterix/` (048, 034, 205, 129, decode only); `docs/unbuilt.md` (encode refused for 048 and 205); `../../design/external-standards.md` pins no Category 062 edition.
+- Severity: 3. Reach: 5 threads. Effort: M. Priority: 15.
+- Impact: The node decodes four ASTERIX categories and encodes none by design, because a fused track is not a monoradar report. Category 062 is the system-track category that surveillance consumers read, and it is absent, so the picture cannot reach an air-traffic or air-defense consumer that speaks ASTERIX.
+- Closing action: Pin the Category 062 edition in `external-standards.md`; an encoder from `TrackView` with the system track number from GAP-218's identity, gated against a public decoder over a vendored sample; `ExchangeFormat::Asterix062` in place of the refused `Asterix048`; an export sink per exchange agreement.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: D-137; DN-18; DN-25 §1; `../../review/2026-10-26-comprehensive-review.md` §4 finding 4.
+- Depends on: GAP-206, GAP-216.
+
+**GAP-242 No NFFI bearer for friendly-force positions**
+
+- Type: Technical.
+- Capability: CAP-1.6 Peer early warning; CAP-4.5 Warn assets and authorities; CAP-7.4 Peer and coalition exchange.
+- History:
+  - 2026-10-26, Open: Filed under D-137, taken the same day past the recommended default: the owner judged the blue-force feed worth the specification pinning.
+- Evidence: No match for NFFI, STANAG 5527 or ADatP-36 under `docs/` or in any source; `../../design/external-standards.md`; GAP-090's history.
+- Severity: 3. Reach: 5 threads. Effort: L. Priority: 15.
+- Impact: The friendly set is only the friendlies a sensor detected (GAP-090). A partner that does not run TAK has no way to report its positions, and the node has no way to publish its own. NFFI (STANAG 5527, ADatP-36) is the NATO bearer for exactly that, needs no terminal, and no reference to it exists anywhere in the repository.
+- Closing action: Pin the NFFI specification and its interface profiles in `external-standards.md` first; an inbound adapter that turns NFFI tracks into friendly `DetectionView`s with provenance and the identity Friendly, through the ordinary gateway; an outbound publication of own-force positions under an exchange agreement; both gated on a public sample.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: D-137; DN-16; GAP-090; `../../review/2026-10-26-comprehensive-review.md` §4 finding 4.
+- Depends on: GAP-206, GAP-216.
 
