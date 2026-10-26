@@ -7,11 +7,12 @@ are defined in `gungnir-api/src/v3/mod.rs` and reuse `gungnir-model` views and
 `gungnir-eventing` envelopes, so the API can never disagree with the desktop about
 what a track or a plan is.
 
-Status: the types exist and are covered by serialization tests; the transport crates
-were admitted by D-18 on 2026-09-05 (`agentic-coding-standards.md` §2.9) and are in the
-workspace manifest, but no code uses them yet. `gungnir_api::ApiServer::serve` returns
-`TransportNotImplemented` until it does, and will keep saying so rather than reporting a
-server that is not listening.
+Status: the types are covered by serialization tests, and the transport is
+`gungnir_api::transport` (D-18, `agentic-coding-standards.md` §2.9; GAP-041): JSON over
+HTTP and a WebSocket event stream, served in plaintext on loopback or on any address under
+the mutual TLS of `gungnir_api::tls` (GAP-060). `UnimplementedServer::serve` remains for a
+node that serves nothing at all, and is the one `TransportNotImplemented` this crate still
+returns (`unbuilt.md`).
 
 ## Transport decision
 
@@ -137,8 +138,11 @@ which `serde_json::to_value` refused and a reader outside Rust rounds to a doubl
 Every request carries a credential that `gungnir_security::Authenticator` resolves
 to an `OperatorId`; every handler checks `gungnir_security::Authorizer` for the
 action in `gungnir_security::actions` before doing anything. Unauthorized calls
-return `ApiError::Security`. The credential mechanism (mutual TLS or bearer
-tokens) is an open decision in `ARCHITECTURE.md` §8.5.
+return `ApiError::Security`. The credential mechanism is D-02's (`ARCHITECTURE.md` §8.5):
+mutual TLS for machine identities (`gungnir_api::tls`, GAP-060) and short-lived signed
+tokens for operator sessions, minted by the node's `AccountTokenAuthority` from the key
+`gungnir-node/src/auth.rs` reads out of the environment (GAP-057,
+`design/DN-23-operator-authentication.md`).
 
 ## Endpoints
 
@@ -227,9 +231,10 @@ is whoever the token says. `ApprovalRequest` itself, reachable from no route aft
 and named only by a method of the unimplemented `ApiHandler` trait, was removed with that
 method on 2026-09-25 (GAP-138), so the contract carries one description of a decision.
 
-**Why only loopback is served.** There is no TLS (GAP-060, which waits on GAP-084's key
-custody), so `gungnir_api::transport::serve` refuses any bind address that is not
-loopback, and the client refuses an `https` endpoint rather than downgrading it.
+**Loopback in the clear, or anywhere under mutual TLS.** `gungnir_api::transport::serve`
+refuses a plaintext bind address that is not loopback; `serve_on_listener` takes a
+`gungnir_api::tls::TlsListener` and serves any address (GAP-060). The client speaks mutual
+TLS to an `https` endpoint and never downgrades one (`gungnir-remote/src/lib.rs`).
 
 **Retention for `from_seq`** is a bounded in-memory window on the node
 (`transport::BACKLOG_CAPACITY`), which is smaller than the journal's. The behaviour the

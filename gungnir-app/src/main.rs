@@ -572,9 +572,9 @@ impl App {
     /// The picture itself: the three-d scene when it is attached and the deployment has
     /// asked for it, otherwise the 2D projection.
     ///
-    /// The 2D path is the default (GAP-022). It is the one that has been verified, and
-    /// the GL draw call has not been looked at on a screen; a deployment that can look
-    /// at it sets `ui.scene_3d`.
+    /// The three-d scene is the default (`UiSettings::scene_3d`, on; GAP-022, the owner's
+    /// decision of 2026-09-05), with the 2D projection as the opt-out and as the fallback
+    /// when no GL context could be attached (`gungnir-viewport3d`'s crate documentation).
     fn draw_picture(&mut self, ui: &mut egui::Ui) {
         // GAP-007. Built before either branch so both renderers show the same coverage,
         // and so an unplaceable layer says so on whichever one is running.

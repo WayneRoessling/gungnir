@@ -84,53 +84,36 @@ gungnir-render, gungnir-viewport3d, gungnir-ui, gungnir-app             UI and r
                                                                         binary
 ```
 
-The workspace has 50 crates: 49 members plus `gungnir-fuzz`, which is excluded from the
-default build because `cargo-fuzz` needs its own toolchain. The scope is deliberately
-open; a later pass locks which crates ship first (`ARCHITECTURE.md` §10).
+The workspace's crates are the member list in `Cargo.toml`, plus `gungnir-fuzz`, which is
+excluded from the default build because `cargo-fuzz` needs its own toolchain. The release
+scope is D-01's (`docs/mission/gap-analysis/decisions-needed.md`).
 
 ## Status
 
-**Updated 2026-09-07.** The two lists below described the scaffold as it stood on
-2026-09-04, the day this document, `ARCHITECTURE.md`, and the rest of the design set
-were brought into agreement. Most of what "Scaffold" named has since been built and
-gated -- the tracking math among the largest of it -- and this section had not been
-brought forward to say so; corrected here, in a development-status review, rather
-than found stale by whoever read it next.
-
 Every crate compiles (`cargo check --workspace --all-targets`), every crate's public
 surface is doc-commented with the capability and, for the tracking core, the pass
-criterion it implements, and the crates that have logic have unit tests (1,509
-passing across the workspace as of this update). What is real and what is a
-scaffold:
+criterion it implements, and the crates that have logic have unit tests. What is built
+is read from sources that are generated or checked, not from a list kept here
+(`docs/README.md`, "Keeping the set consistent"):
 
-- **Real:** the canonical data model and event schema; the broadcast event bus; the
-  JSON-lines journal, replay, and reporting; config loading and validation with backend
-  selection; the ingest gateway with validation, quarantine, recorded, simulated, ASTERIX
-  radar, and SAPIENT spotter adapters; the geofence policy, approval workflow, risk
-  scoring, decision rationale, identity and classification engines, model registry,
-  sensor registry, role-based authorization and audit log; geofences, line-of-sight and
-  coverage analytics; store-and-forward and reconciliation; authority arbitration; role
-  workspaces and the alert lifecycle; the schema catalog and Arrow interop; the egui
-  panels and the three-d viewport, attached to eframe's own GL context; both binaries'
-  startup and tick loops. **Also real since 2026-09-06:** the tracking pipeline itself --
-  the linear, extended and unscented Kalman filters, the particle filter, the
-  interacting-multiple-model and square-root/UDU forms, the RTS smoother, Hungarian/JV
-  and JPDA/MHT association, the Gaussian-mixture PHD filter, track-to-track fusion and
-  sensor registration, the Bellman/DP allocator, and the out-of-sequence, multi-rate
-  fusion pipeline that runs all of it (`gungnir_fusion_async::PIPELINE_IMPLEMENTED` is
-  `true`); the API transport (`gungnir_api::transport::serve`, `gungnir_remote::connect`,
-  both over mutual TLS); and the CPU reference for point-cloud registration.
-- **Scaffold:** the CPHD cardinality distribution and the GLMB/LMB labelled random-finite-
-  set filters (the PHD filter above is built; these would extend it); the GPU point-cloud
-  registration path (the CPU reference above is built and gated; the WGSL pipeline is
-  not); the STANAG 4676 codec; live adapters for EO/IR, acoustic, passive-RF, and
-  ISR-video sensors (radar and the SAPIENT spotter are built; a specification is pinned
-  for each of these four and none has an adapter yet); the Cursor-on-Target exchange
-  format; the `gungnir-ml` crate and its trained models; and assistant integration. Each
-  says so through a `NotImplemented` error, a `todo!()` off every runtime path, or a
-  health flag; nothing pretends to work.
+- **What is not built** is `docs/unbuilt.md`, generated from every `NotImplemented`
+  error the code returns, in the code's own words.
+- **What is still a gap, and what closed,** is the register,
+  `docs/mission/gap-analysis/gap-register.md`, generated from `data/gaps.yaml`. The
+  Cursor-on-Target exchange is GAP-090 and GAP-091 (`docs/design/DN-25-cursor-on-target.md`),
+  the assistant GAP-044, and an EO/IR adapter GAP-001; STANAG 4676 left the release under
+  D-44 (`docs/mission/gap-analysis/decisions-needed.md`).
+- **What passed its gate** is `docs/verification-capability-table.md` §1, row by row, with
+  the oracle each row was held to or the reason none was.
 
-`ARCHITECTURE.md` §10 lists what the 2026-09-04 pass fixed and what remains open.
+Among what those sources show as built: the tracking pipeline
+(`gungnir_fusion_async::PIPELINE_IMPLEMENTED` is `true`) with its filters, associators,
+random-finite-set filters, track-to-track fusion and the Bellman/DP allocator; the API
+transport (`gungnir_api::transport::serve`, `gungnir_remote::connect`, both over mutual
+TLS) and the node-held approval queue; the egui panels and the three-d viewport,
+attached to eframe's own GL context; and both binaries' startup and tick loops.
+
+Why each thing was done, and what was found doing it, is `docs/record/`.
 
 ## Running
 
@@ -173,8 +156,10 @@ Three profiles are supported by design, all built from the same crates. See
 
 The desktop selects the backend from its config baseline and switches through the
 `TrackingService` and `InterceptService` traits, so no UI code knows which profile is
-active. The API contract is decided (`docs/gungnir-api-v1.md`); its transport is the next
-addition, until which a configured remote endpoint falls back to embedded with an alert.
+active. The API contract is `docs/gungnir-api-v1.md` and its transport is
+`gungnir_api::transport` (GAP-041); a desktop whose node is unreachable falls back to
+embedded with an alert, at startup and mid-session (`gungnir-app/src/failover.rs`,
+GAP-050).
 
 ## Stack
 

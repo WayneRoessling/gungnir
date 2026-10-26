@@ -44,8 +44,14 @@ for older hosts.
 The image runs as an unprivileged user, keeps the journal on the
 `/var/lib/gungnir` volume, and reads `/etc/gungnir/config.json`
 (`deploy/node/config.example.json` is baked in as a starting point; mount your own
-over it). Port 7410 is reserved for `gungnir-api`; the transport is not implemented
-yet, so nothing listens on it in this build and the node logs that at startup.
+over it). `gungnir-api` is served on `node.bind_addr`, which the example config sets to
+`0.0.0.0:7410`. That is not a loopback address, so the node serves it only under mutual
+TLS: set `GUNGNIR_TLS_CERT`, `GUNGNIR_TLS_KEY` and `GUNGNIR_TLS_CLIENT_CA`, or
+`GUNGNIR_TLS_CLIENT_CA` alone to serve with the identity the node issues itself (the
+machine-identity section below). Without them the node logs that it is not serving and
+keeps tracking and journalling, rather than listening in plaintext
+(`gungnir-node/src/main.rs`, `spawn_transport`). A loopback `bind_addr` is served in
+the clear.
 
 ## Desktop pointing at a node
 
@@ -323,5 +329,6 @@ file dropped beside a deployment:
 The same image runs unchanged in a cloud container platform. Differences from
 on-prem are posture, not code: encryption at rest for the journal volume, key
 management off-host, and a stricter `gungnir-security` configuration
-(`ARCHITECTURE.md` §8.5). Kubernetes manifests are added here once the API
-transport exists and there is something to expose.
+(`ARCHITECTURE.md` §8.5). No Kubernetes manifests are kept here; a deployment gives the
+container what the `docker run` line above does: the journal volume, port 7410 and the
+TLS environment.

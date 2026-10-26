@@ -19,11 +19,10 @@ human to decide.
 It is one node in a system of systems: several desktops may share a node, nodes exchange
 with peers, and a desktop must keep working when it can reach neither.
 
-**It is currently a verifiable scaffold, not a fielded product.** The productization
-layer, the data model, and the wiring are real and tested. The tracking mathematics, the
-allocator, the intercept geometry, the 3D scene, and the interface transport are trait
-surfaces that return named errors and say so through health flags. Section 7 is the
-honest register.
+**It is a verifiable build, not a fielded product.** What the code still refuses is
+[`../../unbuilt.md`](../../unbuilt.md), generated from the code's own `NotImplemented`
+errors; what is still a gap, and what closed, is the register section 7 points at. Neither
+list is kept here.
 
 ## 2. The five things that shape everything else
 
@@ -137,17 +136,14 @@ Views: the actual-resources and standards domains, plus `ARCHITECTURE.md` §8 an
 
 ## 7. What is not built
 
-Eighty-three gaps in the register, of which four were filed by the machine-learning plan
-and three by this one. Grouped into eighteen work packages across three increments. The five that
-matter most to a reader deciding whether to take this seriously:
-
-| Gap | Why it dominates |
-|---|---|
-| GAP-011 the tracking pipeline | Everything in Understand and Decide waits on it, and it is human-owned |
-| GAP-041 the transport | Every connected-profile capability waits on one stack sign-off |
-| GAP-056 the performance harnesses | Every latency figure here is a budget, and nothing yet measures one |
-| GAP-039 no execution without a decision | The product's central claim has no test yet |
-| GAP-067 operational-readiness verification | A green core build could be mistaken for readiness |
+The register, [`../../mission/gap-analysis/gap-register.md`](../../mission/gap-analysis/gap-register.md),
+is generated from `data/gaps.yaml` and holds every gap with its status as its last
+history entry; [`closure-roadmap.md`](../../mission/gap-analysis/closure-roadmap.md)
+groups them into work packages and increments, and
+[`technical-gap-map.md`](../../mission/gap-analysis/technical-gap-map.md) places them
+on the crate map. What the code refuses, function by function, is
+[`../../unbuilt.md`](../../unbuilt.md). This section held a count and a top-five table
+dated 2026-09-04; both now live in those generated documents and nowhere else.
 
 The states at each increment boundary are in
 [`phase-e-opportunities-solutions/transition-architectures.md`](phase-e-opportunities-solutions/transition-architectures.md).
@@ -167,10 +163,10 @@ and [`compliance-assessment.md`](phase-g-implementation-governance/compliance-as
 
 ## 9. Requirements
 
-Fifty-eight requirements with identifiers, traced to a source, a view, a crate or gap, and
-a verification gate. Thirteen are verified today, and ten of those thirteen are
-constraints or data shapes rather than mission function. That ratio is the honest summary
-of the state of the project.
+Requirements with identifiers, each traced to a source, a view, a crate or gap, and a
+verification gate. The specification's section 8 counts them by category and says how
+many are verified and how many wait on a gap; that table, not this sentence, is where the
+figures live.
 
 Detail: [`requirements-management/architecture-requirements-specification.md`](requirements-management/architecture-requirements-specification.md).
 

@@ -95,7 +95,7 @@ role, not a job description.
 - **Tempo.** Continuous; identification within the decision window of the thread it
   serves; products at the battle rhythm.
 - **Tools.** Evidence per track, entity lineage, requirements and their status,
-  replay, reports, peer products; a requirements panel that does not exist yet.
+  replay, reports, peer products; the requirements panel (PN-15).
 - **Decisions owned.** Identity declarations for the intelligence function; merges
   and splits; product release with marking.
 - **Frustrations.** An identity assigned on one weak source; evidence not retained
@@ -111,8 +111,8 @@ role, not a job description.
 - **Tempo.** Hours to days; a plan cycle per battle rhythm; rehearsal before each
   shift.
 - **Tools.** Coverage over terrain for laydown options, resources and readiness,
-  the defended-asset list, the policy configuration, replay for rehearsal; a
-  planning panel that does not exist yet.
+  the defended-asset list, the policy configuration, replay for rehearsal; the
+  planning panel (PN-16).
 - **Decisions owned.** Laydown proposals; plan drafts; rehearsal design.
 - **Frustrations.** Comparing two laydowns by eye; a rehearsal that cannot use the
   live pipeline; a plan applied under time pressure without the rehearsal.

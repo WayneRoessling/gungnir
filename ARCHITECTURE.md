@@ -620,24 +620,20 @@ and authority engines, and a plan that clears it is queued in an
 counted and its reason kept, so PN-06 can say why the queue is empty. `AppState` holds
 the workflow and that denial history; `src/decisions.rs` is the whole of the wiring.
 
-Nothing in this build ever reaches the queue, and that is a chain of correct steps: the
-tracking pipeline is not implemented, so there are no tracks; with no tracks the
-allocator returns an empty plan; an empty plan is denied before it can be queued. The
-queue is therefore permanently calm, which is the most misleading screen in the product
-and is why PN-06 carries a required explanation rather than a count alone.
+Whether a plan reaches the queue is decided upstream of it, by what the pipeline tracks
+and what the allocator and the policy chain make of those tracks, and a calm queue reads
+as *nothing needs deciding* when it may mean *nothing upstream is running*. That is why
+PN-06 carries a required explanation rather than a count alone: `src/decisions.rs`
+derives which `EmptyBecause` is in force from the health flags and the denial history.
 
 Since GAP-071 the desktop also reads its journal twice more: `gungnir-replay` for
 PN-12's cursor and `gungnir-reporting` for PN-13's counts, and `gungnir-config`'s
 `ConfigStore` for PN-14's validate and apply. None of the three adds a source of truth;
 they add readers of the journal and the baseline the desktop already holds.
 
-Still not called from the tick: `gungnir-identity` and
-`gungnir-identification` (global identity and classification on the snapshot),
-`gungnir-assessment` (real rewards instead of the uniform matrix), `gungnir-security`
-(operator login and audit), `gungnir-workflow` (role-based layouts), `gungnir-replay`
-and `gungnir-reporting` (against the journal), and `gungnir-analytics`. Each has a
-working in-memory implementation and tests, so wiring is the remaining step;
-`AppState`'s doc comment lists where each plugs in.
+What the tick calls, and in what order, is `gungnir-app/src/update.rs` (`tick`), and
+`AppState`'s doc comment says where each crate plugs in. What a crate still refuses is
+`docs/unbuilt.md`'s, generated from the code; this section keeps no list of its own.
 
 `AppState` is a local, render-friendly projection of mission state. The system of record
 is the `gungnir-store` journal: on the desktop in the disconnected profile, on the
@@ -665,13 +661,18 @@ desktop switches between the two through the §2 traits.
 
 | Binary | Status | Hosts | Depends on |
 |---|---|---|---|
-| `gungnir-app` | Scaffolded and runnable | The operator interface, and in the disconnected profile the whole services layer | Everything (§4) |
-| `gungnir-node` | Scaffolded and runnable | The services layer and durable mission state for one or more desktops, behind `gungnir-api` | Both service facades and the productization layer; no UI or rendering crate, no `three-d`, no `wgpu` |
+| `gungnir-app` | Runnable | The operator interface, and in the disconnected profile the whole services layer | Everything (§4) |
+| `gungnir-node` | Runnable | The services layer and durable mission state for one or more desktops, behind `gungnir-api` | Both service facades and the productization layer; no UI or rendering crate, no `three-d`, no `wgpu` |
 
 `gungnir-node` targets **Linux x86_64 containers** (`deploy/node/Dockerfile`,
 `deploy/README.md`); `ci.yml` builds it for that target on every change. It runs the
 same tick loop as the desktop, journals to the configured data directory, logs health,
-and reports at startup that the API transport is not implemented yet.
+and serves `gungnir-api` on `node.bind_addr`: in plaintext on loopback only, or on any
+address under mutual TLS when the deployment provides the material
+(`GUNGNIR_TLS_CERT`, `GUNGNIR_TLS_KEY` and `GUNGNIR_TLS_CLIENT_CA`, or the client
+authority alone with the node's own issued identity; `gungnir-node/src/main.rs`,
+`spawn_transport`; GAP-041, GAP-060). Asked to serve a routable address without it, the
+node does not serve, and says so, rather than listening in the clear.
 
 ### §8.2 — Profiles
 
@@ -687,11 +688,12 @@ connected profiles the desktop runs `gungnir-remote`'s `RemoteTrackingService` a
 projection, and forward detections through `gungnir-api`. The v1 contract
 (`docs/gungnir-api-v1.md`) defines the snapshot, event stream, detection submission, and
 plan-decision endpoints; the transport (JSON over HTTP plus a WebSocket event stream,
-D-18) serves all of them but the last, which refuses with 501 because a node runs no
-approval queue. **Decisions therefore do not reach the node**: a linked desktop queues and
-decides the node's plan itself, and two desktops on one node each do so without knowing of
-the other (GAP-129). D-55 decided that the node will hold the queue for the desktops linked to
-it; `docs/design/DN-31-node-approval-queue.md` plans the change and GAP-130 to GAP-134 build it.
+D-18; GAP-041) serves all of them. **The node holds the approval queue for the desktops
+linked to it** (D-55; `docs/design/DN-31-node-approval-queue.md`; GAP-129 to GAP-134):
+it runs the policy chain, offers each item along the escalation ladder, sweeps expiry on
+its own clock and takes one decision per item through the decision route
+(`gungnir-node/src/approval.rs`), and a linked desktop draws the node's queue through
+`gungnir-remote`'s projection rather than running one of its own.
 
 ### §8.3 — Where each crate group runs
 
@@ -703,7 +705,7 @@ it; `docs/design/DN-31-node-approval-queue.md` plans the change and GAP-130 to G
 | `gungnir-store` | Local journal | Authoritative journal |
 | `gungnir-time`, `gungnir-ingest`, `gungnir-sensor-management`, `gungnir-interop` | Yes, for locally attached sensors | Yes, for sensors feeding the node |
 | `gungnir-identity`, `gungnir-identification`, `gungnir-assessment`, `gungnir-decision`, `gungnir-modelops` | Yes | Yes |
-| `gungnir-policy`, `gungnir-command` | Yes, local operator approval | `gungnir-policy` only, on every fresh plan. A node runs no approval queue: plans are decided on a desktop, and its decision route refuses with 501, so no decision reaches a node's record (GAP-129) |
+| `gungnir-policy`, `gungnir-command` | Yes, local operator approval | Yes: the same decision path through `gungnir-approval`, holding the queue for the desktops linked to the node (GAP-132, D-55) |
 | `gungnir-collab` | Linked by no binary. The arbitration rule it re-exports lives in `gungnir_model::arbitration`, which the desktop's reconciliation applies (D-53) | Linked by no binary |
 | `gungnir-resilience` | Reconciliation on reconnect. Its `StoreAndForwardQueue` has no caller and is kept, unused, for a future use (GAP-121, D-110): the desktop's outboxes are `gungnir-remote`'s | Not linked: the node accepts forwarded detections through `gungnir-api` and serves the history a desktop reconciles against |
 | `gungnir-security` | Operator login and local audit log | Authentication and authorization for every API caller; central audit log |
@@ -719,9 +721,11 @@ it; `docs/design/DN-31-node-approval-queue.md` plans the change and GAP-130 to G
 A connected desktop that loses its node must keep operating
 (`docs/gungnir-capabilities.md` §5.6):
 
-- The desktop falls back to the embedded backends and continues journaling locally.
-  Today this happens at startup when the remote endpoint is unreachable; mid-session
-  failover needs the transport's heartbeat.
+- The desktop falls back to the embedded backends and continues journaling locally: at
+  startup when the endpoint is unreachable, and mid-session when the link's silence
+  outlasts the node's heartbeat (`gungnir-app/src/failover.rs`, GAP-050). It says so on
+  the strip and the record, keeps the link retrying, and does not switch back on its own
+  (D-15).
 - Detections recorded while disconnected are store-and-forward: `RemoteTrackingService`
   queues them (bounded by `OUTBOX_CAPACITY`, oldest dropped and counted) and the link
   forwards them once the node answers. Operator decisions and audit entries stay on the
@@ -738,9 +742,7 @@ A connected desktop that loses its node must keep operating
   reconciliation is computed, and journals its verdict as `LinkEvent::ConflictArbitrated`.
   A conflict it cannot rank, because a side's role was never recorded, waits on PN-18 for
   a person permitted `plan.decide`, and the switch back waits with it (D-53,
-  `docs/record/2026-09-04/018.md`). No build puts a decision on a node's record yet,
-  since a node runs no approval queue, so outside the tests that place one there,
-  reconciliation meets no conflicting decision (GAP-129).
+  `docs/record/2026-09-04/018.md`).
 
 ### §8.5 — Security posture by profile
 
@@ -752,11 +754,13 @@ the journal and key management that does not live on the same host. The role-to-
 matrix (`gungnir_security::authz::role_permits`), the audit log, and the action names
 exist. The credential mechanism is **decided**, not open: D-02 settled it on 2026-09-04 as
 mutual TLS for machine identities and short-lived signed tokens for operator sessions.
-Neither is built -- the tokens are GAP-057 and the TLS is GAP-060, which waits on GAP-084's
-key custody (DN-22) -- so as of GAP-041 a node **serves loopback only and refuses every
-write path**, because it can protect neither the channel nor the caller's identity.
-(This sentence said the mechanism was undecided until 2026-09-05, four days after D-02
-resolved it.)
+Both are built: the tokens in `gungnir_security::token`, with the node's half in
+`gungnir-node/src/auth.rs` (GAP-057, `docs/design/DN-23-operator-authentication.md`),
+and mutual TLS in `gungnir_api::tls` (GAP-060, DN-22). A node serves plaintext on
+loopback only; a routable address needs the TLS material, and a node asked to serve one
+without it does not serve rather than listening in the clear (§8.1). A write path is
+served where its caller can be authenticated and refuses otherwise
+(`gungnir-node/src/main.rs`).
 
 ### §8.6 — Interoperability with peer systems
 
