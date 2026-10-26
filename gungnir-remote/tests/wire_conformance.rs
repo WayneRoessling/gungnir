@@ -23,6 +23,7 @@
 //! |---|---|
 //! | Zero-loss round-trip of a catalogued schema | **Yes, for `gungnir.TrackView` and `gungnir.Envelope`**, both doors: the snapshot and the event stream, against the committed test-track corpus, compared as canonical JSON bytes and not only as values |
 //! | Zero-loss round-trip of the health payload | **Yes**, `GET /v3/health` as a machine caller under an agreement listing `Health` |
+//! | Zero-loss crossing of the exchange products | **Yes**, for warnings, reports and handoffs: a real launch warning, a mission report generated from a real journal, and a handoff, each written by a signed-in desktop to its node and read by a partner over mutual TLS, compared as canonical JSON bytes and found verbatim in the served response |
 //! | An unsupported version is refused with the catalogue's error | **Yes**: a node declaring a schema version this build does not speak is refused whole, and the link says which two versions disagreed |
 //! | Public-specification samples decode partially, and nothing panics on the fuzz corpus | **No, and not applicable**: ASTERIX, AIS and STANAG are read from feeds and files, not from this transport, and stay covered in memory |
 //!
@@ -39,10 +40,6 @@
 //!   producer on this transport.
 //! * **`stanag.4676`** has no corpus and no decoder at all, and is descoped from this
 //!   release by D-44.
-//! * **Warnings, reports and handoffs** have had producers since 2026-09-08, after this
-//!   file was written, and are not checked here. `gungnir-api/tests/exchange.rs` serves
-//!   them over real TLS and compares ids and counts on placeholder bodies; a byte-for-byte
-//!   check of their real bodies is GAP-065's remaining item.
 //!
 //! `gungnir-interop/tests/conformance.rs` states the same table entry by entry, so a new
 //! catalogue entry fails there until somebody says which of these it is. This file
@@ -52,17 +49,24 @@
 mod common;
 
 use common::{until, until_following, Pki};
-use gungnir_api::transport::NodeApi;
-use gungnir_api::v3::SnapshotResponse;
+use gungnir_api::transport::{AccountTokenAuthority, NodeApi};
+use gungnir_api::v3::{ExchangeProduct, ExchangeResponse, SnapshotResponse};
 use gungnir_eventing::{Envelope, Event};
 use gungnir_model::events::TrackingEvent;
 use gungnir_model::{
-    Classification, DetectionView, ExchangeAgreement, ExchangeFormat, ExchangeItem, ExchangeSet,
-    MissionTime, Quality, Releasability, SystemHealth, TrackId, TrackStatus, TrackView,
-    SCHEMA_VERSION,
+    Classification, DecisionAttribution, DecisionId, DetectionView, ExchangeAgreement,
+    ExchangeFormat, ExchangeItem, ExchangeSet, Geodetic, Handoff, InterceptSolutionView,
+    LaunchWarningReport, MissionTime, PlanId, PlanKind, Provenance, Quality, Releasability,
+    ResourceId, SessionId, SystemHealth, TrackId, TrackStatus, TrackView, SCHEMA_VERSION,
 };
+use gungnir_remote::link::{Credential, ExchangeProductRecord};
 use gungnir_remote::peer::PeerLink;
 use gungnir_remote::{LinkTls, RemoteEndpoint};
+use gungnir_reporting::{JournalReportGenerator, ReportGenerator, TrackingMetricsSummary};
+use gungnir_security::{
+    hash_passphrase, Account, InMemoryAccountStore, OperatorId, Role, TokenIssuer,
+};
+use gungnir_store::{EventJournal, FileEventJournal};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -346,4 +350,263 @@ async fn a_node_speaking_another_schema_version_is_refused_whole() {
         peer.take_tracks().is_empty(),
         "nothing from an incompatible schema may enter the picture"
     );
+}
+
+/// The operator the desktop signs in as: a `Commander`, which holds `PUBLISH_EXCHANGE`.
+const COMMANDER: u64 = 70;
+const PASSPHRASE: &str = "correct horse battery staple";
+
+// Every body below is written through `to_partner_value`, the function
+// `ExchangeProduct::body_of` and the desktop's `product_body` both call, so a non-finite
+// float is DN-18 §15's "value unavailable" object rather than a `null` (GAP-171, D-103).
+
+/// A launch warning as `gungnir-app`'s `launch_warning::declare` publishes one, with text
+/// a re-encoding transport could mangle: non-ASCII, and a dash a careless one would not.
+fn launch_warning_record() -> ExchangeProductRecord {
+    let report = LaunchWarningReport {
+        id: "TT07-lw-0001".into(),
+        what: "Shahed-136 \u{d7} 3 from the Vell launch site \u{2014} bearing 042\u{b0}".into(),
+        at: MissionTime(1_234.567),
+        releasability: Releasability::AllPeers,
+    };
+    ExchangeProductRecord {
+        id: report.id.clone(),
+        at: report.at,
+        releasability: report.releasability.clone(),
+        body: gungnir_eventing::nonfinite::to_partner_value(&report).expect("a product body"),
+    }
+}
+
+/// A mission report generated from a real journal, as `sustainment::exchange_record`
+/// publishes one, with a diverged tracker's metrics added: the NaN and the infinity are
+/// what a replay with truth can produce, and the two values the body's encoding exists
+/// for.
+fn mission_report_record() -> ExchangeProductRecord {
+    let dir = std::env::temp_dir().join(format!(
+        "gungnir-wire-report-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos())
+    ));
+    let mut journal = FileEventJournal::open(&dir).expect("a journal");
+    let session = SessionId(41);
+    for (seq, track) in (1u64..).zip(corpus().into_iter().take(12)) {
+        journal
+            .append(
+                session,
+                &Envelope {
+                    seq,
+                    mission_time: track.mission_time,
+                    event: Event::Tracking(TrackingEvent::TrackInitiated(track)),
+                },
+            )
+            .expect("appended");
+    }
+    let mut report = JournalReportGenerator {
+        journal: &journal,
+        metrics: None,
+    }
+    .generate(session)
+    .expect("a report from the journal");
+    report.metrics = Some(TrackingMetricsSummary {
+        mota: f64::NAN,
+        motp: f64::INFINITY,
+        purity: 0.75,
+        fragmentation: 0.125,
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+    // Every journaled track is releasable to all peers, so the report's combined marking
+    // is too; anything less and the partner's gate would withhold it and this test would
+    // measure the gate.
+    assert_eq!(report.releasability, Releasability::AllPeers);
+    ExchangeProductRecord {
+        id: report.session.0.to_string(),
+        at: MissionTime(1_250.0),
+        releasability: report.releasability.clone(),
+        body: gungnir_eventing::nonfinite::to_partner_value(&report).expect("a product body"),
+    }
+}
+
+/// A handoff as the node's approval queue publishes one (`gungnir-node/src/approval.rs`):
+/// a full-width decision identifier, an intercept solution with its geodetic point, and
+/// the provenance of the track it names.
+fn handoff_record() -> ExchangeProductRecord {
+    let handoff = Handoff::from_decision(
+        DecisionId(0x0192_f3a1_7c4e_7d2b_9a10_3e5f_6b7c_8d9e),
+        PlanId(0x0192_f3a1_7c4e_7d2b_9a10_3e5f_6b7c_8d9f),
+        PlanKind::Intercept {
+            solutions: vec![InterceptSolutionView {
+                resource: ResourceId(4),
+                track: TrackId(7),
+                intercept_point: Some(Geodetic {
+                    lat_rad: 0.820_304_748_437_334_9,
+                    lon_rad: 0.244_346_095_279_206_1,
+                    alt_m: 2_150.25,
+                }),
+                time_to_intercept_s: Some(37.125),
+            }],
+        },
+        DecisionAttribution {
+            operator: "commander-70".into(),
+            role: "commander".into(),
+            at: MissionTime(1_300.0),
+            authority_rule: Some("pre-delegated: air defence, hostile UAS".into()),
+        },
+        vec![(TrackId(7), Provenance::default(), Quality::default())],
+        Releasability::AllPeers,
+        MissionTime(1_301.5),
+    );
+    ExchangeProductRecord {
+        id: format!("{:x}", handoff.decision.0),
+        at: handoff.issued,
+        releasability: handoff.releasability.clone(),
+        body: gungnir_eventing::nonfinite::to_partner_value(&handoff).expect("a product body"),
+    }
+}
+
+/// What a partner should be served for `record`: the product as the node holds it.
+fn canonical_product(record: &ExchangeProductRecord) -> String {
+    serde_json::to_string(&ExchangeProduct {
+        id: record.id.clone(),
+        at: record.at,
+        releasability: record.releasability.clone(),
+        body: record.body.clone(),
+    })
+    .expect("serialises")
+}
+
+/// A node holding one `Commander` account, and an agreement sending `partner` all three
+/// exchange items.
+fn exchange_node() -> Arc<NodeApi> {
+    let accounts = InMemoryAccountStore::new(vec![Account {
+        operator: OperatorId(COMMANDER),
+        role: Role::Commander,
+        phc: hash_passphrase(PASSPHRASE).expect("hashed"),
+    }]);
+    Arc::new(
+        NodeApi::new(SnapshotResponse::new(
+            Vec::new(),
+            None,
+            SystemHealth::default(),
+            Vec::new(),
+        ))
+        .with_exchange(ExchangeSet {
+            agreements: vec![ExchangeAgreement {
+                party: "partner".into(),
+                inbound: Vec::new(),
+                outbound: vec![
+                    ExchangeItem::Warnings,
+                    ExchangeItem::Reports,
+                    ExchangeItem::Handoffs,
+                ],
+                format: ExchangeFormat::Canonical,
+            }],
+        })
+        .with_callers(Arc::new(AccountTokenAuthority::new(
+            Box::new(accounts),
+            TokenIssuer::new(vec![5u8; 32], 300.0).expect("issuer"),
+        ))),
+    )
+}
+
+/// Criterion 1, the exchange products (GAP-065): a real launch warning, a mission report
+/// generated from a real journal, and a handoff each cross **both** hops -- a signed-in
+/// desktop's write to its node over the link, and a partner's read from that node over
+/// mutual TLS -- and arrive as the desktop wrote them, byte for byte.
+///
+/// Compared twice: as the canonical encoding of the product the partner decodes, and as
+/// the body's own bytes found verbatim in the response the node served, so a transport
+/// that re-encoded the body consistently on both sides would still be caught.
+#[tokio::test(flavor = "multi_thread")]
+async fn every_exchange_product_crosses_both_hops_with_zero_loss() {
+    let pki = Pki::new("wire-exchange");
+    let node = exchange_node();
+    let url = pki.serve(Arc::clone(&node)).await;
+    let handle = tokio::runtime::Handle::current();
+    let desktop = gungnir_remote::link::start(
+        &RemoteEndpoint {
+            url: url.clone(),
+            tls: pki.client("desktop-a"),
+        },
+        Credential {
+            operator: COMMANDER,
+            passphrase: PASSPHRASE.into(),
+        },
+        &handle,
+    )
+    .expect("the desktop's link starts");
+    until(|| desktop.connected(), "the desktop's link to come up").await;
+
+    let products = [
+        (ExchangeItem::Warnings, "warnings", launch_warning_record()),
+        (ExchangeItem::Reports, "reports", mission_report_record()),
+        (ExchangeItem::Handoffs, "handoffs", handoff_record()),
+    ];
+    for (item, _, record) in &products {
+        desktop.queue_exchange(*item, vec![record.clone()]);
+    }
+    for (item, _, _) in &products {
+        until(
+            || {
+                matches!(
+                    node.exchange_all(*item),
+                    Some(ExchangeResponse::Held { ref products, .. }) if products.len() == 1
+                )
+            },
+            "the node to hold what the desktop published",
+        )
+        .await;
+    }
+
+    let partner = http_client(&pki.client("partner"));
+    for (item, route, record) in &products {
+        let response = partner
+            .get(format!("{url}/v3/exchange/{route}"))
+            .send()
+            .await
+            .expect("the exchange route answers");
+        assert!(
+            response.status().is_success(),
+            "{route}: {}",
+            response.status()
+        );
+        let served = response.text().await.expect("a body");
+        let body_bytes = serde_json::to_string(&record.body).expect("serialises");
+        assert!(
+            served.contains(&body_bytes),
+            "{route}: the body the desktop wrote is not in the bytes the node served"
+        );
+        let ExchangeResponse::Held {
+            item: held,
+            products,
+            withheld,
+            ..
+        } = serde_json::from_str(&served).expect("an exchange response")
+        else {
+            panic!("{route}: not held: {served}");
+        };
+        assert_eq!(held, *item);
+        assert_eq!(
+            withheld, 0,
+            "{route}: the marking released it, so nothing is withheld"
+        );
+        assert_eq!(products.len(), 1, "{route}");
+        assert_eq!(
+            serde_json::to_string(&products[0]).expect("serialises"),
+            canonical_product(record),
+            "{route}: the product changed between the desktop and the partner"
+        );
+    }
+
+    // The two non-finite metrics arrived as DN-18 §15's object, which is what made the
+    // report's crossing worth checking: a `null` here would be a silent loss.
+    let report = &products[1].2.body;
+    for metric in ["mota", "motp"] {
+        assert!(
+            report["metrics"][metric].is_object(),
+            "the report's {metric} must cross as the value-unavailable object: {}",
+            report["metrics"][metric]
+        );
+    }
 }

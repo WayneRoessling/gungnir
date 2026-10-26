@@ -678,6 +678,10 @@ REL:uses:RS-remote->RS-tracking-service,uafRelationship,uses
 REL:uses:RS-remote->RS-intercept-service,uafRelationship,uses
 REL:uses:RS-remote->RS-analytics,uafRelationship,uses
 REL:uses:RS-remote->RS-analytics,registry.kind,dev
+REL:uses:RS-remote->RS-reporting,uafRelationship,uses
+REL:uses:RS-remote->RS-reporting,registry.kind,dev
+REL:uses:RS-remote->RS-store,uafRelationship,uses
+REL:uses:RS-remote->RS-store,registry.kind,dev
 REL:uses:RS-replay->RS-model,uafRelationship,uses
 REL:uses:RS-replay->RS-eventing,uafRelationship,uses
 REL:uses:RS-replay->RS-store,uafRelationship,uses

@@ -595,6 +595,8 @@ REL:uses:RS-remote->RS-api,uses,,RS-remote,RS-api,uses: RS-remote -> RS-api,Depe
 REL:uses:RS-remote->RS-tracking-service,uses,,RS-remote,RS-tracking-service,uses: RS-remote -> RS-tracking-service,Dependency
 REL:uses:RS-remote->RS-intercept-service,uses,,RS-remote,RS-intercept-service,uses: RS-remote -> RS-intercept-service,Dependency
 REL:uses:RS-remote->RS-analytics,uses,,RS-remote,RS-analytics,uses: RS-remote -> RS-analytics,Dependency
+REL:uses:RS-remote->RS-reporting,uses,,RS-remote,RS-reporting,uses: RS-remote -> RS-reporting,Dependency
+REL:uses:RS-remote->RS-store,uses,,RS-remote,RS-store,uses: RS-remote -> RS-store,Dependency
 REL:uses:RS-replay->RS-model,uses,,RS-replay,RS-model,uses: RS-replay -> RS-model,Dependency
 REL:uses:RS-replay->RS-eventing,uses,,RS-replay,RS-eventing,uses: RS-replay -> RS-eventing,Dependency
 REL:uses:RS-replay->RS-store,uses,,RS-replay,RS-store,uses: RS-replay -> RS-store,Dependency

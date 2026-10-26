@@ -115,7 +115,7 @@ deployment, and UI crates, from the crate manifests:
 | `gungnir-tracking-service` | `core`, `coord`, `filters`, `association`, `track`, `rfs`, `track-fusion`, `fusion-async`, `model` |
 | `gungnir-intercept-service` | `core`, `coord`, `allocation`, `model` |
 | `gungnir-data-fusion` | `data` |
-| `gungnir-remote` | `model`, `eventing`, `api`, `tracking-service`, `intercept-service`, `security` (t) |
+| `gungnir-remote` | `model`, `eventing`, `api`, `tracking-service`, `intercept-service`, `security` (t) (dev: `analytics`, `reporting`, `store`) |
 | `gungnir-node` | `model`, `config`, `mission`, `eventing`, `store`, `time`, `ingest`, `sensor-management`, `tracking-service`, `intercept-service`, `api`, `analytics` (g), `security`, `observability`, `modelops` (h), `policy` (k), `geo` (l), `remote` (p), `identity` (s), `approval` (y), `command` (y), `data` (ab) |
 | `gungnir-ui` | `model` |
 | `gungnir-viewport3d` | `data`, `data-fusion`, `model`, `ui` (theme only) |
