@@ -45,7 +45,7 @@ restated fact is a stale fact the day the source moves.
   `docs/verification-capability-table.md` -- not only a widening.
 - `docs/record/README.md`: how the record works. Items 1 to 136 and 96A are what
   `ARCHITECTURE.md` §10 held, under the same numbers.
-- `docs/plans/README.md`: the eleven plans and the folders their deliverables go to.
+- `docs/plans/README.md`: the twelve plans and the folders their deliverables go to.
 
 ## Hard rules
 

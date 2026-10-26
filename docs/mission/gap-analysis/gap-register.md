@@ -197,8 +197,46 @@ history, and an entry is never edited once it has merged.
 | GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | L | 32 | I4 | UI engineer | Closed |
 | GAP-202 | A cut-off desktop that restarts forgets the gap acceptances it owed its node | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | S | 12 | I3 | Services engineer | Closed |
 | GAP-201 | A linked desktop could miss a queued item until the queue moved again | Technical | CAP-5.9, CAP-4.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
+| GAP-203 | Weapons control status cannot be changed while the desktop runs | Technical | CAP-3.6, CAP-5.9 | 5 | 10 | M | 50 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-204 | The desktop cannot provision its own accounts | Technical | CAP-6.1, CAP-7.3 | 3 | 10 | S | 30 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-205 | A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second | Technical | CAP-1.5 | 3 | 7 | M | 21 | I3 | Services engineer | Open |
+| GAP-206 | No production track is releasable, so track exchange has no producer | Technical | CAP-6.6, CAP-7.4, CAP-1.6 | 5 | 5 | M | 25 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-207 | An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop | Technical | CAP-4.4, CAP-4.6 | 4 | 5 | L | 20 | I3 | Services engineer | Open |
+| GAP-208 | The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks | Technical | CAP-6.3 | 4 | 9 | M | 36 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-209 | Reconciliation arbitration ranks a role string the desktop's own journal asserts | Technical | CAP-5.4, CAP-4.2 | 4 | 6 | M | 24 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-210 | Configuration baselines are not signed | Technical | CAP-5.6, CAP-6.4 | 4 | 2 | M | 8 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-211 | Issued identities never expire and nothing revokes them | Technical | CAP-6.1, CAP-6.4 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-212 | Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends | Technical | CAP-6.1, CAP-6.2 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-213 | Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll | Technical | CAP-6.7, CAP-1.2 | 3 | 9 | M | 27 | I3 | Services engineer | Open |
+| GAP-214 | The transport has no request timeout, connection cap or pre-credential deadline | Technical | CAP-7.1, CAP-6.4 | 3 | 6 | S | 18 | I3 | Services engineer | Open |
+| GAP-215 | Sealed files inherit directory permissions on Windows, and nothing is zeroized | Technical | CAP-6.4 | 3 | 2 | S | 6 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-216 | Identity is four states; STANAG 1241's are absent | Technical | CAP-2.6, CAP-7.4 | 4 | 7 | M | 28 | I4 | Services engineer | Open |
+| GAP-217 | Airspace control measures are a circle with a flag, and the fires chain's deconfliction checks never evaluate | Technical | CAP-3.6, CAP-3.8, CAP-2.11 | 4 | 7 | L | 28 | I4 | Security engineer (human-owned crate) | Open |
+| GAP-218 | No global track identity crosses a peer link, and a peer's track can be re-ingested in a loop | Technical | CAP-2.7, CAP-1.6, CAP-2.3 | 4 | 5 | L | 20 | I4 | Services engineer | Open |
+| GAP-219 | Two nodes with overlapping sectors can each engage the same object unseen by the other | Technical | CAP-4.6, CAP-7.4 | 4 | 5 | M | 20 | I4 | Services engineer | Open |
+| GAP-220 | The cloud profile has no scaling or availability design | Technical | CAP-7.3, CAP-5.10 | 3 | 8 | L | 24 | I4 | Services engineer | Open |
+| GAP-221 | Node budgets have no fan-out, snapshot-latency or recovery harness | Technical | CAP-5.10 | 3 | 8 | M | 24 | I4 | Services engineer | Open |
+| GAP-222 | No metrics export | Technical | CAP-5.5 | 2 | 8 | S | 16 | I4 | Services engineer | Open |
+| GAP-223 | The alert lifecycle is not wired, and PN-08 is a list of strings | Technical | CAP-5.5, CAP-5.9 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
+| GAP-224 | The desktop has no keyboard operation | Technical | CAP-5.9 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
+| GAP-225 | The map cannot hook a track and draws no defended assets or effectors | Technical | CAP-5.9, CAP-3.1, CAP-4.1 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
+| GAP-226 | The three-d scene is the default and has never been seen; the track table is not virtualised | Technical | CAP-5.10, CAP-5.9 | 2 | 10 | S | 20 | I4 | UI engineer | Open |
+| GAP-227 | No basemap, no standard symbology, no declutter, no geographic readout | Technical | CAP-2.10, CAP-5.9 | 3 | 10 | L | 30 | I4 | UI engineer | Open |
+| GAP-228 | No operator-initiated escalation | Technical | CAP-3.7, CAP-3.6 | 3 | 7 | S | 21 | I4 | Security engineer (human-owned crate) | Open |
+| GAP-229 | No system safety assessment for the engagement authority path | Technical | CAP-4.3, CAP-3.6 | 4 | 7 | L | 28 | I4 | Owner | Open |
+| GAP-230 | No cybersecurity accreditation package | Technical | CAP-6.5, CAP-6.4 | 4 | 2 | L | 8 | I4 | Owner | Open |
+| GAP-231 | No operator guide, training material, or desktop installation guide | Technical | CAP-5.9 | 3 | 10 | M | 30 | I4 | Services engineer | Open |
+| GAP-232 | No data-rights, export-control or license-status statement | Technical | CAP-6.5 | 3 | 1 | S | 3 | I4 | Owner | Open |
+| GAP-233 | No dated test report, no software version description, and the overview is a stale self-audit | Technical | CAP-6.5, CAP-5.10 | 3 | 8 | M | 24 | I4 | Services engineer | Open |
+| GAP-234 | Lock-poisoning handling is inconsistent across 198 acquisitions | Technical | CAP-5.5 | 2 | 8 | M | 16 | I4 | Services engineer | Open |
+| GAP-235 | Three source files exceed 3,700 lines, and 62 functions carry too_many_lines allows | Technical | CAP-7.3 | 1 | 1 | M | 1 | I4 | Services engineer | Open |
+| GAP-236 | String-typed errors on the remote identity surface and 41 desktop sites | Technical | CAP-6.1 | 2 | 10 | M | 20 | I4 | Security engineer (human-owned crate) | Open |
+| GAP-237 | gungnir-approval's deliveries, engagements and handoffs have no in-crate tests | Technical | CAP-4.3, CAP-4.4 | 3 | 6 | S | 18 | I4 | Security engineer (human-owned crate) | Open |
+| GAP-238 | The workspace lints do not enforce the no-unsafe, no-unwrap and documented-items properties | Technical | CAP-6.5 | 1 | 1 | S | 1 | I4 | Services engineer | Open |
+| GAP-239 | The laydown rehearsal blocks the frame thread, and the event bus has no subscriber depth bound | Technical | CAP-5.10, CAP-5.2 | 2 | 8 | S | 16 | I4 | UI engineer | Open |
+| GAP-240 | Dependency-linkage notes and advisory ignores have drifted | Technical | CAP-6.5 | 1 | 1 | S | 1 | I4 | Services engineer | Open |
 
-Counts: 184 gaps, 3 mission, 181 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 222 gaps, 3 mission, 219 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -2846,4 +2884,507 @@ Counts: 184 gaps, 3 mission, 181 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: GAP-133; DN-31 §6.6; `../../record/2026-10-24/the-queue-s-picture-goes-out-before-its.md`.
 - Depends on: GAP-133.
+
+**GAP-203 Weapons control status cannot be changed while the desktop runs**
+
+- Type: Technical.
+- Capability: CAP-3.6 Rules of engagement; CAP-5.9 Role workspaces and workflow.
+- History:
+  - 2026-10-26, Open: Filed by plan 12 from the review's small-unit findings: the one control an operator must have during a raid is the one the desktop cannot give without a restart.
+- Evidence: `gungnir-model/src/policy_settings.rs` (`WeaponsControlStatus` defaults to `Hold`); `gungnir-app/src/sustainment.rs:921` (`SET_CONTROL_STATUS` gates a baseline apply only); `gungnir-app/src/main.rs:1039` ("takes effect when the desktop restarts"); no `control_status` route in `gungnir-api/src/transport.rs`; `../../ux/usability-round-1-session.md:71` (US-07 blocked).
+- Severity: 5. Reach: 10 threads. Effort: M. Priority: 50.
+- Impact: A raid that starts under `Hold` stays under `Hold` until an operator edits the baseline JSON and restarts the application. US-07 is blocked, and one layer at `Hold` refuses every plan on every layer (GAP-183, D-114), so a single operator at a site cannot run the live loop at all.
+- Closing action: A live, audited change of `PolicySettings.control_status` per effector layer from a PN-07-style dialog under `SET_CONTROL_STATUS`, journaled as a command event and applied without a restart; the same through a node route for linked desktops, with the node's policy chain re-running on the next plan; a render test that the dialog never defaults to a more permissive status than the one in force.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: DN-09; GAP-033; GAP-183; D-140; `../../review/2026-10-26-comprehensive-review.md` §6 finding 2.
+
+**GAP-204 The desktop cannot provision its own accounts**
+
+- Type: Technical.
+- Capability: CAP-6.1 Authenticate; CAP-7.3 Three profiles.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. GAP-057 built the account store and the node's command; nothing reaches it from a Windows desktop.
+- Evidence: `gungnir-node/src/account.rs:136-153` (the only writer; passphrase echo not suppressed at lines 20-24); `.github/workflows/release.yml:92-97`; `gungnir-app/src/state.rs:974-978`; `gungnir-app/src/failover.rs:29-35`; `gungnir-config/src/lib.rs:1286`.
+- Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
+- Impact: The release ships `gungnir-app` for Windows and `gungnir-node` for Linux, and the only writer of the accounts file is `gungnir-node account add`. A laptop in the field runs with nobody signed in; its decisions record no role, and D-03 arbitration cannot rank them on reconnect.
+- Closing action: `gungnir-app account add|list` sharing `account.rs` as a library target, passphrase from standard input with echo suppressed, documented in `deploy/README.md` beside the node's; or ship `gungnir-node.exe` beside the desktop and document the one line.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: GAP-057; DN-23; `../../review/2026-10-26-comprehensive-review.md` §6 finding 4.
+
+**GAP-205 A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second**
+
+- Type: Technical.
+- Capability: CAP-1.5 Time discipline.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. GAP-008 detects skew; nothing corrects it, and the default buffer assumes a disciplined host.
+- Evidence: `gungnir-time/src/lib.rs:221-226` (`SystemTime::now`), `:87-130` (skew per source), `:138-158` and `:204-213` (out-of-sync drop); no NTP, PPS or GNSS reference in any `.rs` file.
+- Severity: 3. Reach: 7 threads. Effort: M. Priority: 21.
+- Impact: `WallClockAuthority` is the host's `SystemTime`. A free-running laptop clock against a GPS-disciplined radar drifts past the one-second late-data default within hours, and the pipeline then drops that source as out of sync. There is no own-position concept for a unit on the move: the frame origin and every sensor position are static baseline entries.
+- Closing action: A `ClockSource` authority that can be disciplined from a named sensor's time stamps, a documented wider `late_data` for undisciplined hosts, PN-09 saying which source disciplines the clock; a deployment note for the trial. A mobile frame origin is a separate gap once a mobile unit is in scope.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: GAP-008; GAP-140; `../../review/2026-10-26-comprehensive-review.md` §6 finding 3.
+
+**GAP-206 No production track is releasable, so track exchange has no producer**
+
+- Type: Technical.
+- Capability: CAP-6.6 Releasability; CAP-7.4 Peer and coalition exchange; CAP-1.6 Peer early warning.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. GAP-062 built the marking and GAP-065 the gate; nothing in a production path ever sets a track to anything but `Internal`.
+- Evidence: `gungnir-tracking-service/src/lib.rs:355` and `gungnir-node/src/entities.rs:252` (`Releasability::default()`); `gungnir-model/src/lib.rs:454-465` (`DetectionView` carries no marking); no `releasab` in `gungnir-config/src/lib.rs`; `gungnir-remote/tests/wire_conformance.rs:120,370` (tracks built as `AllPeers`).
+- Severity: 5. Reach: 5 threads. Effort: M. Priority: 25.
+- Impact: Both projections stamp `Releasability::Internal`, no configuration field sets anything else, and the exchange gate withholds `Internal`. A track never crosses a peer link or an exchange agreement outside the tests that build it as `AllPeers`; the two-node picture the architecture describes has no producer. The same default is what today prevents the re-ingest loop GAP-218 names.
+- Closing action: A `default_releasability` per deployment and per sensor and peer in the baseline, as DN-17 §5 and §6 specified, carried on `Provenance` into `project_track` and the node's projection and combined on fusion to the most restrictive input; a two-node test that one tracker-produced track crosses the wire and one `Internal` track does not.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: DN-17 §5, §6; GAP-062; GAP-065; `../../review/2026-10-26-comprehensive-review.md` §4 finding 1.
+
+**GAP-207 An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop**
+
+- Type: Technical.
+- Capability: CAP-4.4 Handoff with provenance; CAP-4.6 Track engagements and effects.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. Which effector is the trial's is D-144; the adapter and the return path are the work.
+- Evidence: `gungnir-app/src/handoff.rs:79-94` (`Manual` or a generic JSON endpoint); no `TcpListener::bind` in `gungnir-app/src`; GAP-040's history.
+- Severity: 4. Reach: 5 threads. Effort: L. Priority: 20.
+- Impact: No adapter speaks to a jammer or an interceptor. The `EffectorReport` route lives on the node only and the desktop binds no listener, so in the disconnected profile no effector outcome ever comes back by data: PN-05 reminds the operator to make a radio call and never learns what happened.
+- Closing action: One effector adapter against the trial's effector interface behind the existing delivery trait, and an outcome path for the embedded profile (a loopback report route, or an adapter-side poll) so PN-05 shows the report where a linked desktop already does.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: DN-07; GAP-040; GAP-043; `../../review/2026-10-26-comprehensive-review.md` §6 finding 2.
+- Depends on: D-144.
+
+**GAP-208 The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks**
+
+- Type: Technical.
+- Capability: CAP-6.3 Audit.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. GAP-163 put the head outside the file; the file it chose is one the same account can rewrite.
+- Evidence: `gungnir-security/src/audit/anchor.rs:12-16` (the chain is unkeyed and the head is in the journal); `audit.rs:42-46`; `audit.rs:667-682` (`line_hash` is plain SHA-256); `keystore.rs:191-199`; `os_keystore.rs:161-169`.
+- Severity: 4. Reach: 9 threads. Effort: M. Priority: 36.
+- Impact: On a disconnected desktop the operator who can edit the audit file can also reseal the journal with a rewritten head, because the journal's sealing key is unlocked from that operator's own keystore. The chain finds a torn or edited line; it cannot find a rewrite by its own writer.
+- Closing action: Sign each anchor and segment close under a purpose the operator session cannot unlock (D-142 names it); push anchors to the node when linked so the node holds a head the desktop cannot reach; verification reports which anchors were signed and by what.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: GAP-163; GAP-179; DN-23 §14; `../../review/2026-10-26-comprehensive-review.md` §5 finding 1.
+- Depends on: D-142.
+
+**GAP-209 Reconciliation arbitration ranks a role string the desktop's own journal asserts**
+
+- Type: Technical.
+- Capability: CAP-5.4 Disconnected and reconcile; CAP-4.2 Record every decision.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. D-03's rule is right; the input it ranks is the one thing on a disconnected desktop nobody else vouches for.
+- Evidence: `gungnir-model/src/arbitration.rs:27-30,52-54` (rank of the role the side was decided under, as recorded); `gungnir-command/src/lib.rs:149-156` (`role` as the caller supplied it); `gungnir-remote/src/link.rs:2042`; DN-31 §6.8.
+- Severity: 4. Reach: 6 threads. Effort: M. Priority: 24.
+- Impact: A forged or edited desktop journal can win a decision conflict on reconnect, and a forwarded outage batch carries the self-asserted role to the node. A replayed batch is caught by the request-id key; a fabricated one is not.
+- Closing action: The node re-derives the role of every forwarded decision from its own account store by operator id and refuses a mismatch with an audit entry; arbitration takes the node-derived rank where one exists; the desktop keeps its recorded role for display.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: D-03; DN-31 §13; `../../review/2026-10-26-comprehensive-review.md` §5 finding 2.
+
+**GAP-210 Configuration baselines are not signed**
+
+- Type: Technical.
+- Capability: CAP-5.6 Baselines and plans; CAP-6.4 Data protection.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. The key purpose has existed since DN-22; nothing produces or checks a signature with it.
+- Evidence: `gungnir-security/src/keys.rs:44-46` (`BaselineSigning` declared); the only other references are the purpose-code tables (`provider.rs:81,89`, `asymmetric.rs:49,546`); no signature in `gungnir-config/src/lib.rs`.
+- Severity: 4. Reach: 2 threads. Effort: M. Priority: 8.
+- Impact: A baseline carries the authority rules, the sensor allow-list, the exchange agreements and the escrow public key. Unsigned, it is the highest-value tamper target on a disconnected host, and `../../../ARCHITECTURE.md` §8.5 lists signed baselines as a node need.
+- Closing action: Sign a baseline with a deployment key under `BaselineSigning`; verify on load and on apply in both binaries; refuse an unsigned or mis-signed baseline in the connected profiles and warn on the disconnected desktop until the deployment key exists; audit the signer on `config.apply`.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: DN-22; GAP-084; GAP-162; `../../review/2026-10-26-comprehensive-review.md` §5 finding 3.
+
+**GAP-211 Issued identities never expire and nothing revokes them**
+
+- Type: Technical.
+- Capability: CAP-6.1 Authenticate; CAP-6.4 Data protection.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. D-135 settled naming and persistence; validity and revocation were not part of it.
+- Evidence: `gungnir-remote/src/identity.rs:356` (`CertificateParams` with no validity window); `gungnir-api/src/tls.rs:137-139,176-178` (no CRLs); `gungnir-node/src/main.rs:1633-1636` (pinned).
+- Severity: 3. Reach: 10 threads. Effort: M. Priority: 30.
+- Impact: A desktop or node identity issued on the persistent key is valid from 1975 to 4096 by rcgen's defaults, the verifier carries no revocation list, and identities are self-signed and pinned, so a compromised desktop key stays trusted until an operator edits the client-authority file by hand.
+- Closing action: A validity window per role, re-issued on the persistent key before expiry; `with_crls` or a pinned-fingerprint deny list in the baseline; PN-01 shows days to expiry.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: D-135; GAP-060; `../../review/2026-10-26-comprehensive-review.md` §5 finding 4.
+
+**GAP-212 Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends**
+
+- Type: Technical.
+- Capability: CAP-6.1 Authenticate; CAP-6.2 Authorize by role, class, layer.
+- History:
+  - 2026-10-26, Open: Filed by plan 12 as one work package: five findings on the same token path, each small on its own.
+- Evidence: `gungnir-node/src/auth.rs:17,55-56`; `gungnir-security/src/token.rs:43-51,79-83,154-162`; `gungnir-api/src/transport.rs:309-361`; `gungnir-app/src/state.rs:1592-1596`; `gungnir-time/src/lib.rs:221-226`.
+- Severity: 3. Reach: 10 threads. Effort: M. Priority: 30.
+- Impact: The node's MAC key is whatever `GUNGNIR_TOKEN_KEY` holds past a length check; a token carries its role and is never re-read from the account store, so a demoted operator keeps authority until expiry; nothing revokes a token; expiry is compared on the wall clock, so a set-back clock re-accepts one; the disconnected session has no lifetime by default and no idle timeout; sign-in back-off is keyed by operator id alone.
+- Closing action: A `SessionToken` purpose in the key provider (an HKDF of the environment string as the bridge); re-read the role on each authorization; a revocation set keyed by operator and issued-before; a mandatory lifetime maximum and an idle timeout (D-143); expiry against a monotonic clock captured at issue; a clock step backwards audited; back-off keyed by peer address and operator.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: DN-23; GAP-057; `../../review/2026-10-26-comprehensive-review.md` §5 findings 5 to 8.
+- Depends on: D-143.
+
+**GAP-213 Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll**
+
+- Type: Technical.
+- Capability: CAP-6.7 Untrusted input; CAP-1.2 Validate and quarantine.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. GAP-076 seeded the corpus; the targets stopped at three.
+- Evidence: `gungnir-fuzz/Cargo.toml:24-40` (three targets); `gungnir-ingest/src/lib.rs:66-67`; `gungnir-ingest/src/adapters/misb.rs:76-87`.
+- Severity: 3. Reach: 9 threads. Effort: M. Priority: 27.
+- Impact: The nightly fuzz run found a real defect on its first night (GAP-103) and the MISB length stall was found only in human review; SAPIENT (the largest parser), MISB, ADS-B, AIS and the Category 129 and 205 decoders have no target. `AllowAllAuthenticator` is documented as never for a deployed profile and nothing refuses it when `node` is set.
+- Closing action: Targets for SAPIENT, MISB, ADS-B, AIS, Cat 129 and Cat 205 seeded from the corpora under `testdata/`; `gungnir-config` validation refuses `AllowAll` in a node baseline.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: GAP-076; GAP-103; `../../review/2026-10-26-comprehensive-review.md` §5 finding 9.
+
+**GAP-214 The transport has no request timeout, connection cap or pre-credential deadline**
+
+- Type: Technical.
+- Capability: CAP-7.1 Versioned interface; CAP-6.4 Data protection.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-api/src/transport.rs:2125-2131,2150-2157,3704-3714`; no `with_protocol_versions` or `CryptoProvider` anywhere.
+- Severity: 3. Reach: 6 threads. Effort: S. Priority: 18.
+- Impact: The WebSocket upgrades before any credential and waits for the subscribe frame without a deadline, so a peer holding a valid certificate can hold sockets open indefinitely; body size is the framework default; TLS 1.2 is still negotiable. All of it sits behind mutual TLS, which is why the severity is not higher.
+- Closing action: A handshake-to-subscribe deadline, a timeout layer, a concurrency limit, an explicit body limit, TLS 1.3 only. The FIPS provider question is GAP-230's.
+- Target: I3. Owner: Services engineer. Status: Open.
+- Reference: GAP-041; `../../review/2026-10-26-comprehensive-review.md` §5 finding 11.
+
+**GAP-215 Sealed files inherit directory permissions on Windows, and nothing is zeroized**
+
+- Type: Technical.
+- Capability: CAP-6.4 Data protection.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-security/src/keystore.rs:226-235`; `account_store.rs:190-199`; `managed_service.rs:196`; `gungnir-node/src/account.rs:210-220`; no `zeroize` in any manifest.
+- Severity: 3. Reach: 2 threads. Effort: S. Priority: 6.
+- Impact: `keystore.sealed`, `accounts.sealed` and `keystore.kms-wrapped` are written with `std::fs::write` and no permission handling; the only `set_permissions` is Unix-only and for the plaintext PHC file. The AES wrapping key, the token key and the link's passphrase stay in heap memory until dropped. The default data directory is under the working directory.
+- Closing action: An owner-only DACL on Windows and mode 0600 on Unix for every sealed file; `zeroize::Zeroizing` around the three secrets, with its §2.9 row and the Decision and Duplicate linkage lines a new crate needs; the data directory defaults to the per-user profile.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: DN-22; `../../review/2026-10-26-comprehensive-review.md` §5 finding 10.
+
+**GAP-216 Identity is four states; STANAG 1241's are absent**
+
+- Type: Technical.
+- Capability: CAP-2.6 Classify and identify; CAP-7.4 Peer and coalition exchange.
+- History:
+  - 2026-10-26, Open: Filed by plan 12 ahead of the Cursor-on-Target build (GAP-090, GAP-091), which needs something to map its type letters to.
+- Evidence: `gungnir-model/src/lib.rs:301-325`; `gungnir-identification/src/lib.rs:35-48`.
+- Severity: 4. Reach: 7 threads. Effort: M. Priority: 28.
+- Impact: `Classification` is `Unknown`, `Neutral`, `Friendly`, `Hostile`. Pending, Assumed Friend, Suspect, Joker and Faker do not exist, and the lethality weight of `Unknown` is 0.8, which an allied operator would read as Suspect without the word. Every outbound bearer (Cursor-on-Target's type letters first) needs the wider set.
+- Closing action: Per D-136: widen `Classification` with `Unknown` kept as the default, map Pending, Assumed Friend and Suspect into the risk weight, carry Joker and Faker for exercises, bump the schema version under the compatibility rule, and derive the Cursor-on-Target type letter from it.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: DN-25 §1; GAP-018; `../../review/2026-10-26-comprehensive-review.md` §7 finding 5.
+- Depends on: D-136.
+
+**GAP-217 Airspace control measures are a circle with a flag, and the fires chain's deconfliction checks never evaluate**
+
+- Type: Technical.
+- Capability: CAP-3.6 Rules of engagement; CAP-3.8 Fires tasks; CAP-2.11 Geometric questions.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. DN-05 named the checks; the inputs they need were never given a type.
+- Evidence: `gungnir-geo/src/lib.rs:41-50`; `gungnir-config/src/lib.rs:2435-2442`; `gungnir-approval/src/chain.rs:173-192,253-254`; `gungnir-policy/src/fires.rs:81-82,137-156`; `gungnir-model/src/policy_settings.rs:122-128`.
+- Severity: 4. Reach: 7 threads. Effort: L. Priority: 28.
+- Impact: `Geofence` is a circle with a `no_go` flag whose `contains` ignores altitude. The fires chain receives airspace measures and no-fire areas as `None` with "no source", so two of its checks are permanently "could not be evaluated". Weapons control status is per effector layer, never per zone; no engagement zone, restricted operations zone, coordinating altitude or kill box exists, so an airspace control order from higher has nothing to land in.
+- Closing action: A design note (DN-34) for a polygon measure with an altitude band and a kind (ROZ, MEZ, WEZ, NFA, RFA, coordinating altitude, kill box) in `gungnir-geo`, read from the baseline now and from an airspace control order import later, feeding both the intercept and the fires chains; weapons control status keyed by layer and zone; PN-11 draws them.
+- Target: I4. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: DN-05; DN-09; GAP-036; GAP-088; `../../review/2026-10-26-comprehensive-review.md` §7 finding 2.
+
+**GAP-218 No global track identity crosses a peer link, and a peer's track can be re-ingested in a loop**
+
+- Type: Technical.
+- Capability: CAP-2.7 Global identity; CAP-1.6 Peer early warning; CAP-2.3 Sensor registration.
+- History:
+  - 2026-10-26, Open: Filed by plan 12. Depends on GAP-206 because the loop is unreachable until a track can leave a node.
+- Evidence: `gungnir-node/src/main.rs:2180-2183`; `gungnir-ingest/src/adapters/peer.rs:161-201`; `gungnir-track-fusion/src/lib.rs:128-200`.
+- Severity: 4. Reach: 5 threads. Effort: L. Priority: 20.
+- Impact: `GlobalEntityId` is minted per node and never placed on `TrackView`, so nothing crosses the wire; `PeerOrigin.remote_track` is the peer's session-local id as a string; the peer adapter overwrites `provenance.peer` and the gateway has no loop guard, so two mutually configured peers would re-ingest each other's tracks as fresh measurements. The covariance-intersection fuser exists and the peer path does not use it.
+- Closing action: Carry `GlobalEntityId` and the originating node on `TrackView` and the wire; refuse re-ingest of a lineage that already contains the receiver; route peer tracks through covariance intersection in `gungnir-track-fusion` rather than the measurement path; a system track number as the pair (node, `GlobalEntityId`).
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: DN-16; GAP-009; GAP-123; `../../review/2026-10-26-comprehensive-review.md` §4 finding 2.
+- Depends on: GAP-206.
+
+**GAP-219 Two nodes with overlapping sectors can each engage the same object unseen by the other**
+
+- Type: Technical.
+- Capability: CAP-4.6 Track engagements and effects; CAP-7.4 Peer and coalition exchange.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `../../design/DN-31-node-approval-queue.md` §11; `gungnir-resilience/src/lib.rs:121-138`.
+- Severity: 4. Reach: 5 threads. Effort: M. Priority: 20.
+- Impact: DN-31 §11 scopes shared queues out and `BothActed` is keyed by a local `TrackId`, so nothing tells a node that its neighbour has opened an engagement on the same object.
+- Closing action: Per D-141: publish engagement opened and closed over the exchange keyed by the global identity; a linked desktop and a peer show a neighbour's engagement on the track; sector ownership is the decision's second half.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: DN-06; DN-18; `../../review/2026-10-26-comprehensive-review.md` §4 finding 3.
+- Depends on: GAP-218, D-141.
+
+**GAP-220 The cloud profile has no scaling or availability design**
+
+- Type: Technical.
+- Capability: CAP-7.3 Three profiles; CAP-5.10 Performance budgets.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-node/src/main.rs:2082-2323`; `main.rs:2236`; `deploy/README.md` (no manifests).
+- Severity: 3. Reach: 8 threads. Effort: L. Priority: 24.
+- Impact: One single-threaded loop owns ingest, tracking, planning, policy, the queue, audit, coverage (recomputed every tick), the journal and publication; every structure is in memory; tokens are minted in process; there is no replication, leader election or manifest. The cloud profile is the on-prem container on another host.
+- Closing action: Per D-138: a design note with the scaling model, active/standby through journal shipping or an explicit vertical-only position, and the manifests; coverage recomputed only when the registry or the baseline changes.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: `../../../ARCHITECTURE.md` §8; `../../review/2026-10-26-comprehensive-review.md` §4 finding 5.
+- Depends on: D-138.
+
+**GAP-221 Node budgets have no fan-out, snapshot-latency or recovery harness**
+
+- Type: Technical.
+- Capability: CAP-5.10 Performance budgets.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `docs/performance-budgets.md:14-15,197-209`; `gungnir-node/benches/node_load.rs`; `gungnir-node/tests/`.
+- Severity: 3. Reach: 8 threads. Effort: M. Priority: 24.
+- Impact: The budgets name 5,000 detections a second, p99 150 ms to the stream, ten desktops, 50 ms snapshot at 500 tracks and 30 s recovery; the only node harness measures ingest and fsync with the tracker stubbed, so every other number is unevidenced.
+- Closing action: A ten-desktop fan-out harness over the real transport measuring detection-to-stream p99 and snapshot latency at 500 tracks, and recovery time after a kill; rows in the verification table §2.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: GAP-056; GAP-067; `../../review/2026-10-26-comprehensive-review.md` §4 finding 6.
+
+**GAP-222 No metrics export**
+
+- Type: Technical.
+- Capability: CAP-5.5 Health and alert lifecycle.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-observability/src/lib.rs`; no Prometheus or OpenTelemetry reference in any source or manifest; `docs/architecture/uaf/model/elements.yaml:273`.
+- Severity: 2. Reach: 8 threads. Effort: S. Priority: 16.
+- Impact: Health is three booleans and a log line of counters every ten seconds; nothing a monitoring stack can scrape. The UAF registry describes metrics, structured logs and distributed traces that do not exist.
+- Closing action: A `/metrics` text exposition of the counters the health line already holds, and traces behind a feature; the registry description corrected to what is built.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: `../../review/2026-10-26-comprehensive-review.md` §4 finding 8.
+
+**GAP-223 The alert lifecycle is not wired, and PN-08 is a list of strings**
+
+- Type: Technical.
+- Capability: CAP-5.5 Health and alert lifecycle; CAP-5.9 Role workspaces and workflow.
+- History:
+  - 2026-10-26, Open: Filed by plan 12 for GAP-055's leftover, which had no open id.
+- Evidence: `gungnir-app/src/state.rs:265`; `gungnir-ui/src/panels/alerts.rs:55-64`; `gungnir-workflow/src/lib.rs:341-415`.
+- Severity: 4. Reach: 10 threads. Effort: M. Priority: 40.
+- Impact: `AppState.alerts` is a `Vec<String>`; `AlertLifecycle` with new, acknowledged, escalated and closed exists in `gungnir-workflow` and is used only by its own test; there is no acknowledge, escalate or close control, so FL-01, US-05 and the strip's by-state counts are all unbuilt.
+- Closing action: `AppState.alerts` becomes `Vec<AlertLifecycle>`; PN-08 draws severity, state, acknowledge, escalate and close per `can_transition_to`; the strip reports by-state counts; render tests prove each state is painted.
+- Target: I4. Owner: UI engineer. Status: Open.
+- Reference: GAP-055; `../../review/2026-10-26-comprehensive-review.md` §8 finding 1.
+
+**GAP-224 The desktop has no keyboard operation**
+
+- Type: Technical.
+- Capability: CAP-5.9 Role workspaces and workflow.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: Zero matches for `egui::Key`, `Modifiers`, `KeyboardShortcut` and `consume_key` in `gungnir-ui`, `gungnir-app`, `gungnir-viewport3d` and `gungnir-workflow`; `../../ux/accessibility.md:29-39`.
+- Severity: 4. Reach: 10 threads. Effort: M. Priority: 40.
+- Impact: Not one key binding exists across the four interface crates while the accessibility note specifies five shortcuts and a tab order; an operator who is also on a radio has no hands-free path, and the keyboard-only usability measure can only read "not attempted".
+- Closing action: The five shortcuts and the tab order; Enter on the queue opens PN-05 and never PN-07; Escape abandons the dialog; render-probe tests that Enter never reaches Accept.
+- Target: I4. Owner: UI engineer. Status: Open.
+- Reference: GAP-074; `../../review/2026-10-26-comprehensive-review.md` §8 finding 2.
+
+**GAP-225 The map cannot hook a track and draws no defended assets or effectors**
+
+- Type: Technical.
+- Capability: CAP-5.9 Role workspaces and workflow; CAP-3.1 Defended-asset list; CAP-4.1 Present for decision.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-viewport3d/src/interaction.rs:61-70`; `gungnir-viewport3d/src/lib.rs:253`; `gungnir-app/src/workspace.rs:840`; `gungnir-app/src/main.rs:624-634`; `../../ux/personas.md:132-133`.
+- Severity: 4. Reach: 10 threads. Effort: M. Priority: 40.
+- Impact: The viewport consumes drag and scroll only; the one click in it is the 2D/3D toggle; selection originates only in the track table; no selection halo is drawn although its colour token exists; the layer inputs carry no asset or effector layer. The commander persona names being asked to accept a gap without seeing it on the map as a frustration.
+- Closing action: Nearest-glyph pick with a pixel radius (pure arithmetic, testable like `TopDownView`), the selection halo, an asset and effector layer, selection symmetric across the map, the table and the plan.
+- Target: I4. Owner: UI engineer. Status: Open.
+- Reference: DN-01; GAP-026; `../../review/2026-10-26-comprehensive-review.md` §8 finding 3.
+
+**GAP-226 The three-d scene is the default and has never been seen; the track table is not virtualised**
+
+- Type: Technical.
+- Capability: CAP-5.10 Performance budgets; CAP-5.9 Role workspaces and workflow.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-viewport3d/src/gl.rs:29-31`; `gungnir-app/src/ui_settings.rs:232`; `gungnir-app/src/main.rs:575` against `gungnir-viewport3d/src/lib.rs:18-20`; `gungnir-ui/src/panels/track_table.rs:99-106`; `../../ux/information-architecture.md:135-136`.
+- Severity: 2. Reach: 10 threads. Effort: S. Priority: 20.
+- Impact: The scene's own comment says the drawn result has not been looked at, the setting defaults it on, and two comments disagree about which path is the default. PN-03 is a grid in a fixed scroll area laid out every frame, the information architecture says it is virtualised, and the frame-budget gate renders a workspace that has no table.
+- Closing action: Default `scene_3d` off until it has been seen on a display, with a screenshot smoke check; `show_rows` virtualisation with sort and filter; the operator workspace added to the 8 ms gate; the two comments and the IA sentence corrected.
+- Target: I4. Owner: UI engineer. Status: Open.
+- Reference: GAP-022; GAP-056; `../../review/2026-10-26-comprehensive-review.md` §8 findings 5 and 7.
+
+**GAP-227 No basemap, no standard symbology, no declutter, no geographic readout**
+
+- Type: Technical.
+- Capability: CAP-2.10 Terrain and map context; CAP-5.9 Role workspaces and workflow.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-viewport3d/src/interaction.rs:94-123`; `gungnir-viewport3d/src/tracks.rs:170-230`; no `2525` in any source; `gungnir-viewport3d/src/streaming/`.
+- Severity: 3. Reach: 10 threads. Effort: L. Priority: 30.
+- Impact: The picture is a top-down local projection on a metric grid with no tiles or imagery, no latitude, longitude or MGRS readout, custom frame-by-affiliation glyphs rather than a standard set, fixed-offset labels that overprint on a dense picture, and 3D Tiles streaming that is three `NotImplemented` stubs.
+- Closing action: Per D-139 on symbology; a cursor latitude, longitude and MGRS readout; speed-scaled leaders; label collision avoidance; basemap tiles as the first consumer of the streaming stubs.
+- Target: I4. Owner: UI engineer. Status: Open.
+- Reference: GAP-022; `../../review/2026-10-26-comprehensive-review.md` §8 finding 6.
+- Depends on: D-139.
+
+**GAP-228 No operator-initiated escalation**
+
+- Type: Technical.
+- Capability: CAP-3.7 Queue under saturation; CAP-3.6 Rules of engagement.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-ui/src/panels/approval_queue.rs` (the mark only); DN-10 §5.
+- Severity: 3. Reach: 7 threads. Effort: S. Priority: 21.
+- Impact: Escalation happens only on expiry; an operator who knows an item is above their judgement can only wait for the clock. The queue draws "escalated from" and offers no control.
+- Closing action: An escalate-with-note control on a queue row under `DECIDE_PLAN`, journaled as a command event and offered to the next role on the ladder; on the desktop and through the node route.
+- Target: I4. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: DN-10; GAP-034; GAP-113; `../../review/2026-10-26-comprehensive-review.md` §8 finding 8.
+
+**GAP-229 No system safety assessment for the engagement authority path**
+
+- Type: Technical.
+- Capability: CAP-4.3 Never execute without a decision; CAP-3.6 Rules of engagement.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: Zero occurrences of MIL-STD-882, "hazard analysis" or FMEA under `docs/`; the mitigations in DN-09, GAP-183, contract C-01, `gungnir-app/tests/no_execution_without_decision.rs`, MOP-31 and REQ-S-01.
+- Severity: 4. Reach: 7 threads. Effort: L. Priority: 28.
+- Impact: A program office expects a hazard analysis for a system that gates engagement. The mitigations exist and are tested; there is no hazard list behind them, so a reviewer cannot tell which hazard each one closes or which has none.
+- Closing action: A hazard analysis under `docs/safety/`: the hazard list, severity and probability per hazard, the mitigation traced to the design note or test that holds it, the residual risk accepted by name; seeded from DN-09, DN-10, DN-31 and GAP-183.
+- Target: I4. Owner: Owner. Status: Open.
+- Reference: `../../review/2026-10-26-comprehensive-review.md` §9 finding 1.
+
+**GAP-230 No cybersecurity accreditation package**
+
+- Type: Technical.
+- Capability: CAP-6.5 Supply chain; CAP-6.4 Data protection.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: Zero occurrences of NIST SP 800-53, RMF, "Authority to Operate", STIG, FedRAMP or CMMC under `docs/`; the mechanisms in `docs/architecture/uaf/security/Sc-Pr.md`, DN-22, DN-23 and `docs/release-governance.md`.
+- Severity: 4. Reach: 2 threads. Effort: L. Priority: 8.
+- Impact: Nothing maps the built mechanisms to the control families an authorizing official reads, and no STIG posture exists for the Windows desktop or the Debian container. The mechanisms are better documented than most; the package that cites them is absent.
+- Closing action: A system security plan skeleton mapping each mechanism to the AC, AU, IA, SC, CM, SI and SA families with "not addressed" stated per control; a STIG posture note for both hosts; the FIPS provider question answered.
+- Target: I4. Owner: Owner. Status: Open.
+- Reference: `../../review/2026-10-26-comprehensive-review.md` §9 finding 2.
+
+**GAP-231 No operator guide, training material, or desktop installation guide**
+
+- Type: Technical.
+- Capability: CAP-5.9 Role workspaces and workflow.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `docs/architecture/uaf/personnel/Pr-Rm.md:10`; `deploy/README.md`; `CLAUDE.md`.
+- Severity: 3. Reach: 10 threads. Effort: M. Priority: 30.
+- Impact: The design set describes every panel and task and no document tells an operator how to use them; the deployment README gives the desktop one build line and account provisioning is described only in the agent notes.
+- Closing action: A role-keyed operator guide generated from the panel catalogue and the task analyses under `docs/guide/`; desktop installation and account provisioning in `deploy/README.md`; a training outline per persona.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: GAP-074; `../../review/2026-10-26-comprehensive-review.md` §9 finding 3.
+- Depends on: GAP-204.
+
+**GAP-232 No data-rights, export-control or license-status statement**
+
+- Type: Technical.
+- Capability: CAP-6.5 Supply chain.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: Zero occurrences of DFARS or 252.227 under `docs/`; export control an outline item in `../../plans/01-product-business-plan.md:84-88`; `LICENSE-ADDITIONAL-TERMS.md:95-98`.
+- Severity: 3. Reach: 1 threads. Effort: S. Priority: 3.
+- Impact: A government buyer asks what it receives under each license path, what the data rights assertion is, and what the export jurisdiction is; the repository answers none of the three, and the additional license terms say they have not been reviewed by counsel.
+- Closing action: A one-page rights and restrictions note: the AGPL and commercial paths, the data rights assertion position, the export jurisdiction and the counsel review status; replaces the scattered deferrals.
+- Target: I4. Owner: Owner. Status: Open.
+- Reference: D-34; `../../review/2026-10-26-comprehensive-review.md` §9 finding 4.
+
+**GAP-233 No dated test report, no software version description, and the overview is a stale self-audit**
+
+- Type: Technical.
+- Capability: CAP-6.5 Supply chain; CAP-5.10 Performance budgets.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `docs/release-governance.md:89-91`; `docs/GungnirOverview.md` masthead; `docs/verification-capability-table.md`.
+- Severity: 3. Reach: 8 threads. Effort: M. Priority: 24.
+- Impact: The verification table is overwritten in place, so no release carries a dated result; no version description exists; `docs/GungnirOverview.md` and its PDF are an audit as of 2026-09-09, 46 days and about 130 commits behind, with four of five spot-checked claims stale.
+- Closing action: A release evidence step that emits a dated test report (nextest JSON joined to the table rows and REQ ids), a version description, and an overview regenerated from the generated sources, into the package `../../release-governance.md` defines.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: GAP-061; `../../review/2026-10-26-comprehensive-review.md` §9 findings 6 and 8.
+
+**GAP-234 Lock-poisoning handling is inconsistent across 198 acquisitions**
+
+- Type: Technical.
+- Capability: CAP-5.5 Health and alert lifecycle.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-api/src/transport.rs:312,326,348`; `gungnir-app/src/node_tasks.rs:62,72`; the counts per crate in the review (`gungnir-remote` 21, `gungnir-ingest` 12, `gungnir-app` 9, `gungnir-api` 5).
+- Severity: 2. Reach: 8 threads. Effort: M. Priority: 16.
+- Impact: Forty-nine sites silently skip on a poisoned lock, eighteen swallow it, fourteen recover and nine surface it. After a poison a link projection or a feed-statistics sink stops updating with no health flag, which is the connected state that is not true.
+- Closing action: One policy in `agentic-coding-standards.md` §3: state a health flag depends on recovers with `into_inner` or marks the link or feed unhealthy; a grep gate on the silent form.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: `../../review/2026-10-26-comprehensive-review.md` §3 finding 1.
+
+**GAP-235 Three source files exceed 3,700 lines, and 62 functions carry too_many_lines allows**
+
+- Type: Technical.
+- Capability: CAP-7.3 Three profiles.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: The ten largest files in the review §3; 62 `clippy::too_many_lines` allows.
+- Severity: 1. Reach: 1 threads. Effort: M. Priority: 1.
+- Impact: `gungnir-config/src/lib.rs` is 8,310 lines, `gungnir-api/src/transport.rs` 4,192 and `gungnir-node/src/main.rs` 3,749; review cost and merge conflicts scale with them.
+- Closing action: Split the configuration crate by section (it has `sections.rs` already), the transport by route family, and lift the node's production code into the library it references; retire the allows as the splits land.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: `../../review/2026-10-26-comprehensive-review.md` §3 finding 2.
+
+**GAP-236 String-typed errors on the remote identity surface and 41 desktop sites**
+
+- Type: Technical.
+- Capability: CAP-6.1 Authenticate.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-remote/src/identity.rs:419,659,681,699`; `gungnir-remote/src/lib.rs:179`; the per-crate counts in the review §3.
+- Severity: 2. Reach: 10 threads. Effort: M. Priority: 20.
+- Impact: 107 production sites return `Result<_, String>`, among them the human-owned TLS identity path, so a caller cannot match on what failed and a reviewer reads prose rather than a variant.
+- Closing action: A `thiserror` enum on the identity and TLS surface first, under the human-owned review; then the 41 sites in `gungnir-app`.
+- Target: I4. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: `../../review/2026-10-26-comprehensive-review.md` §3 finding 3.
+
+**GAP-237 gungnir-approval's deliveries, engagements and handoffs have no in-crate tests**
+
+- Type: Technical.
+- Capability: CAP-4.3 Never execute without a decision; CAP-4.4 Handoff with provenance.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-approval/src/{deliveries,engagements,handoffs,lib}.rs` (no tests); `gungnir-node/tests/approval_queue.rs` (ten tests, 1,356 lines).
+- Severity: 3. Reach: 6 threads. Effort: S. Priority: 18.
+- Impact: The decision path both binaries run has seven in-crate tests over 2,359 lines; its coverage comes from the node's integration tests, so a reviewer of a human-owned change cannot read the state transitions in isolation.
+- Closing action: Unit tests on the state transitions of deliveries and handoffs and on engagement opening, each readable without the node.
+- Target: I4. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: GAP-131; `../../review/2026-10-26-comprehensive-review.md` §3 finding 4.
+
+**GAP-238 The workspace lints do not enforce the no-unsafe, no-unwrap and documented-items properties**
+
+- Type: Technical.
+- Capability: CAP-6.5 Supply chain.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `Cargo.toml` `[workspace.lints]`: no `unsafe_code = "forbid"`, no `missing_docs`, no `clippy::unwrap_used` or `expect_used`.
+- Severity: 1. Reach: 1 threads. Effort: S. Priority: 1.
+- Impact: The three strongest properties of the codebase (zero `unsafe`, zero `unwrap` in production, 80.7 % documented public items) hold by review, not by the compiler.
+- Closing action: Add the three to `[workspace.lints]` with test-module allows; `missing_docs` warn first, then deny for `gungnir-model`, `gungnir-core` and `gungnir-api`.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: `agentic-coding-standards.md` §3.5; `../../review/2026-10-26-comprehensive-review.md` §3 finding 7.
+
+**GAP-239 The laydown rehearsal blocks the frame thread, and the event bus has no subscriber depth bound**
+
+- Type: Technical.
+- Capability: CAP-5.10 Performance budgets; CAP-5.2 Replay and rehearse.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `gungnir-app/src/laydown_rehearsal.rs:1185-1192`; `gungnir-eventing/src/lib.rs:177-178`.
+- Severity: 2. Reach: 8 threads. Effort: S. Priority: 16.
+- Impact: The rehearsal sleeps two milliseconds up to 5,000 times inside the frame's action handler, ten seconds worst case; every bus subscriber holds an unbounded channel with no depth metric, so a slow subscriber grows without bound and nobody sees it.
+- Closing action: A worker thread with a result channel for the rehearsal, as the point-cloud loader already does; a depth gauge, or a bound with a documented drop policy, on `InProcessBus`.
+- Target: I4. Owner: UI engineer. Status: Open.
+- Reference: DN-32; GAP-105; `../../review/2026-10-26-comprehensive-review.md` §3 findings 5 and 6.
+
+**GAP-240 Dependency-linkage notes and advisory ignores have drifted**
+
+- Type: Technical.
+- Capability: CAP-6.5 Supply chain.
+- History:
+  - 2026-10-26, Open: Filed by plan 12.
+- Evidence: `cargo tree -d` on 2026-10-26; `deny.toml` ignores for RUSTSEC-2026-0192, -0194 and -0195; the `vtkio` 0.6.3 row.
+- Severity: 1. Reach: 1 threads. Effort: S. Priority: 1.
+- Impact: The manifest says one copy each of `hmac` and `sha2`; the AWS signing path brings a second generation. `wgpu-hal` 22 brings a second `glow` beside the shared one. Three advisory ignores match no crate. `nom` 3.2.1 will be rejected by a future compiler.
+- Closing action: Refresh the resolution notes on the affected §2.9 rows, drop the three dead ignores, and track `vtkio`'s move off `nom` 3.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: D-20; `../../review/2026-10-26-comprehensive-review.md` §2 and §3 finding 8.
 

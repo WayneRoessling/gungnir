@@ -31,7 +31,7 @@ added. The pre-consistency snapshot of the original documents is archived in
 | 15 | [`release-governance.md`](release-governance.md) | Engineers, release owners | Dependency and license policy, SBOM, signing, promotion. |
 | 16 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Everyone | The short form of the rules for any change. |
 | 17 | [`../deploy/README.md`](../deploy/README.md) | Deployment owners | Building and running the desktop and the node container. |
-| 18 | [`plans/README.md`](plans/README.md) | Everyone | The planning set: eleven plans for the business plan, mission analysis, UAF views, capabilities, gaps, UX, test tracks, AI agent, ML, TOGAF documentation, and design gap closure, with sequencing and effort. |
+| 18 | [`plans/README.md`](plans/README.md) | Everyone | The planning set: twelve plans for the business plan, mission analysis, UAF views, capabilities, gaps, UX, test tracks, AI agent, ML, TOGAF documentation, design gap closure, and review closure, with sequencing and effort. |
 | 19 | [`unbuilt.md`](unbuilt.md) | Everyone | What the code says it does not do yet: every `NotImplemented` error, generated from the sources. |
 | 20 | [`signatures.md`](signatures.md) | Engineers, agents, reviewers | Every change the owner has signed, with the paths and the commit; the only place that says whether something is signed. |
 | 21 | [`record/README.md`](record/README.md) | Engineers, agents | Why things were done: one file per explained change, never edited once merged. Items 1 to 136 and 96A are what `ARCHITECTURE.md` §10 held. |
@@ -55,6 +55,7 @@ plans execute. `plans/README.md` keeps the execution status in detail.
 | `ai/` | 08 | Agent concept of operations, safety boundaries, architecture, tools, provider configuration, evaluation, security | First draft 2026-09-04 |
 | `ml/` | 09 | ML use cases, architecture, data pipeline, training, evaluation, MLOps, security | First draft 2026-09-04 |
 | `design/` | 11 | A design note per open design gap: owning component, types, edges, behaviour, configuration and interface delta, panel delta, verification row | First draft 2026-09-05 (22 notes, 4 consolidations), plus DN-23 and DN-24 raised the same day out of the gaps they block, both implemented; `external-standards.md` (2026-09-06) locates the ASTERIX and STANAG 4676 specifications for GAP-064 and, since D-24 the same day, the AIS and ADS-B candidates for GAP-010 -- AIS pinned to ITU-R M.1371-6 under D-32 the same day, and ADS-B **deliberately left unpinned** later that day because no specification is both free to obtain and permissively licensed, its decoder gated instead against two MIT decoders over two vendored captures (§4.3, §4.5) -- and `handoff-2026-09-06-radar-feed.md` hands the radar feed work on; `tak-interoperability-research.md` (2026-09-08) is the TAK ecosystem as verified from the clients' own source, and the three D-33 extensions the owner took the same day |
+| `review/` | 12 | A dated comprehensive review (code, architecture, security, operational viability, interface, documentation) and the plan that closes its actions through the register: one gap per work package, one decision per owner question | First review 2026-10-26; plan 12 written the same day, its gaps GAP-203 to GAP-240 and decisions D-136 to D-144 open |
 
 ## Which standard applies to which crate
 

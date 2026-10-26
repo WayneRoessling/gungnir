@@ -3363,3 +3363,153 @@
     authority issuing every certificate is the fuller pattern and is not decided here; the
     configured certificate's precedence keeps that path open. See
     `../../record/2026-10-25/a-node-presents-its-own-persisted-peer-identity.md`.
+
+# Raised by plan 12 (`../../../plans/12-review-closure.md`) from the comprehensive review
+# of 2026-10-26. Each is open; its outcome field holds the recommended default until the
+# owner takes it.
+
+- id: D-136
+  decision: Identity vocabulary
+  question: >-
+    `Classification` has four states. STANAG 1241 adds Pending, Assumed Friend, Suspect,
+    Joker and Faker, and every outbound bearer (Cursor-on-Target first) carries that set.
+    Widen the type to the standard's vocabulary, or keep four states and map at each
+    bearer?
+  raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §7 finding 5"
+  decider: Owner
+  unblocks: GAP-216, GAP-090, GAP-091
+  outcome: >-
+    Recommended default, not yet taken: widen the type. `Unknown` stays the default and
+    the only state a track can hold with no evidence; Pending, Assumed Friend and Suspect
+    enter the risk weight between Unknown and Hostile; Joker and Faker are carried for
+    exercises and never weighted. Mapping at each bearer would put the same table in three
+    crates.
+
+- id: D-137
+  decision: Tactical data links beyond Cursor-on-Target
+  question: >-
+    Link 16 J-series over JREAP-C, VMF, OTH-Gold and NFFI are what a brigade, division or
+    joint headquarters consumes, and none is mentioned anywhere in the design. Are any in
+    scope for this release, or is the position that Cursor-on-Target and ASTERIX Category
+    062 are the bearers and the rest are a later increment?
+  raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §4 finding 4"
+  decider: Owner
+  unblocks: GAP-091
+  outcome: >-
+    Recommended default, not yet taken: out of scope for this release, recorded as such.
+    Cursor-on-Target (DN-25) reaches ATAK, WinTAK, TAK Server and, through existing
+    gateways, most Western command posts; Category 062 encode reaches surveillance
+    consumers. J-series needs a certified terminal and an interface the project cannot
+    test, so it stays a stated gap rather than an unmentioned one.
+
+- id: D-138
+  decision: Scaling and availability model for the cloud profile
+  question: >-
+    The cloud profile is the on-prem container on another host: one loop, every structure
+    in memory, one journal directory, no replication, no manifests. Is the position
+    vertical scaling with one node per sector, active/standby through journal shipping, or
+    a multi-node design?
+  raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §4 finding 5"
+  decider: Owner with the deployment owner
+  unblocks: GAP-220
+  outcome: >-
+    Recommended default, not yet taken: vertical scaling, one node per sector, with an
+    active/standby pair through journal shipping designed in a note before any of it is
+    built. A multi-node design would reopen the queue and authority questions D-55 settled
+    for one node.
+
+- id: D-139
+  decision: Symbology standard for the picture
+  question: >-
+    The picture draws custom frame-by-affiliation glyphs. A defense operator expects
+    MIL-STD-2525 or APP-6 symbols. Adopt a standard set, and if so how much of it
+    (frames and affiliation only, or echelon and modifiers too)?
+  raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §8 finding 6"
+  decider: Owner
+  unblocks: GAP-227
+  outcome: >-
+    Recommended default, not yet taken: MIL-STD-2525D frames, affiliation and the air,
+    surface and subsurface battle dimensions, derived from the widened identity (D-136);
+    no echelon or modifier fields until a unit model exists. The current glyphs already
+    follow the frame-plus-colour convention, so the step is the standard's shapes, not a
+    new scheme.
+
+- id: D-140
+  decision: Separation of duties on override and control status
+  question: >-
+    A single `DECIDE_PLAN` holder accepts a machine-proposed plan; `Supervisor` holds
+    submit, decide, override and set-control-status together; no two-person rule exists.
+    Is single approval the position, and should an optional two-person rule exist for
+    `OVERRIDE_PLAN` and `SET_CONTROL_STATUS`?
+  raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §5 finding 12"
+  decider: Owner
+  unblocks: GAP-203
+  outcome: >-
+    Recommended default, not yet taken: single approval stays the rule and is recorded as
+    a decision rather than an omission; an optional two-person rule for override and
+    control-status changes is a baseline setting, off by default, so a deployment that
+    needs it has it without a code change.
+
+- id: D-141
+  decision: Cross-node engagement visibility and sector ownership
+  question: >-
+    Two nodes with overlapping sectors can each engage the same object with neither
+    knowing. Should an engagement be published over the exchange so a neighbour sees it,
+    and should a sector-ownership rule (reporting responsibility) decide who engages?
+  raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §4 finding 3"
+  decider: Owner
+  unblocks: GAP-219
+  outcome: >-
+    Recommended default, not yet taken: publish engagement opened and closed over the
+    exchange, keyed by the global identity, so a neighbour's engagement is on the track
+    before anyone proposes a second; defer sector ownership, which needs a unit model and
+    an airspace control order to be meaningful.
+
+- id: D-142
+  decision: Which key signs the desktop's audit anchors
+  question: >-
+    The audit chain's head is sealed under a key the interactive operator's own keystore
+    unlocks. A signature the operator cannot forge needs a key the operator session does
+    not hold. Is that a deployment key provisioned with the baseline, the escrow public
+    key's counterpart held off the desktop, or the node's key with anchors forwarded when
+    linked?
+  raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §5 finding 1"
+  decider: Owner with the security engineer
+  unblocks: GAP-208
+  outcome: >-
+    Recommended default, not yet taken: a deployment `AuditSigning` purpose whose private
+    half is provisioned with the baseline and sealed under the deployment key the
+    operator session never unlocks (DN-22's custody profiles already distinguish them),
+    and anchors forwarded to the node whenever linked so the node holds an independent
+    head. Signing with the node's key alone leaves the disconnected desktop unsigned.
+
+- id: D-143
+  decision: Session lifetime maximum and idle timeout
+  question: >-
+    The disconnected session never expires by default and no idle timeout exists. What
+    are the mandatory maximum lifetime and the idle timeout, and does a locked screen
+    keep the queue visible?
+  raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §5 finding 7"
+  decider: Owner
+  unblocks: GAP-212
+  outcome: >-
+    Recommended default, not yet taken: a twelve-hour maximum and a fifteen-minute idle
+    lock, both configurable downward only; a locked screen keeps the picture and the queue
+    visible and refuses every action until re-authentication, so a shift change under a
+    raid is not a blank screen.
+
+- id: D-144
+  decision: The fixed-site field experiment that tranche A of plan 12 closes toward
+  question: >-
+    The plan's first tranche is sized to a fixed-site counter-UAS trial: SAPIENT-speaking
+    sensors, a radio-called or single-adapter effector, one Commander account, no mobile
+    frame. Is that the experiment, and which sensors and effector are its targets so the
+    one adapter in GAP-207 and the trial radar under GAP-001 can be named?
+  raised_in: "Plan 12; `../../review/2026-10-26-comprehensive-review.md` §6"
+  decider: Owner
+  unblocks: GAP-207
+  outcome: >-
+    Recommended default, not yet taken: yes, a fixed-site trial with SAPIENT sensors and
+    one effector; the specific sensors and effector are named when the trial partner is,
+    and until then GAP-207's adapter is built against the SAPIENT task path that already
+    exists.
