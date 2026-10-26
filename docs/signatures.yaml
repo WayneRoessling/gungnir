@@ -3438,3 +3438,20 @@
   commit: 5960a29238519d2f262e0f0d8baa8923507404d7
   pre_repository: false
   record: "GAP-015; D-46; docs/record/2026-10-25/d-46-the-dense-group-filter-is-chosen.md; PR #218"
+
+- date: 2026-10-26
+  signer: Owner
+  subject: >-
+    GAP-015's human-owned change in the dense group's consumer: the doc comment on
+    `PipelineSnapshot::dense_group` now names `gungnir-tracking-service`'s projection into
+    `gungnir_model::DenseGroupView`, drawn as a group and never as track symbols, in place
+    of the sentence saying nothing read the field (`gungnir-fusion-async/src/lib.rs`); and
+    the partner gate withholding the dense group from a party and counting it, beside the
+    retained bearings (`gungnir-api/src/transport.rs`).
+  kind: code
+  paths:
+  - gungnir-fusion-async/src/lib.rs
+  - gungnir-api/src/transport.rs
+  commit: 9e9fe9f5be7e191c17044475483722fe275463bd
+  pre_repository: false
+  record: "GAP-015; docs/record/2026-10-26/gap-015-the-dense-group-on-the-picture.md; PR #223"
