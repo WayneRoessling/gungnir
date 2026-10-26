@@ -304,6 +304,12 @@ lossless form (D-102), and a partner-bound body writes a non-finite float as DN-
 a wire payload, so no type in `gungnir-model` changed and `SCHEMA_VERSION` is unchanged.
 See [the record](../record/2026-10-25/gap-079-the-ml-04-anomaly-rows.md).
 
+**Landed 2026-10-26, GAP-015**: `gungnir-model` gained `DenseGroupView` and
+`GroupComponentView`, a dense group the tracker could not resolve, with no identifier
+field; `SnapshotResponse` gained a defaulted `dense_group`, withheld from a partner and
+counted. Additive and defaulted throughout, so `SCHEMA_VERSION` is unchanged. See
+[the record](../record/2026-10-26/gap-015-the-dense-group-on-the-picture.md).
+
 `SnapshotResponse` gains `assets`, `predictions`, `engagements`, `requirements`,
 `hazards`, and `control_status`, and is filtered per caller by DN-17. The filtering is a
 behaviour change on an existing endpoint and is gated on the caller having a configured

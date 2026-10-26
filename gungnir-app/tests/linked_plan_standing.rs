@@ -340,6 +340,7 @@ impl Node {
             tracks,
             &[],
             gungnir_tracking_service::PipelineStats::default(),
+            None,
             self.announcer.last_plan(),
             self.announcer.last_standing(),
             health,

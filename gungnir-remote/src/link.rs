@@ -91,6 +91,11 @@ pub struct Projection {
     /// wire contract). Refreshed on the same cadence as `bearing_rays`, for the same
     /// reason.
     pub pipeline_stats: PipelineStatsView,
+    /// The node pipeline's dense-group estimate, as of the last snapshot (GAP-015).
+    /// Refreshed on the same per-(re)connect cadence as `bearing_rays`, for the same
+    /// reason: no envelope carries it between snapshots, so a connected desktop's group
+    /// is the one the node last published when this link asked, and says which epoch.
+    pub dense_group: Option<gungnir_model::DenseGroupView>,
     /// True only once a node has answered. Cleared as soon as it stops.
     pub connected: bool,
     /// What the node last said about its own services (GAP-161): the snapshot's `health`
@@ -1228,6 +1233,9 @@ async fn run_link(
         // not a live one.
         p.bearing_rays = snapshot.bearing_rays;
         p.pipeline_stats = snapshot.pipeline_stats;
+        // GAP-015: taken as the snapshot says, `None` included, so a node whose mode is off
+        // does not inherit a group a previous node on this link reported.
+        p.dense_group = snapshot.dense_group;
         // GAP-161: the node's own word on its services, kept live by the stream from here.
         p.node_health = Some(snapshot.health);
         // GAP-157: whether that plan answers the node's picture, kept live by the stream.

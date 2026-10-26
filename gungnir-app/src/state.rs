@@ -146,6 +146,10 @@ pub struct AppState {
     /// newly retained bearing from one already on the alert list (GAP-096). Not the
     /// picture: `tracking.bearing_rays()` is what PN-02 and PN-09 read live, every frame.
     pub last_bearing_rays: Vec<gungnir_model::BearingRayView>,
+    /// The epoch of the dense group PN-08 was told about, while the tracker is still
+    /// reporting one (GAP-015); `None` while it reports none. `dense_group::tick` alerts
+    /// once when a group appears and once when it goes.
+    pub dense_group_reported: Option<gungnir_model::MissionTime>,
     /// The identification engine, fed by cooperative evidence and governed by the
     /// baseline's thresholds (GAP-010, GAP-018, DN-08 §5).
     pub identification: gungnir_identification::EvidenceFusionEngine,
@@ -764,6 +768,7 @@ impl AppState {
             sapient_stats: sapient.stats,
             sapient_task_acks: sapient.task_acks,
             last_bearing_rays: Vec::new(),
+            dense_group_reported: None,
             identification: gungnir_identification::EvidenceFusionEngine::with_settings(
                 identification_settings,
             ),

@@ -23,9 +23,9 @@
 
 use gungnir_model::events::VerdictSummary;
 use gungnir_model::{
-    BearingRayView, CollectionRequirement, DecisionId, DetectionView, EffectorLayer, ExchangeItem,
-    HeldLayerView, MissionTime, PendingApprovalId, PipelineStatsView, PlanId, PlanStandingView,
-    PlanView, Releasability, SystemHealth, TrackView, SCHEMA_VERSION,
+    BearingRayView, CollectionRequirement, DecisionId, DenseGroupView, DetectionView,
+    EffectorLayer, ExchangeItem, HeldLayerView, MissionTime, PendingApprovalId, PipelineStatsView,
+    PlanId, PlanStandingView, PlanView, Releasability, SystemHealth, TrackView, SCHEMA_VERSION,
 };
 
 pub use gungnir_eventing::Envelope as EventFrame;
@@ -62,6 +62,14 @@ pub struct SnapshotResponse {
     /// itself -- see that type's own doc comment for why.
     #[serde(default)]
     pub pipeline_stats: PipelineStatsView,
+    /// The dense group the node's pipeline could not resolve into tracks, as of its last
+    /// epoch (GAP-015), mirroring `TrackingService::dense_group` locally. `None` is the
+    /// ordinary answer: a resolvable scene.
+    ///
+    /// **Additive and defaulted**, exactly as `bearing_rays` above: a client built before
+    /// the field existed reads none, which is what a node whose mode is off honestly has.
+    #[serde(default)]
+    pub dense_group: Option<DenseGroupView>,
     /// Items removed from this response for the caller's party (DN-17 §5 rule 3,
     /// GAP-062). Zero for an operator inside the deployment. Never silent: a peer that
     /// is told its picture is partial can act on that; one that is not believes it has
@@ -138,6 +146,7 @@ impl SnapshotResponse {
             requirements,
             bearing_rays: Vec::new(),
             pipeline_stats: PipelineStatsView::default(),
+            dense_group: None,
             withheld: 0,
             queue: Vec::new(),
             // Filled in by the route that answers with it, which is the moment worth
@@ -164,6 +173,14 @@ impl SnapshotResponse {
     #[must_use]
     pub fn with_held_layers(mut self, held: Vec<HeldLayerView>) -> Self {
         self.held_layers = held;
+        self
+    }
+
+    /// Attach the node pipeline's dense-group estimate (GAP-015), `None` when the mode
+    /// did not engage.
+    #[must_use]
+    pub fn with_dense_group(mut self, dense_group: Option<DenseGroupView>) -> Self {
+        self.dense_group = dense_group;
         self
     }
 

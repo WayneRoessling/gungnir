@@ -120,6 +120,16 @@ pub trait TrackingService: Send + Sync {
         &[]
     }
 
+    /// The dense group the pipeline could not resolve into tracks, as of its last epoch
+    /// (GAP-015), or `None` -- the ordinary answer, a resolvable scene. To be drawn as a
+    /// group and never as tracks: it carries no identity.
+    ///
+    /// Defaulted to `None` for the reason [`bearing_rays`](Self::bearing_rays) is
+    /// defaulted to empty: a backend with no pipeline behind it has no group to report.
+    fn dense_group(&self) -> Option<&gungnir_model::DenseGroupView> {
+        None
+    }
+
     /// The underlying pipeline's own counters (GAP-096): how many bearings were
     /// offered, updated a track, were retained, expired, or were refused
     /// (`gungnir_fusion_async::PipelineStats`'s five bearing fields), for PN-09.
@@ -367,6 +377,43 @@ pub fn project_bearing_ray(
     }
 }
 
+/// Project the dense-group mode's estimate into the canonical view (GAP-015).
+///
+/// Arithmetic, like [`project_bearing_ray`]: the count, the distribution and each
+/// component carried across, a component's state split into position and velocity and its
+/// covariance diagonal turned into the one-sigma a drawn extent widens with. `is_stale`
+/// starts false; the holder ages it on its own clock.
+#[must_use]
+pub fn project_dense_group(
+    estimate: &gungnir_fusion_async::DenseGroupEstimate,
+) -> gungnir_model::DenseGroupView {
+    gungnir_model::DenseGroupView {
+        epoch: MissionTime(estimate.epoch_s),
+        expected_targets: estimate.expected_targets,
+        most_probable_count: estimate
+            .most_probable_count
+            .map(|n| u64::try_from(n).unwrap_or(u64::MAX)),
+        count_distribution: estimate.count_distribution.clone(),
+        components: estimate
+            .components
+            .iter()
+            .map(|c| gungnir_model::GroupComponentView {
+                expected_targets: c.expected_targets,
+                position_enu: [c.state[0], c.state[1], c.state[2]],
+                velocity_enu: [c.state[3], c.state[4], c.state[5]],
+                position_sigma_m: [
+                    c.covariance[(0, 0)].sqrt(),
+                    c.covariance[(1, 1)].sqrt(),
+                    c.covariance[(2, 2)].sqrt(),
+                ],
+            })
+            .collect(),
+        filter: estimate.filter.as_str().to_owned(),
+        scan_size: u64::try_from(estimate.scan_size).unwrap_or(u64::MAX),
+        is_stale: false,
+    }
+}
+
 /// Project the pipeline's own counters into the wire-facing view (GAP-096's wire
 /// contract).
 ///
@@ -472,6 +519,10 @@ pub struct LiveTrackingService {
     /// pipeline's own `retained` set is already the current one, so there is nothing to
     /// merge.
     bearing_rays: Vec<gungnir_model::BearingRayView>,
+    /// The dense-group mode's estimate as of the last snapshot, for
+    /// [`TrackingService::dense_group`] (GAP-015). Replaced on every snapshot, `None`
+    /// included, and aged on every poll by the staleness rule tracks follow.
+    dense_group: Option<gungnir_model::DenseGroupView>,
     /// The pipeline's own counters as of the last snapshot, for
     /// [`TrackingService::pipeline_stats`] (GAP-096).
     pipeline_stats: gungnir_fusion_async::PipelineStats,
@@ -549,6 +600,7 @@ impl LiveTrackingService {
         Self {
             tracks: Vec::new(),
             bearing_rays: Vec::new(),
+            dense_group: None,
             pipeline_stats: gungnir_fusion_async::PipelineStats::default(),
             engine,
             pipeline_alive: true,
@@ -834,6 +886,9 @@ impl TrackingService for LiveTrackingService {
                 .map(project_bearing_ray)
                 .collect();
             self.pipeline_stats = snapshot.stats;
+            // GAP-015: the group goes with the snapshot it came in, `None` included -- a
+            // released mode is a resolvable scene, and must not leave the last raid drawn.
+            self.dense_group = snapshot.dense_group.as_ref().map(project_dense_group);
         } else {
             // No new snapshot: only staleness ages against the last report. A track's
             // `mission_time` stays exactly what it was -- the pipeline has not moved it,
@@ -852,6 +907,11 @@ impl TrackingService for LiveTrackingService {
         // stayed on PN-02 for the rest of the session while PN-08 had said "retained
         // 60 s". `now` is the same clock `is_stale` ages a track against above.
         self.bearing_rays.retain(|ray| ray.valid_until.0 > now.0);
+        // The group ages on the same clock, by the one staleness rule (GAP-012): a feed
+        // that stops sends no snapshot to replace it, and an old raid must say it is old.
+        if let Some(group) = &mut self.dense_group {
+            group.is_stale = is_stale(group.epoch, now, None, &self.staleness);
+        }
     }
 
     fn tracks(&self) -> &[TrackView] {
@@ -860,6 +920,10 @@ impl TrackingService for LiveTrackingService {
 
     fn bearing_rays(&self) -> &[gungnir_model::BearingRayView] {
         &self.bearing_rays
+    }
+
+    fn dense_group(&self) -> Option<&gungnir_model::DenseGroupView> {
+        self.dense_group.as_ref()
     }
 
     fn pipeline_stats(&self) -> gungnir_fusion_async::PipelineStats {
@@ -1319,6 +1383,121 @@ mod tests {
             !svc.is_healthy(),
             "the pipeline is gone; health must not claim otherwise"
         );
+    }
+
+    /// **GAP-015's consumer, at its source.** A scan past the engagement threshold puts
+    /// the pipeline's dense-group estimate on `dense_group()`, projected with no identity
+    /// and stamped with its epoch; and the one staleness rule ages it on the host's clock
+    /// when nothing arrives to replace it, so a feed gone quiet cannot leave a raid on the
+    /// picture reading as current.
+    #[test]
+    fn a_dense_scan_puts_a_group_on_the_view_and_it_ages_stale_with_nothing_arriving() {
+        let settings = PipelineSettings {
+            dense_group: Some(gungnir_fusion_async::DenseGroupSettings {
+                engage_above_detections: 4,
+                ..gungnir_fusion_async::DenseGroupSettings::default()
+            }),
+            ..PipelineSettings::default()
+        };
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let mut svc = LiveTrackingService::with_pipeline_settings(runtime.handle(), settings)
+            .with_staleness(gungnir_model::StalenessSettings {
+                default_s: 10.0,
+                by_class_s: std::collections::BTreeMap::new(),
+            });
+        assert!(svc.dense_group().is_none(), "nothing yet, so no group");
+        // Eight targets 60 m apart, one scan a second for six seconds: every scan holds
+        // more detections than the threshold of four.
+        for scan in 0..6u32 {
+            let t = f64::from(scan);
+            for target in 0..8u32 {
+                svc.submit_detection(DetectionView {
+                    sensor: SensorId(1),
+                    source_time: MissionTime(t),
+                    receipt_time: MissionTime(t),
+                    measurement: gungnir_model::Measurement::Position {
+                        enu: nalgebra::Vector3::new(
+                            120.0 * t,
+                            f64::from(target) * 60.0 + 30.0 * t,
+                            2_000.0,
+                        ),
+                        variance_m2: [400.0, 400.0, 900.0],
+                    },
+                    provenance: Provenance::default(),
+                })
+                .expect("accepted");
+            }
+        }
+        for _ in 0..2_000 {
+            svc.poll(MissionTime(6.0));
+            if svc.dense_group().is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let group = svc
+            .dense_group()
+            .expect("the dense scans engaged the mode")
+            .clone();
+        assert_eq!(group.filter, "gm-phd", "D-46: the PHD is the default");
+        assert_eq!(group.scan_size, 8);
+        assert!(
+            group.epoch.0 <= 5.0,
+            "stamped with its epoch, not the poll: {}",
+            group.epoch.0
+        );
+        assert!(!group.components.is_empty());
+        assert!(
+            group.most_probable_count.is_none(),
+            "the PHD has no mode to report"
+        );
+        assert!(!group.is_stale);
+
+        // Nothing arrives; the host's clock runs on past the staleness limit.
+        svc.poll(MissionTime(group.epoch.0 + 30.0));
+        assert!(
+            svc.dense_group().is_some_and(|g| g.is_stale),
+            "an old group must say it is old: {:?}",
+            svc.dense_group().map(|g| g.is_stale)
+        );
+    }
+
+    /// The projection carries the estimate across with nothing invented: a component's
+    /// state split into position and velocity, its covariance diagonal into one-sigma,
+    /// and the CPHD's most probable count where there is one.
+    #[test]
+    fn the_projection_carries_the_estimate_across() {
+        let mut covariance = nalgebra::SMatrix::<f64, 6, 6>::identity();
+        covariance[(0, 0)] = 400.0;
+        covariance[(1, 1)] = 900.0;
+        covariance[(2, 2)] = 2_500.0;
+        let estimate = gungnir_fusion_async::DenseGroupEstimate {
+            epoch_s: 42.0,
+            expected_targets: 2.5,
+            most_probable_count: Some(3),
+            count_distribution: vec![0.0, 0.25, 0.25, 0.5],
+            components: vec![gungnir_fusion_async::GroupComponent {
+                expected_targets: 2.5,
+                state: nalgebra::SVector::<f64, 6>::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
+                covariance,
+            }],
+            filter: gungnir_fusion_async::DenseGroupFilter::Cphd,
+            scan_size: 17,
+        };
+        let view = project_dense_group(&estimate);
+        assert_eq!(view.epoch, MissionTime(42.0));
+        assert_eq!(view.most_probable_count, Some(3));
+        assert_eq!(view.count_distribution, vec![0.0, 0.25, 0.25, 0.5]);
+        assert_eq!(view.filter, "gm-cphd");
+        assert_eq!(view.scan_size, 17);
+        let c = view.components[0];
+        assert_eq!(c.position_enu, [1.0, 2.0, 3.0]);
+        assert_eq!(c.velocity_enu, [4.0, 5.0, 6.0]);
+        assert_eq!(c.position_sigma_m, [20.0, 30.0, 50.0]);
     }
 
     /// The other half of the lifetime (2026-09-09, found in the review recorded as item

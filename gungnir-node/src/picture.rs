@@ -459,6 +459,8 @@ impl Announcer {
 /// Requirements are empty: a node states none of its own -- PN-15 is a desktop panel,
 /// and publishing an empty list is different from the field being absent (GAP-005).
 ///
+/// `dense_group` is `tracking.dense_group()`, attached the same way (GAP-015).
+///
 /// **`bearing_rays`/`pipeline_stats` are the same values `tracking.bearing_rays()`/
 /// `tracking.pipeline_stats()` already give an embedded desktop** (GAP-096's wire
 /// contract): attached here so a connected one reads the same picture rather than the
@@ -491,6 +493,7 @@ pub fn publish_picture(
     tracks: &[gungnir_model::TrackView],
     bearing_rays: &[gungnir_model::BearingRayView],
     pipeline_stats: PipelineStats,
+    dense_group: Option<&gungnir_model::DenseGroupView>,
     plan: &PlanView,
     standing: Option<&PlanStandingView>,
     health: SystemHealth,
@@ -504,6 +507,8 @@ pub fn publish_picture(
                 bearing_rays.to_vec(),
                 project_pipeline_stats(pipeline_stats),
             )
+            // GAP-015: the group the pipeline could not resolve, beside the bearings.
+            .with_dense_group(dense_group.cloned())
             .with_queue(queue)
             // GAP-183: the layers at hold refusing every plan, beside the queue they are
             // keeping empty.

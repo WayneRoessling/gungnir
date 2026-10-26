@@ -446,6 +446,7 @@ impl App {
                         terrain: gungnir_app::terrain::layer(&self.state.terrain, &self.state.data),
                         point_clouds: &point_clouds,
                         laydown_preview,
+                        dense_group: self.state.tracking.dense_group(),
                     },
                 );
                 None
@@ -629,6 +630,7 @@ impl App {
             terrain: gungnir_app::terrain::layer(&self.state.terrain, &self.state.data),
             point_clouds: &point_clouds,
             laydown_preview,
+            dense_group: self.state.tracking.dense_group(),
         };
         let Some(scene) = self.scene.clone().filter(|_| self.state.viewport.use_3d) else {
             gungnir_viewport3d::render(

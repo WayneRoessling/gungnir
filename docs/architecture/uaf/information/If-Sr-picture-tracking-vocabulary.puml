@@ -62,6 +62,22 @@ class "BearingRayView" as BearingRayView <<InformationElement>> {
   azimuth_one_sigma_rad: f64
   valid_until: MissionTime
 }
+class "DenseGroupView" as DenseGroupView <<InformationElement>> {
+  epoch: MissionTime
+  expected_targets: f64
+  most_probable_count: Option<u64>
+  count_distribution: Vec<f64>
+  components: Vec<GroupComponentView>
+  filter: String
+  scan_size: u64
+  is_stale: bool
+}
+class "GroupComponentView" as GroupComponentView <<InformationElement>> {
+  expected_targets: f64
+  position_enu: [f64; 3]
+  velocity_enu: [f64; 3]
+  position_sigma_m: [f64; 3]
+}
 class "PipelineStatsView" as PipelineStatsView <<InformationElement>> {
   accepted: u64
   too_late: u64
@@ -154,6 +170,8 @@ TrackView --> Quality : quality
 TrackView --> Releasability : releasability
 BearingRayView --> MissionTime : valid_until
 BearingRayView --> SensorId : sensor
+DenseGroupView --> GroupComponentView : components
+DenseGroupView --> MissionTime : epoch
 ResourceView --> EffectorLayer : layer
 ResourceView --> Magazine : magazine
 ResourceView --> RelativeCost : cost

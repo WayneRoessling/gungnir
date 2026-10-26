@@ -288,6 +288,7 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
                 terrain: None,
                 point_clouds: &[],
                 laydown_preview: None,
+                dense_group: None,
             },
         );
     });
@@ -348,6 +349,7 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
                 terrain: None,
                 point_clouds: &[],
                 laydown_preview: None,
+                dense_group: None,
             },
         );
     });
@@ -482,6 +484,7 @@ fn coverage_gaps_are_reported_along_the_declared_approaches() {
                 terrain: None,
                 point_clouds: &[],
                 laydown_preview: None,
+                dense_group: None,
             },
         );
     });
@@ -535,4 +538,67 @@ fn no_declared_approaches_is_not_full_coverage() {
         sustainment::coverage_status(&state, None),
         CoverageStatus::NotPlaceable { .. }
     ));
+}
+
+/// GAP-015's consumer on the screen: a dense group is drawn and labelled as a group that
+/// is **not tracks** -- with its count as a mean, its filter and its epoch -- and the map's
+/// own status line still counts no tracks, because a group adds none.
+#[test]
+fn a_dense_group_is_drawn_as_a_group_and_not_as_tracks() {
+    let mut state = desktop("dense-group");
+    let group = gungnir_model::DenseGroupView {
+        epoch: gungnir_model::MissionTime(412.0),
+        expected_targets: 19.6,
+        most_probable_count: Some(20),
+        count_distribution: vec![0.1, 0.8, 0.1],
+        components: vec![gungnir_model::GroupComponentView {
+            expected_targets: 2.4,
+            position_enu: [500.0, 800.0, 2_000.0],
+            velocity_enu: [120.0, 30.0, 0.0],
+            position_sigma_m: [40.0, 40.0, 60.0],
+        }],
+        filter: "gm-cphd".into(),
+        scan_size: 21,
+        is_stale: false,
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| {
+        gungnir_viewport3d::render(
+            ui,
+            &state.palette,
+            &mut state.viewport,
+            &[],
+            &[],
+            &gungnir_model::PlanView::default(),
+            gungnir_viewport3d::layers::LayerInputs {
+                coverage: gungnir_viewport3d::layers::CoverageLayer::Circles {
+                    circles: &[],
+                    nominal: None,
+                },
+                gaps: &[],
+                hazards: &[],
+                geofences: &[],
+                predictions: &[],
+                terrain: None,
+                point_clouds: &[],
+                laydown_preview: None,
+                dense_group: Some(&group),
+            },
+        );
+    });
+    assert!(
+        frame.says("dense group, not tracks") && frame.says("about 19.6 targets"),
+        "the group was not labelled as a group that is not tracks: {}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("most likely 20") && frame.says("gm-cphd"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("(0 tracks"),
+        "a group must add no track to the picture: {}",
+        frame.joined()
+    );
 }

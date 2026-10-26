@@ -117,6 +117,7 @@ fn the_nodes_health_follows_each_flag_true_false_true() {
             &[],
             &[],
             PipelineStats::default(),
+            None,
             &PlanView::default(),
             None,
             health,

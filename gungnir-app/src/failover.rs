@@ -338,7 +338,7 @@ impl TrackingService for TeeTracking {
         self.inner.tracks()
     }
 
-    // The three below are defaulted on the trait for a backend that has no pipeline
+    // The four below are defaulted on the trait for a backend that has no pipeline
     // behind it, and this one has: `inner`'s. Taking the defaults instead -- which this
     // wrapper did until the rehearsal work of 2026-09-17 -- emptied PN-02's bearing rays
     // and zeroed PN-09's counters for the length of every outage, while the embedded
@@ -346,6 +346,10 @@ impl TrackingService for TeeTracking {
     // wraps is the health-flag rule read backwards, and just as wrong.
     fn bearing_rays(&self) -> &[gungnir_model::BearingRayView] {
         self.inner.bearing_rays()
+    }
+
+    fn dense_group(&self) -> Option<&gungnir_model::DenseGroupView> {
+        self.inner.dense_group()
     }
 
     fn pipeline_stats(&self) -> PipelineStats {

@@ -68,6 +68,10 @@ pub fn tick(state: &mut AppState) {
     //     localising and DN-27 §7 places that case on the alert list rather than on the
     //     map (GAP-096).
     crate::bearings::tick(state);
+    // 2e. A scene too dense to resolve is reported as a group, not tracks (GAP-015): one
+    //     alert when it appears and one when it goes, because the tracks beside it are not
+    //     the whole picture while it lasts.
+    crate::dense_group::tick(state);
 
     // 1a. What the radars said about themselves this frame (GAP-064), after the
     //     gateway has polled the adapters that queue it.

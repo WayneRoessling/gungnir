@@ -216,6 +216,47 @@ async fn a_party_receives_what_its_agreement_and_the_markings_release() {
     let _ = std::fs::remove_dir_all(&pki.dir);
 }
 
+/// GAP-015: the dense-group estimate is this deployment's internal sensor picture, like
+/// the retained bearings beside it, and no exchange item covers it: a party receives none
+/// of it, and the response counts it as withheld rather than leaving it silently absent.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_dense_group_is_withheld_from_a_party_and_counted() {
+    let pki = Pki::new("dense-group");
+    let group = gungnir_model::DenseGroupView {
+        epoch: gungnir_model::MissionTime(5.0),
+        expected_targets: 12.5,
+        most_probable_count: None,
+        count_distribution: Vec::new(),
+        components: Vec::new(),
+        filter: "gm-phd".into(),
+        scan_size: 14,
+        is_stale: false,
+    };
+    let snapshot = SnapshotResponse::new(
+        vec![track(3, Releasability::AllPeers)],
+        None,
+        SystemHealth::default(),
+        Vec::new(),
+    )
+    .with_dense_group(Some(group));
+    let api = Arc::new(NodeApi::new(snapshot).with_exchange(ExchangeSet {
+        agreements: vec![ExchangeAgreement {
+            party: "sector-north".into(),
+            inbound: Vec::new(),
+            outbound: vec![ExchangeItem::Tracks, ExchangeItem::Health],
+            format: ExchangeFormat::Canonical,
+        }],
+    }));
+    let addr = serve(&pki, api).await;
+    let (status, body) = get(&pki, addr, "sector-north", "/v3/snapshot").await;
+    assert_eq!(status, 200, "{body}");
+    let snapshot: SnapshotResponse = serde_json::from_str(&body).expect("snapshot");
+    assert_eq!(snapshot.tracks.len(), 1, "the released track goes");
+    assert!(snapshot.dense_group.is_none(), "the group stays home");
+    assert_eq!(snapshot.withheld, 1, "and is counted");
+    let _ = std::fs::remove_dir_all(&pki.dir);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_party_with_no_agreement_is_refused_and_a_health_agreement_sends_health() {
     let pki = Pki::new("refuse");
