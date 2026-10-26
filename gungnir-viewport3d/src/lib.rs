@@ -205,6 +205,9 @@ fn draw_layers(
     // Predicted lines have no toggle: a prediction the operator cannot see is the case
     // DN-02 §5 warns about, and an empty list draws nothing.
     layers::draw_predictions_2d(painter, palette, rect, &state.view, layers.predictions);
+    // A dense group has no toggle either: a raid the operator cannot see is the failure
+    // GAP-015 exists about, and `None` draws nothing.
+    layers::draw_dense_group_2d(painter, palette, rect, &state.view, layers.dense_group);
     // The laydown preview has no toggle either, for the same reason: selecting an
     // option on PN-16 is what turns it on, and there is nothing to hide when nothing
     // is selected (GAP-087).

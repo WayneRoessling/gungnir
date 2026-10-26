@@ -44,14 +44,15 @@ use gungnir_model::identity::GlobalEntityId;
 use gungnir_model::{
     check_schema_version, AlgorithmBaselineId, AssetExtent, AssetId, AssetListView, AssetPriority,
     BearingRayView, Classification, CollectionRequirement, Concurrence, DecisionId,
-    DeconflictionCheck, DeconflictionKind, DeconflictionResult, DefendedAsset, DetectionView,
-    EffectorLayer, EffectorReport, FiresPlan, Geodetic, HeldLayerView, InterceptSolutionView,
-    LaunchWarningReport, LaydownId, Magazine, Measurement, MissionProfile, MissionTime, ModelError,
-    PeerLaunchWarning, PeerOrigin, PendingApprovalId, PipelineStatsView, PlanBasis, PlanId,
-    PlanKind, PlanStandingView, PlanView, ProductKind, Provenance, Quality, RehearsalOrigin,
-    RelativeCost, Releasability, RequestId, RequirementId, RequirementState, ResourceId,
-    ResourceView, SensorId, SensorMode, SensorTaskId, SessionId, SourceAuthentication,
-    TestTrackNumber, TrackId, TrackStatus, TrackView, WarningObligation, SCHEMA_VERSION,
+    DeconflictionCheck, DeconflictionKind, DeconflictionResult, DefendedAsset, DenseGroupView,
+    DetectionView, EffectorLayer, EffectorReport, FiresPlan, Geodetic, GroupComponentView,
+    HeldLayerView, InterceptSolutionView, LaunchWarningReport, LaydownId, Magazine, Measurement,
+    MissionProfile, MissionTime, ModelError, PeerLaunchWarning, PeerOrigin, PendingApprovalId,
+    PipelineStatsView, PlanBasis, PlanId, PlanKind, PlanStandingView, PlanView, ProductKind,
+    Provenance, Quality, RehearsalOrigin, RelativeCost, Releasability, RequestId, RequirementId,
+    RequirementState, ResourceId, ResourceView, SensorId, SensorMode, SensorTaskId, SessionId,
+    SourceAuthentication, TestTrackNumber, TrackId, TrackStatus, TrackView, WarningObligation,
+    SCHEMA_VERSION,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -283,6 +284,38 @@ fn bearing_ray() -> BearingRayView {
         elevation_rad: Some(0.11),
         azimuth_one_sigma_rad: 0.017_453_292_519_943_295,
         valid_until: T1,
+    }
+}
+
+/// A dense group from each filter: the CPHD's with a most probable count and a
+/// distribution, the PHD's with neither, and one stale.
+fn dense_groups() -> Vec<DenseGroupView> {
+    let cphd = DenseGroupView {
+        epoch: T1,
+        expected_targets: 19.625,
+        most_probable_count: Some(20),
+        count_distribution: vec![0.0, 0.125, 0.75, 0.125],
+        components: vec![group_component(), group_component()],
+        filter: "gm-cphd".into(),
+        scan_size: 21,
+        is_stale: false,
+    };
+    let phd = DenseGroupView {
+        most_probable_count: None,
+        count_distribution: Vec::new(),
+        filter: "gm-phd".into(),
+        is_stale: true,
+        ..cphd.clone()
+    };
+    vec![cphd, phd]
+}
+
+fn group_component() -> GroupComponentView {
+    GroupComponentView {
+        expected_targets: 2.375,
+        position_enu: [1_200.5, -3_400.25, 150.0],
+        velocity_enu: [12.5, -3.25, 0.0],
+        position_sigma_m: [22.5, 30.0, 45.0],
     }
 }
 
@@ -1658,6 +1691,14 @@ fn every_view_type_round_trips_and_every_one_is_covered() {
 
     round_trip("PipelineStatsView", &pipeline_stats());
     check("PipelineStatsView", 1);
+
+    let groups = dense_groups();
+    for (i, g) in groups.iter().enumerate() {
+        round_trip(&format!("DenseGroupView {i}"), g);
+    }
+    check("DenseGroupView", groups.len());
+    round_trip("GroupComponentView", &group_component());
+    check("GroupComponentView", 1);
 
     round_trip("AssetListView", &assets());
     check("AssetListView", 1);

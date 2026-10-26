@@ -1184,7 +1184,11 @@
     the dense-group mode needs before its default can be switched on; a `TrackingConfig`
     vocabulary so a promoted baseline can reach the mode's settings; and a consumer --
     nothing projects `PipelineSnapshot::dense_group`, so no picture shows a group
-    estimate yet. Not built, and refusing by name: the full delta-GLMB, which would need
+    estimate yet. **The consumer is
+    built 2026-10-26** and the vocabulary by D-46's build the day before: the estimate
+    reaches both desktops' picture as a group that is not tracks
+    (`../../record/2026-10-26/gap-015-the-dense-group-on-the-picture.md`). The
+    `spawn_blocking` plumbing remains. Not built, and refusing by name: the full delta-GLMB, which would need
     a hypothesis-truncation scheme (ranked assignment or Gibbs sampling) and whose only
     gain over the built LMB is memory of the inter-label dependence ACROSS scans --
     within a scan the LMB's marginals are already exact, and the cost of the projection
@@ -1451,6 +1455,16 @@
       pass it through. An absent section leaves the mode off, so no deployment changes.
       Still open: the `spawn_blocking` plumbing and a consumer for the estimate. See
       `../../record/2026-10-25/d-46-the-dense-group-filter-is-chosen.md`.
+  - date: 2026-10-26
+    status: Open
+    note: >-
+      **The dense group is on the picture.** `DenseGroupView` carries the estimate with no
+      identifier through the facade, the v3 snapshot (withheld from partners and counted),
+      the node and the link, so an embedded and a connected desktop see the same group.
+      PN-02 draws it as translucent two-sigma discs labelled "dense group, not tracks"
+      with the mean count, filter and epoch, aged stale by the track staleness rule, and
+      PN-08 alerts when it appears and goes. Still open: the `spawn_blocking` plumbing.
+      See `../../record/2026-10-26/gap-015-the-dense-group-on-the-picture.md`.
 - id: GAP-016
   name: Scenario generator
   type: Technical

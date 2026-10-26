@@ -1278,6 +1278,9 @@ impl NodeApi {
         // desktop is the only caller `snapshot` hands the unfiltered `full` to.
         withheld += full.bearing_rays.len();
         withheld += usize::from(full.pipeline_stats != gungnir_model::PipelineStatsView::default());
+        // GAP-015: the dense-group estimate is the same internal sensor picture, and DN-18
+        // names no exchange item for it either.
+        withheld += usize::from(full.dense_group.is_some());
         // GAP-132: the queue is what this deployment's own people are deciding, and DN-18
         // names no exchange item for it -- the same reasoning as the plan two lines above,
         // which is a recommendation for this deployment's own effectors. Withheld and
@@ -1301,6 +1304,7 @@ impl NodeApi {
             requirements: Vec::new(),
             bearing_rays: Vec::new(),
             pipeline_stats: gungnir_model::PipelineStatsView::default(),
+            dense_group: None,
             withheld,
             queue: Vec::new(),
             // Stamped by the route that answers, as on the operator's own snapshot

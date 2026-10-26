@@ -537,6 +537,56 @@ pub struct BearingRayView {
     pub valid_until: MissionTime,
 }
 
+/// A dense group the tracker could not resolve into tracks, projected for a caller to
+/// draw (GAP-015).
+///
+/// The third thing the picture can hold, beside [`TrackView`] (a place with an identity)
+/// and [`BearingRayView`] (a direction with no place): **a count and a shape with no
+/// identity**. The pipeline's dense-group mode runs a PHD or CPHD filter for a scan with
+/// more detections than exact association attempts, and that filter's intensity carries
+/// no label across scans, so **nothing here has an identifier, and nothing here may be
+/// drawn or counted as a track**. `gungnir-tracking-service` projects
+/// `gungnir_fusion_async::DenseGroupEstimate` into this; `TrackingService::dense_group`
+/// is where a caller reads the current one.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DenseGroupView {
+    /// The epoch the estimate is of, on the pipeline's clock: never a poll time.
+    pub epoch: MissionTime,
+    /// The expected number of targets: a mean, not a count. 2.4 is between two and three.
+    pub expected_targets: f64,
+    /// The most probable count, from the CPHD only. `None` from the PHD, which has no
+    /// distribution to take a mode of -- not zero, and not the mean rounded.
+    pub most_probable_count: Option<u64>,
+    /// `[n]` is the probability of exactly `n` targets. Empty from the PHD.
+    #[serde(default)]
+    pub count_distribution: Vec<f64>,
+    /// The intensity's components: unlabelled, and in no meaningful order across epochs.
+    pub components: Vec<GroupComponentView>,
+    /// Which filter produced it, by its configuration name (`gm-phd`, `gm-cphd`).
+    pub filter: String,
+    /// Detections in the epoch's scan.
+    pub scan_size: u64,
+    /// Whether the estimate is older than the staleness rule allows, by the same rule a
+    /// track's `Quality::is_stale` follows (GAP-012): a feed gone quiet must not leave a
+    /// raid on the picture reading as current.
+    #[serde(default)]
+    pub is_stale: bool,
+}
+
+/// One component of a [`DenseGroupView`]: mass at a place, with no identity.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct GroupComponentView {
+    /// The expected number of targets it accounts for. Not a probability; it may exceed
+    /// one, and a component of 2.4 is about two targets not resolved from each other.
+    pub expected_targets: f64,
+    /// Local ENU metres.
+    pub position_enu: [f64; 3],
+    /// Local ENU metres per second.
+    pub velocity_enu: [f64; 3],
+    /// One-sigma position uncertainty per axis, metres, from the covariance diagonal.
+    pub position_sigma_m: [f64; 3],
+}
+
 /// The pipeline's own counters, for a caller across a process boundary (GAP-096's wire
 /// contract): how many bearings were offered, updated a track, were retained, expired,
 /// or were refused, alongside the wider counters they sit next to on

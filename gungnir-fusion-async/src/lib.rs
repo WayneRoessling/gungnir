@@ -174,8 +174,9 @@ pub struct PipelineSnapshot {
     /// identifier of any kind, because the PHD or CPHD intensity behind it carries no
     /// identity across scans; see [`crate::dense_group`] for the whole of that reasoning
     /// and for what a labelled filter would have to add before any of it could be
-    /// presented as tracks. **Nothing reads this yet**: `gungnir-tracking-service` does
-    /// not project it, which is the same state `retained_bearings` was left in above.
+    /// presented as tracks. `gungnir-tracking-service` projects it into
+    /// `gungnir_model::DenseGroupView`, which the picture draws as a group and never as
+    /// track symbols (GAP-015).
     pub dense_group: Option<DenseGroupEstimate>,
     /// [`FusionPipeline::dense_group_refusals`] at the same instant as `tracks`: epochs
     /// the dense-group filter refused, so a caller can tell a resolvable scene from a

@@ -1181,6 +1181,10 @@ IE-delivery-state,uafId,IE-delivery-state
 IE-delivery-state,uafKind,InformationElement
 IE-delivery-state,registry.code,gungnir_model::DeliveryState
 IE-delivery-state,registry.domain,"Plans, effectors & handoff"
+IE-dense-group-view,uafId,IE-dense-group-view
+IE-dense-group-view,uafKind,InformationElement
+IE-dense-group-view,registry.code,gungnir_model::DenseGroupView
+IE-dense-group-view,registry.domain,Picture & tracking vocabulary
 IE-effector-layer,uafId,IE-effector-layer
 IE-effector-layer,uafKind,InformationElement
 IE-effector-layer,registry.code,gungnir_model::EffectorLayer
@@ -1253,6 +1257,10 @@ IE-governance-event,uafId,IE-governance-event
 IE-governance-event,uafKind,InformationElement
 IE-governance-event,registry.code,gungnir_model::GovernanceEvent
 IE-governance-event,registry.domain,Events & the record
+IE-group-component-view,uafId,IE-group-component-view
+IE-group-component-view,uafKind,InformationElement
+IE-group-component-view,registry.code,gungnir_model::GroupComponentView
+IE-group-component-view,registry.domain,Picture & tracking vocabulary
 IE-handoff,uafId,IE-handoff
 IE-handoff,uafKind,InformationElement
 IE-handoff,registry.code,gungnir_model::Handoff

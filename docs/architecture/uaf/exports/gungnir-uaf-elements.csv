@@ -312,6 +312,7 @@ IE-deconfliction-result,Information Elements,InformationElement,DeconflictionRes
 IE-defended-asset,Information Elements,InformationElement,DefendedAsset,One asset the sector defends.,Class
 IE-delegation-settings,Information Elements,InformationElement,DelegationSettings,"How long D-15's delegations survive a desktop losing its node (docs/design/DN-31-node-approval-queue.md \u00a76, clause 6.7, and \u00a77).",Class
 IE-delivery-state,Information Elements,InformationElement,DeliveryState,"How the handoff reached, or failed to reach, the effector.",Class
+IE-dense-group-view,Information Elements,InformationElement,DenseGroupView,"A dense group the tracker could not resolve into tracks, projected for a caller to draw (GAP-015).",Class
 IE-effector-layer,Information Elements,InformationElement,EffectorLayer,"Defence layer, ordered outermost first.",Class
 IE-effector-report,Information Elements,InformationElement,EffectorReport,What the receiving system reports back.,Class
 IE-elevation-band,Information Elements,InformationElement,ElevationBand,"The elevations a sensor can see: a floor and a ceiling, radians above the horizon **at the sensor**, measured against its own local vertical (GAP-158, D-111, docs/design/DN-12-coverage-and-gaps.md amendment 2).",Class
@@ -330,6 +331,7 @@ IE-gap-acceptance,Information Elements,InformationElement,GapAcceptance,"A comma
 IE-gap-acceptance-id,Information Elements,InformationElement,GapAcceptanceId,"Identifies one gap acceptance: a per-deployment serial, continued past the highest the journal holds (DN-33 \u00a78 rule 6).",Class
 IE-gap-severity,Information Elements,InformationElement,GapSeverity,"How a coverage gap falls short: detectable by one sensor, or watched by nothing (docs/design/DN-12-coverage-and-gaps.md \u00a73).",Class
 IE-governance-event,Information Elements,InformationElement,GovernanceEvent,"Which algorithm configuration is in force, and how it got there (docs/design/DN-24-mission-profiles-and-algorithm-baselines.md \u00a78, GAP-086).",Class
+IE-group-component-view,Information Elements,InformationElement,GroupComponentView,"One component of a DenseGroupView: mass at a place, with no identity.",Class
 IE-handoff,Information Elements,InformationElement,Handoff,What is handed to an effector or fires system.,Class
 IE-handoff-error,Information Elements,InformationElement,HandoffError,Why an effector report could not be applied to the handoff it names.,Class
 IE-handoff-event,Information Elements,InformationElement,HandoffEvent,"A handoff's life (docs/design/DN-07-handoff.md \u00a75, GAP-040). **Never Delivered from this side until a transport carries it**: today a handoff is issued and is either manual (no endpoint configured, a radio call the operator must make) or undelivered (an endpoint is configured and nothing carries it there).",Class

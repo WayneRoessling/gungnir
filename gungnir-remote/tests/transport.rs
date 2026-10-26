@@ -341,6 +341,52 @@ async fn a_desktop_receives_the_nodes_bearing_rays_and_pipeline_stats() {
     );
 }
 
+/// GAP-015: a node whose pipeline reports a dense group publishes it, and a desktop
+/// connected over the real v3 transport reads it back through
+/// `TrackingService::dense_group`, field for field -- the same picture an embedded
+/// desktop reads from its own pipeline.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_desktop_receives_the_nodes_dense_group() {
+    let group = gungnir_model::DenseGroupView {
+        epoch: MissionTime(8.0),
+        expected_targets: 7.75,
+        most_probable_count: None,
+        count_distribution: Vec::new(),
+        components: vec![gungnir_model::GroupComponentView {
+            expected_targets: 1.25,
+            position_enu: [960.0, 450.0, 2_000.0],
+            velocity_enu: [120.0, 30.0, 0.0],
+            position_sigma_m: [20.0, 20.0, 30.0],
+        }],
+        filter: "gm-phd".into(),
+        scan_size: 9,
+        is_stale: false,
+    };
+    let snap = snapshot(vec![track(1)]).with_dense_group(Some(group.clone()));
+    let api = authenticating(snap);
+    let url = serve(Arc::clone(&api)).await;
+
+    let handle = tokio::runtime::Handle::current();
+    let (mut tracking, _intercept) =
+        connect(&RemoteEndpoint::plain(url), credential(), &handle).expect("the link starts");
+    until(
+        || {
+            tracking.poll(MissionTime(0.0));
+            tracking.is_healthy()
+        },
+        "the link to report connected",
+    )
+    .await;
+    tracking.poll(MissionTime(0.0));
+
+    assert_eq!(
+        tracking.dense_group(),
+        Some(&group),
+        "the node's dense group did not reach the desktop over the wire"
+    );
+    assert_eq!(tracking.tracks().len(), 1, "and the group is not a track");
+}
+
 /// A track initiated on the node after the desktop connected reaches it over the event
 /// stream, without another snapshot request.
 #[tokio::test(flavor = "multi_thread")]

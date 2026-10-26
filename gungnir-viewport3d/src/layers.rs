@@ -246,6 +246,9 @@ pub struct LayerInputs<'a> {
     /// The laydown option PN-16 has selected for a before-and-after preview (GAP-087),
     /// or `None` when nothing is selected.
     pub laydown_preview: Option<LaydownPreview<'a>>,
+    /// The dense group the tracker could not resolve into tracks (GAP-015), or `None`
+    /// for a resolvable scene. Drawn as a group, never as track symbols.
+    pub dense_group: Option<&'a gungnir_model::DenseGroupView>,
 }
 
 /// The placed terrain as the viewport draws it: the grid's vertices in local ENU metres.
@@ -482,6 +485,95 @@ pub fn draw_predictions_2d(
             }
         }
     }
+}
+
+/// The least a component of a dense group must account for to be drawn: half a target,
+/// the PHD's own conventional extraction threshold (`gungnir_rfs::PhdSettings`: "a
+/// component accounting for less than half a target is not one"). The mixture holds up to
+/// hundreds of components, most of them slivers of mass, and drawing every one would
+/// paint the raid's whole neighbourhood rather than where the targets are.
+pub const GROUP_COMPONENT_DRAW_WEIGHT: f64 = 0.5;
+
+/// What a dense group's label says (GAP-015): that it is **not tracks**, the expected
+/// count as the mean it is, the filter, the CPHD's most likely count where there is one,
+/// the epoch it is of, and whether it has gone stale.
+#[must_use]
+pub fn dense_group_label(group: &gungnir_model::DenseGroupView) -> String {
+    use std::fmt::Write as _;
+    let mut label = format!(
+        "dense group, not tracks: about {:.1} targets ({})",
+        group.expected_targets, group.filter
+    );
+    if let Some(n) = group.most_probable_count {
+        let _ = write!(label, ", most likely {n}");
+    }
+    let _ = write!(label, ", as of t = {:.0} s", group.epoch.0);
+    if group.is_stale {
+        label.push_str(", stale");
+    }
+    label
+}
+
+/// Draw a dense group (GAP-015): a translucent disc two sigma across for each component
+/// holding at least [`GROUP_COMPONENT_DRAW_WEIGHT`] of a target, in the unknown-identity
+/// colour because a group has no identity, and one label at the group's weighted centre.
+///
+/// **No symbol, no identifier, no per-component count.** A disc is mass at a place, and
+/// drawing it as a track symbol would claim the identity the filter does not carry.
+pub fn draw_dense_group_2d(
+    painter: &egui::Painter,
+    palette: &theme::Palette,
+    rect: egui::Rect,
+    view: &TopDownView,
+    group: Option<&gungnir_model::DenseGroupView>,
+) {
+    let Some(group) = group else {
+        return;
+    };
+    let color = palette.class_unknown_color;
+    let stroke = egui::Stroke::new(palette.stroke_emphasis, color);
+    let fill = color.gamma_multiply(0.2);
+    let (mut weight, mut east, mut north) = (0.0, 0.0, 0.0);
+    for c in &group.components {
+        if c.expected_targets.is_finite() && c.expected_targets > 0.0 {
+            weight += c.expected_targets;
+            east += c.expected_targets * c.position_enu[0];
+            north += c.expected_targets * c.position_enu[1];
+        }
+        if c.expected_targets < GROUP_COMPONENT_DRAW_WEIGHT {
+            continue;
+        }
+        let radius_m = 2.0 * c.position_sigma_m[0].max(c.position_sigma_m[1]);
+        if !radius_m.is_finite() {
+            continue;
+        }
+        let centre = view.project(c.position_enu, rect);
+        let edge = view.project(
+            [
+                c.position_enu[0] + radius_m,
+                c.position_enu[1],
+                c.position_enu[2],
+            ],
+            rect,
+        );
+        painter.circle(centre, (edge - centre).length().max(3.0), fill, stroke);
+    }
+    let anchor = if weight > 0.0 {
+        view.project([east / weight, north / weight, 0.0], rect)
+    } else {
+        rect.left_bottom() + egui::vec2(palette.panel_spacing, -3.0 * palette.panel_spacing)
+    };
+    painter.text(
+        anchor,
+        egui::Align2::CENTER_BOTTOM,
+        dense_group_label(group),
+        egui::FontId::proportional(palette.small_font_size),
+        if group.is_stale {
+            palette.track_stale_color
+        } else {
+            palette.viewport_text_color
+        },
+    );
 }
 
 /// One laydown option's sensor and resource positions, previewed on the map for a
@@ -751,6 +843,37 @@ pub fn coverage_color(palette: &theme::Palette, confidence: f32) -> egui::Color3
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// GAP-015: the label says the group is not tracks, gives the count as the mean it
+    /// is, names the filter and the epoch, gives a most likely count only where the
+    /// filter has one, and says when it has gone stale.
+    #[test]
+    fn a_dense_group_label_says_not_tracks_and_what_it_knows() {
+        let mut group = gungnir_model::DenseGroupView {
+            epoch: gungnir_model::MissionTime(412.0),
+            expected_targets: 19.62,
+            most_probable_count: None,
+            count_distribution: Vec::new(),
+            components: Vec::new(),
+            filter: "gm-phd".into(),
+            scan_size: 21,
+            is_stale: false,
+        };
+        let phd = dense_group_label(&group);
+        assert!(phd.contains("not tracks") && phd.contains("19.6"), "{phd}");
+        assert!(phd.contains("gm-phd") && phd.contains("412"), "{phd}");
+        assert!(
+            !phd.contains("most likely") && !phd.contains("stale"),
+            "{phd}"
+        );
+        group.most_probable_count = Some(20);
+        group.is_stale = true;
+        let cphd = dense_group_label(&group);
+        assert!(
+            cphd.contains("most likely 20") && cphd.ends_with("stale"),
+            "{cphd}"
+        );
+    }
 
     /// A small grid is drawn whole; a large one is decimated to the budget, never
     /// skipped triangle by triangle.

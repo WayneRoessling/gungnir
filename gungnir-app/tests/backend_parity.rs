@@ -528,6 +528,7 @@ impl Node {
             self.tracking.tracks(),
             self.tracking.bearing_rays(),
             self.tracking.pipeline_stats(),
+            self.tracking.dense_group(),
             self.announcer.last_plan(),
             self.announcer.last_standing(),
             health,

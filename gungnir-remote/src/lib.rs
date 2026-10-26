@@ -277,6 +277,8 @@ pub struct RemoteTrackingService {
     bearing_rays: Vec<BearingRayView>,
     /// Mirrors `link::Projection::pipeline_stats` (GAP-096's wire contract).
     pipeline_stats: PipelineStatsView,
+    /// Mirrors `link::Projection::dense_group` (GAP-015), on the same cadence.
+    dense_group: Option<gungnir_model::DenseGroupView>,
     outbox: Vec<DetectionView>,
     dropped: u64,
     connected: bool,
@@ -296,6 +298,7 @@ impl RemoteTrackingService {
             cache: Vec::new(),
             bearing_rays: Vec::new(),
             pipeline_stats: PipelineStatsView::default(),
+            dense_group: None,
             outbox: Vec::new(),
             dropped: 0,
             connected: false,
@@ -411,6 +414,7 @@ impl TrackingService for RemoteTrackingService {
             // the cadence `link::Projection::bearing_rays`'s doc comment describes.
             self.bearing_rays.clone_from(&projection.bearing_rays);
             self.pipeline_stats = projection.pipeline_stats;
+            self.dense_group.clone_from(&projection.dense_group);
         }
     }
 
@@ -423,6 +427,12 @@ impl TrackingService for RemoteTrackingService {
     /// defaulted empty answer.
     fn bearing_rays(&self) -> &[BearingRayView] {
         &self.bearing_rays
+    }
+
+    /// The node's dense-group estimate as of the last snapshot (GAP-015), on the cadence
+    /// `link::Projection::dense_group` describes.
+    fn dense_group(&self) -> Option<&gungnir_model::DenseGroupView> {
+        self.dense_group.as_ref()
     }
 
     /// The node pipeline's own counters as of the last snapshot (GAP-096's wire

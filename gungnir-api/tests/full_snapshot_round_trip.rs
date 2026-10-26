@@ -167,6 +167,25 @@ fn populated_queue_item() -> QueueItemView {
     }
 }
 
+/// A dense-group view with every field set, none at its default.
+fn populated_dense_group() -> gungnir_model::DenseGroupView {
+    gungnir_model::DenseGroupView {
+        epoch: MissionTime(412.0),
+        expected_targets: 19.625,
+        most_probable_count: Some(20),
+        count_distribution: vec![0.0, 0.125, 0.75, 0.125],
+        components: vec![gungnir_model::GroupComponentView {
+            expected_targets: 2.375,
+            position_enu: [1_200.5, -3_400.25, 150.0],
+            velocity_enu: [12.5, -3.25, 0.0],
+            position_sigma_m: [22.5, 30.0, 45.0],
+        }],
+        filter: "gm-cphd".into(),
+        scan_size: 21,
+        is_stale: true,
+    }
+}
+
 /// Every field the current `SnapshotResponse` carries, none of them at their default.
 fn full_snapshot() -> SnapshotResponse {
     SnapshotResponse::new(
@@ -181,6 +200,8 @@ fn full_snapshot() -> SnapshotResponse {
     )
     .with_bearing_data(vec![populated_bearing_ray()], populated_pipeline_stats())
     .with_queue(vec![populated_queue_item()])
+    // GAP-015: the dense group the pipeline could not resolve.
+    .with_dense_group(Some(populated_dense_group()))
     // GAP-157: the plan's standing, with every field of its richest variant set.
     .with_plan_standing(gungnir_model::PlanStandingView::Interim {
         value_at_least: 6.25,
@@ -221,6 +242,7 @@ fn a_fully_populated_snapshot_survives_plain_serde() {
     assert_eq!(back.requirements, original.requirements);
     assert_eq!(back.bearing_rays, original.bearing_rays);
     assert_eq!(back.pipeline_stats, original.pipeline_stats);
+    assert_eq!(back.dense_group, original.dense_group);
     assert_eq!(back.queue, original.queue);
     assert_eq!(
         back.plan.as_ref().map(|p| p.basis),

@@ -2269,6 +2269,7 @@ async fn run(
             tracking.tracks(),
             tracking.bearing_rays(),
             tracking.pipeline_stats(),
+            tracking.dense_group(),
             announcer.last_plan(),
             announcer.last_standing(),
             health,

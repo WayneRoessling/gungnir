@@ -204,6 +204,7 @@ impl Node {
             tracks,
             &[],
             PipelineStats::default(),
+            None,
             &PlanView::default(),
             None,
             SystemHealth::default(),
