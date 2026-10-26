@@ -313,6 +313,23 @@ pub fn evaluate(
     with_chain(cx, policy, |chain| chain.evaluate(plan, cx.resources))
 }
 
+/// The control-status engine's verdict alone, for the queue's answer to a live status
+/// change (GAP-203, `crate::control_status`).
+///
+/// Not the whole chain: a node re-judges its queue with nobody at a console, and the
+/// authority engine would refuse every item for that reason rather than for the status.
+/// The engine is `gungnir-policy`'s own, so what withdraws an item is exactly what would
+/// have refused it had it been proposed under the new status.
+#[must_use]
+pub fn control_status_verdict(cx: &ApprovalContext<'_>, plan: &PlanView) -> PolicyVerdict {
+    let classification = classifier(cx.tracks);
+    let engine = ControlStatusPolicy {
+        settings: &cx.config.policy.control_status,
+        track_classification: &classification,
+    };
+    gungnir_policy::PolicyEngine::evaluate(&engine, plan, cx.resources)
+}
+
 /// Build the chain and hand it to `f`.
 ///
 /// Continuation-passing rather than a function returning the chain, because three of the

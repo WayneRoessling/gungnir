@@ -623,7 +623,9 @@ async fn two_clients_racing_one_item_produce_exactly_one_decision() {
                 decision,
                 "the refusal must name the decision that stands"
             ),
-            DecisionRefused::Expired { .. } => panic!("nothing expired in this round"),
+            DecisionRefused::Expired { .. } | DecisionRefused::Withdrawn { .. } => {
+                panic!("nothing expired or was withdrawn in this round")
+            }
         }
 
         // The retry: the same request key, answered with the same decision, recording

@@ -56,7 +56,7 @@ pub struct StatusStripData<'a> {
     /// The coverage report for this frame, owned because the strip's view borrows what
     /// it reports (DN-12 §7).
     coverage: Option<gungnir_analytics::CoverageReport>,
-    control_status: Vec<ControlStatusLine>,
+    control_status: Vec<ControlStatusLine<'a>>,
     delegations: Vec<DelegationLine<'a>>,
     role_name: String,
     /// The signed-in operator's role, by name, for the operator line (GAP-057).
@@ -180,6 +180,10 @@ impl<'a> StatusStripData<'a> {
     #[must_use]
     pub fn from_state(state: &'a AppState) -> Self {
         let settings = &state.config.policy.control_status;
+        // GAP-203: the chip opens the status dialog for a role that may change it, and
+        // says who set the layer when a live change did (the fold at start or this
+        // session, or the node's while linked).
+        let can_change = crate::control_status::may_set(state).is_ok();
         let control_status = LAYERS
             .iter()
             .map(|layer| ControlStatusLine {
@@ -188,6 +192,15 @@ impl<'a> StatusStripData<'a> {
                 // `for_layer` returns Hold for an unconfigured layer by design, so the
                 // map is the only place that knows whether anyone set it.
                 configured: settings.by_layer.contains_key(layer),
+                set_by: state.control_status_ledger.set_by.get(layer).map(|c| {
+                    gungnir_ui::panels::status_strip::SetBy {
+                        operator: c.operator.as_str(),
+                        role: c.role.as_str(),
+                        at: c.at,
+                        reason: c.reason.as_str(),
+                    }
+                }),
+                can_change,
             })
             .collect();
 

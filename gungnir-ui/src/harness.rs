@@ -31,7 +31,7 @@
 //! round. This closes the gap between "the view struct is correct" and "the screen says
 //! it", which is where a rendering bug would otherwise hide.
 
-use egui::{Context, RawInput, Rect};
+use egui::{Context, Event, Modifiers, PointerButton, RawInput, Rect};
 
 /// Default probe surface. Large enough that panels lay out without clipping text away,
 /// which would make an assertion fail for a reason that has nothing to do with the panel.
@@ -79,26 +79,81 @@ impl RenderProbe {
     /// ordinary code under the `harness` feature and the workspace does not permit
     /// `expect` outside tests. The caller is a test and may unwrap it.
     pub fn draw<R>(&self, mut contents: impl FnMut(&mut egui::Ui) -> R) -> (Option<R>, DrawnFrame) {
+        let mut result = None;
+        let mut frame = DrawnFrame::default();
+        for _ in 0..2 {
+            let (r, f) = self.run_frame(Vec::new(), &mut contents);
+            result = r;
+            frame = f;
+        }
+        (result, frame)
+    }
+
+    /// Draw `contents`, then click the first drawn string containing `needle`, and report
+    /// what the frame that saw the release returned and drew.
+    ///
+    /// A click in egui is a press and a release over the same widget on consecutive
+    /// frames, and a widget is only hit-testable once a previous frame has laid it out,
+    /// so this runs the two settling frames of [`draw`](Self::draw), then a frame with the
+    /// pointer moved to the text and pressed, then a frame with it released. The result
+    /// is the release frame's, which is the one a `clicked()` fires in.
+    ///
+    /// `Err` carries the settled frame when nothing drawn contains `needle`, so a test
+    /// can print what was drawn instead; a click on text that is not there is not a
+    /// click on anything.
+    pub fn click<R>(
+        &self,
+        needle: &str,
+        mut contents: impl FnMut(&mut egui::Ui) -> R,
+    ) -> Result<(Option<R>, DrawnFrame), DrawnFrame> {
+        let (_, settled) = self.draw(&mut contents);
+        let Some(target) = settled.rect_of(needle) else {
+            return Err(settled);
+        };
+        let at = target.center();
+        let press = vec![
+            Event::PointerMoved(at),
+            Event::PointerButton {
+                pos: at,
+                button: PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            },
+        ];
+        self.run_frame(press, &mut contents);
+        let release = vec![Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        }];
+        Ok(self.run_frame(release, &mut contents))
+    }
+
+    /// One frame with `events` as its input.
+    ///
+    /// The same central panel the desktop draws its viewport in (egui 0.34 puts it inside
+    /// the frame's root `Ui` rather than on the context).
+    fn run_frame<R>(
+        &self,
+        events: Vec<Event>,
+        contents: &mut impl FnMut(&mut egui::Ui) -> R,
+    ) -> (Option<R>, DrawnFrame) {
         let input = RawInput {
             screen_rect: Some(Rect::from_min_size(
                 egui::pos2(0.0, 0.0),
                 egui::vec2(self.size[0], self.size[1]),
             )),
+            events,
             ..Default::default()
         };
         let mut result = None;
-        let mut frame = DrawnFrame::default();
-        for _ in 0..2 {
-            // The same central panel the desktop draws its viewport in (egui 0.34 puts it
-            // inside the frame's root `Ui` rather than on the context).
-            let output = self.ctx.run_ui(input.clone(), |ui| {
-                egui::CentralPanel::default().show_inside(ui, |ui| {
-                    result = Some(contents(ui));
-                });
+        let output = self.ctx.run_ui(input, |ui| {
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                result = Some(contents(ui));
             });
-            frame = collect(&output);
-        }
-        (result, frame)
+        });
+        (result, collect(&output))
     }
 
     /// The context, for a caller that needs to draw a window rather than a panel.
@@ -109,13 +164,23 @@ impl RenderProbe {
 }
 
 /// The text a frame drew, in draw order.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct DrawnFrame {
     /// Every string painted, in the order it was painted.
     pub texts: Vec<String>,
+    /// Where each string in `texts` was painted, index for index, so a probe can put
+    /// the pointer on one.
+    pub rects: Vec<Rect>,
 }
 
 impl DrawnFrame {
+    /// Where the first drawn string containing `needle` was painted.
+    #[must_use]
+    pub fn rect_of(&self, needle: &str) -> Option<Rect> {
+        self.position_of(needle)
+            .and_then(|i| self.rects.get(i).copied())
+    }
+
     /// Whether any drawn string contains `needle`.
     #[must_use]
     pub fn says(&self, needle: &str) -> bool {
@@ -139,16 +204,20 @@ impl DrawnFrame {
 }
 
 fn collect(output: &egui::FullOutput) -> DrawnFrame {
-    let mut texts = Vec::new();
+    let mut frame = DrawnFrame::default();
     for clipped in &output.shapes {
-        walk(&clipped.shape, &mut texts);
+        walk(&clipped.shape, &mut frame);
     }
-    DrawnFrame { texts }
+    frame
 }
 
-fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
+fn walk(shape: &egui::Shape, out: &mut DrawnFrame) {
     match shape {
-        egui::Shape::Text(text) => out.push(text.galley.text().to_owned()),
+        egui::Shape::Text(text) => {
+            out.texts.push(text.galley.text().to_owned());
+            out.rects
+                .push(Rect::from_min_size(text.pos, text.galley.size()));
+        }
         egui::Shape::Vec(shapes) => {
             for s in shapes {
                 walk(s, out);

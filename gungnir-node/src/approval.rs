@@ -352,7 +352,10 @@ const NOBODY_ROLE: Role = Role::Operator;
 /// the reason the desktop's own `with_desk` gives: a decision and the engagement it opens
 /// are one act and must carry one mission time, and the operator and the role of a
 /// decision come from one session (DN-23 §5 rule 1).
-fn with_desk<T>(
+///
+/// Crate-visible since GAP-203, so [`crate::control_status`] applies a live status change
+/// through the same context and host a decision goes through, rather than a second pair.
+pub(crate) fn with_desk<T>(
     approval: &mut NodeApproval,
     frame: &Frame<'_>,
     signed_in: Option<(OperatorId, Role)>,
@@ -566,6 +569,11 @@ fn already_ended(
     };
     let refused = match &record.decision {
         OperatorDecision::Expired { at } => v3::DecisionRefused::Expired { at: *at },
+        OperatorDecision::Withdrawn { layer, status, at } => v3::DecisionRefused::Withdrawn {
+            layer: *layer,
+            status: *status,
+            at: *at,
+        },
         // **The decision that stands, named in full** (DN-31 §6.3): who decided, as which
         // role and when, so PN-07 can say it rather than only that it was too late.
         OperatorDecision::Accepted
@@ -763,7 +771,8 @@ fn view_of(record: &DecisionRecord) -> Option<v3::DecisionRecordView> {
         OperatorDecision::Rejected { reason } => v3::DecisionChoice::Reject {
             reason: reason.clone(),
         },
-        OperatorDecision::Expired { .. } => return None,
+        // Neither is a person's choice (DN-10 §3; GAP-203).
+        OperatorDecision::Expired { .. } | OperatorDecision::Withdrawn { .. } => return None,
     };
     Some(v3::DecisionRecordView {
         decision: record.id,

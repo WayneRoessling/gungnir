@@ -263,6 +263,7 @@ fn render_reconciliation_due(
     let mut resolution = None;
     if let Some(Ok(r)) = due.reconciliation {
         render_both_acted(ui, palette, &r.both_acted);
+        render_offline_status_changes(ui, palette, &r.local_only_status_changes);
     }
     render_outbox(ui, due.outbox);
     ui.label(
@@ -334,6 +335,43 @@ fn render_both_acted(
                 crate::failover::both_acted_sentence(incident)
             ))
             .color(palette.alert_color),
+        );
+    }
+}
+
+/// The weapons-control-status changes this console made while cut off (GAP-203), each in
+/// words and with **no button**: the node's status is in force again (the owner's rule of
+/// 2026-10-26), and the person reads here that what they set no longer holds.
+fn render_offline_status_changes(
+    ui: &mut egui::Ui,
+    palette: &gungnir_ui::theme::Palette,
+    changes: &[gungnir_model::ControlStatusChange],
+) {
+    if changes.is_empty() {
+        return;
+    }
+    ui.label(
+        egui::RichText::new(format!(
+            "{} weapons control status change(s) made here while cut off; the node's status \
+             is in force again and these no longer hold:",
+            changes.len()
+        ))
+        .strong()
+        .color(palette.warning_color),
+    );
+    for c in changes {
+        ui.label(
+            egui::RichText::new(format!(
+                "  {:?}: {:?} to {:?} by operator {} ({}) at {}: {}",
+                c.layer,
+                c.previous,
+                c.status,
+                c.operator,
+                c.role,
+                crate::control_status::at_sentence(c.at),
+                c.reason
+            ))
+            .color(palette.warning_color),
         );
     }
 }
@@ -515,6 +553,12 @@ pub enum PanelAction {
     CoverageLayer(gungnir_ui::panels::coverage_layers::LayerAction),
     /// PN-11: a commander accepts a coverage gap, with a reason (GAP-106, DN-33 §8).
     AcceptGap(gungnir_ui::panels::coverage_layers::AcceptGap),
+    /// PN-01: open the status dialog FL-08 on this layer (GAP-203).
+    ChangeControlStatus(gungnir_model::EffectorLayer),
+    /// FL-08: a supervisor or commander puts a layer at a status, with a reason and,
+    /// under D-140, a second person's credential (GAP-203). Applied by `main.rs` after the
+    /// frame, like a decision, so the change that withdraws queue items never runs mid-draw.
+    SetControlStatus(gungnir_ui::panels::control_status_dialog::ControlStatusDraft),
     /// PN-15: state, task, decline or answer a collection requirement.
     Requirement(gungnir_ui::panels::requirements::RequirementAction),
     /// PN-12: open, close, step, seek or change rate.
@@ -1876,10 +1920,15 @@ pub fn render_commander_summary(
 
     let ranking = crate::sustainment::asset_exposure(state);
     let exposure_lines = crate::sustainment::exposure_lines(state, &ranking);
+    // GAP-203, DN-09 §7: the session's status changes with who made them. The second
+    // person is formatted once here so the line can borrow it.
+    let confirmed = confirmed_by_sentences(state);
+    let status_changes = status_change_lines(state, &confirmed);
     let view = CommanderSummaryView {
         handover,
         queue,
         delegations: &delegations,
+        control_status_changes: &status_changes,
         accepted_gaps: Err(COVERAGE),
         plan,
         outcomes: Ok(crate::engagements::outcome_counts(state)),
@@ -1907,6 +1956,47 @@ pub fn render_commander_summary(
         notes,
     )
     .map(PanelAction::Handover)
+}
+
+/// The second person of each of the session's status changes, formatted once per frame
+/// so PN-17's lines can borrow it (GAP-203, D-140).
+fn confirmed_by_sentences(state: &AppState) -> Vec<Option<String>> {
+    state
+        .control_status_ledger
+        .this_session
+        .iter()
+        .map(|c| {
+            c.confirmed_by
+                .as_ref()
+                .map(|p| format!("operator {} ({})", p.operator, p.role))
+        })
+        .collect()
+}
+
+/// PN-17's status-change lines, oldest first as the ledger keeps them (GAP-203).
+fn status_change_lines<'a>(
+    state: &'a AppState,
+    confirmed: &'a [Option<String>],
+) -> Vec<gungnir_ui::panels::commander_summary::ControlStatusChangeLine<'a>> {
+    state
+        .control_status_ledger
+        .this_session
+        .iter()
+        .zip(confirmed)
+        .map(
+            |(c, confirmed_by)| gungnir_ui::panels::commander_summary::ControlStatusChangeLine {
+                layer: c.layer,
+                status: c.status,
+                previous: c.previous,
+                operator: c.operator.as_str(),
+                role: c.role.as_str(),
+                at: c.at,
+                reason: c.reason.as_str(),
+                confirmed_by: confirmed_by.as_deref(),
+                origin: c.origin.as_deref(),
+            },
+        )
+        .collect()
 }
 
 /// Whether this panel has a real implementation behind it today.

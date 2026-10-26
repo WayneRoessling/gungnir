@@ -38,6 +38,7 @@ pub mod endpoint;
 pub mod identity;
 pub mod link;
 pub mod peer;
+pub mod policy;
 pub mod queue;
 
 use gungnir_intercept_service::{

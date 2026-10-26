@@ -203,6 +203,12 @@ pub struct Reconciliation {
     /// `LinkEvent::BothActed` and alerted when the merge is computed, and PN-18 shows them
     /// above everything else. **Never resolved by anyone**: both engagements happened.
     pub both_acted: Vec<BothActed>,
+    /// Weapons-control-status changes this desktop made while cut off, which the node
+    /// never saw (GAP-203). Not conflicts and never forwarded: the node's status is in force
+    /// again the moment the link is up (the owner's rule of 2026-10-26), and PN-18 says
+    /// what this console had changed in the meantime so the person knows it no longer
+    /// holds.
+    pub local_only_status_changes: Vec<gungnir_model::ControlStatusChange>,
 }
 
 /// A conflict the arbitration rule resolved, and how.
@@ -845,6 +851,7 @@ pub fn supply_history(state: &mut AppState, outcome: HistoryOutcome) {
                 resolved: Vec::new(),
                 resolved_by: std::collections::BTreeMap::new(),
                 both_acted: report.both_acted,
+                local_only_status_changes: report.local_only_status_changes,
             })
         }
         HistoryOutcome::Gone { reason } => Err(format!(
@@ -990,6 +997,10 @@ fn outage_batch(
             // never admits; the filter says what "taken here" means rather than trusting it.
             r.origin.is_none()
                 && !r.is_expiry()
+                // A withdrawal is not a decision either (GAP-203); the status change
+                // that made it is the desktop's own record, and the node's status wins
+                // on reconnect (the owner's choice of 2026-10-26).
+                && !r.is_withdrawal()
                 && r.mission_time >= fallback.since
                 && r.mission_time <= restored
         })
@@ -1021,10 +1032,13 @@ fn record_view(
                 reason: reason.clone(),
             },
             // Filtered out by the caller; named so a change that let one through reaches
-            // the node's `400` rather than a rejection nobody made.
-            OperatorDecision::Expired { .. } => DecisionChoice::Reject {
-                reason: String::new(),
-            },
+            // the node's `400` rather than a rejection nobody made. A withdrawal (GAP-203)
+            // is the same kind of non-choice.
+            OperatorDecision::Expired { .. } | OperatorDecision::Withdrawn { .. } => {
+                DecisionChoice::Reject {
+                    reason: String::new(),
+                }
+            }
         },
         operator: record.operator_id.clone(),
         role: record.role.clone(),

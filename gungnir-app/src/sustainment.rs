@@ -105,6 +105,11 @@ pub struct SustainmentState {
     /// PN-11's gap acceptance as a commander types its reason (GAP-106). Session state: an
     /// acceptance reaches the record when it is recorded, not as it is typed.
     pub gap_acceptance: gungnir_ui::panels::coverage_layers::AcceptanceDraft,
+    /// FL-08's status dialog while a chip has it open (GAP-203). Session state: a change
+    /// reaches the record when it is recorded or sent, not as it is typed; the second
+    /// person's passphrase lives here for one frame and leaves with the draft.
+    pub control_status_dialog:
+        Option<gungnir_ui::panels::control_status_dialog::ControlStatusDialogState>,
 }
 
 /// The desktop's replay state: which session is open and how fast it is running.
@@ -275,6 +280,7 @@ fn describe(env: &gungnir_eventing::Envelope) -> String {
         Event::Retention(e) => format!("retention {e:?}"),
         Event::Audit(e) => format!("audit {e:?}"),
         Event::Planning(e) => format!("planning {e:?}"),
+        Event::Policy(e) => format!("policy {e:?}"),
     };
     let short: String = kind.chars().take(120).collect();
     format!("seq {} at {:.1} s: {short}", env.seq, env.mission_time.0)

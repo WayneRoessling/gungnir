@@ -100,6 +100,13 @@ pub enum Event {
     Intercept(InterceptEvent),
     Ingest(IngestEvent),
     Command(CommandEvent),
+    /// What this deployment decides by, as it changes while it runs (GAP-203, DN-09
+    /// §10): a live weapons-control-status change, with who made it and why.
+    ///
+    /// Additive, so `SCHEMA_VERSION` is not bumped -- the treatment [`Event::Link`] had. A
+    /// family of its own rather than a [`CommandEvent`] variant because the readers that
+    /// fold decisions must not count a status change as one.
+    Policy(gungnir_model::events::PolicyEvent),
 }
 
 /// An event as delivered and journaled: sequence number, mission time at

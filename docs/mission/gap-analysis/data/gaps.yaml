@@ -11892,6 +11892,18 @@
       D-140 taken 2026-10-26: single approval recorded; the optional two-person rule for
       override and control status joins this action as a baseline setting, off by
       default.
+  - date: 2026-10-26
+    status: Closed
+    note: >-
+      Built, tranche A's first. A signed-in supervisor or commander sets a layer live from
+      the strip's chip (FL-08), with a reason and, under D-140's baseline setting, a second
+      person; journaled as `PolicyEvent::ControlStatusSet`, audited, applied in the same act
+      by `ApprovalDesk::set_control_status` on both binaries; a tightening withdraws the
+      queued items it refuses as `CommandEvent::Withdrawn`; the node serves
+      `POST /v3/policy/control-status` and every linked console follows; the status is
+      folded from the journal at a restart. DN-09 §10 is the design; the verification
+      row is drafted, not agreed. See
+      `../../record/2026-10-26/gap-203-the-status-changes-live.md`.
 
 - id: GAP-204
   name: The desktop cannot provision its own accounts

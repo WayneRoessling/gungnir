@@ -215,6 +215,32 @@ fn full_snapshot() -> SnapshotResponse {
         evaluated: 11,
         since: MissionTime(380.0),
     }])
+    // GAP-203: the status in force and the live change that put it there, with every
+    // optional field of the change set.
+    .with_control_status(
+        [(
+            EffectorLayer::Area,
+            gungnir_model::WeaponsControlStatus::Hold,
+        )]
+        .into_iter()
+        .collect(),
+        vec![gungnir_model::ControlStatusChange {
+            layer: EffectorLayer::Area,
+            status: gungnir_model::WeaponsControlStatus::Hold,
+            previous: gungnir_model::WeaponsControlStatus::Tight,
+            reason: "deconfliction with friendly air".into(),
+            operator: "41".into(),
+            role: "Supervisor".into(),
+            confirmed_by: Some(gungnir_model::ConfirmingOperator {
+                operator: "42".into(),
+                role: "Commander".into(),
+            }),
+            revision: 3,
+            origin: Some("desktop-a".into()),
+            at: MissionTime(379.5),
+            request: Some(gungnir_model::RequestId::new("console-a/17").expect("a key")),
+        }],
+    )
 }
 
 /// Plain serde: the shape of the existing tests in `v3/mod.rs`, over the fully
@@ -250,6 +276,8 @@ fn a_fully_populated_snapshot_survives_plain_serde() {
     );
     assert_eq!(back.plan_standing, original.plan_standing);
     assert_eq!(back.held_layers, original.held_layers);
+    assert_eq!(back.control_status, original.control_status);
+    assert_eq!(back.control_status_changes, original.control_status_changes);
 }
 
 async fn serve(api: Arc<NodeApi>) -> std::net::SocketAddr {

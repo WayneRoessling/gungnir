@@ -130,6 +130,96 @@ impl ControlStatusSettings {
             .copied()
             .unwrap_or(WeaponsControlStatus::Hold)
     }
+
+    /// Put `layer` at `status`, returning the status it was at (GAP-203).
+    ///
+    /// The one way the status in force changes while a binary runs. The returned value
+    /// is what [`ControlStatusChange::previous`] records, so the record and the setting
+    /// cannot disagree about what was replaced; an unconfigured layer was at `Hold`, as
+    /// [`Self::for_layer`] has always said.
+    pub fn set(
+        &mut self,
+        layer: EffectorLayer,
+        status: WeaponsControlStatus,
+    ) -> WeaponsControlStatus {
+        let previous = self.for_layer(layer);
+        self.by_layer.insert(layer, status);
+        previous
+    }
+}
+
+/// The second person who confirmed a two-person act (D-140).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ConfirmingOperator {
+    /// `gungnir_security::OperatorId` in its decimal spelling, as every record names one.
+    pub operator: String,
+    /// The role the confirming operator's verified credential carried.
+    pub role: String,
+}
+
+/// One live change to a layer's weapons control status, as it is journaled, audited and
+/// shown (GAP-203; docs/design/DN-09-authority-and-control-status.md §10).
+///
+/// **A change is a recorded decision** (DN-09 §6): it names the person, the role their
+/// authenticated session carried, the reason they gave, the status it replaced, and the
+/// baseline revision it was made under. The last is what lets a restart fold the change
+/// back over the baseline it was made against and ignore it once a later revision is
+/// applied: a baseline that rewrites the status is a change request under phase H, and it
+/// supersedes any live change made under the revision before it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ControlStatusChange {
+    pub layer: EffectorLayer,
+    pub status: WeaponsControlStatus,
+    /// What the layer was at, as [`ControlStatusSettings::set`] reported it.
+    pub previous: WeaponsControlStatus,
+    /// Why, in the person's words; never empty.
+    pub reason: String,
+    /// Who, in `gungnir_security::OperatorId`'s decimal spelling. A change is never made
+    /// with nobody signed in, so this is not optional.
+    pub operator: String,
+    /// The role the operator's authenticated session carried, in `Role`'s debug spelling.
+    pub role: String,
+    /// The second person, when the baseline's two-person rule was in force (D-140).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed_by: Option<ConfirmingOperator>,
+    /// The baseline revision in force when the change was made.
+    pub revision: u32,
+    /// The machine the change was made on, as `gungnir_app::session::origin_of` names a
+    /// console; `None` for a change made on the machine reading the record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    pub at: MissionTime,
+    /// The client's idempotency key where a route carried one (DN-31 §5.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request: Option<crate::RequestId>,
+}
+
+impl ControlStatusChange {
+    /// Whether this change still applies over `baseline_revision`: a change made under
+    /// an earlier revision was superseded when the later baseline was applied.
+    #[must_use]
+    pub fn applies_to(&self, baseline_revision: u32) -> bool {
+        self.revision == baseline_revision
+    }
+}
+
+/// D-140: whether an act needs a second signed-in person to confirm it.
+///
+/// **Both off by default.** Single approval is the rule the owner recorded; a deployment
+/// that needs two people for an override or a control-status change turns it on in the
+/// baseline rather than through a code change. A single-operator site that turned it on
+/// could not change status at all, which is why it is not the default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub struct TwoPersonSettings {
+    /// A live change to a layer's weapons control status needs a second person
+    /// (GAP-203).
+    #[serde(default)]
+    pub control_status: bool,
+    /// Substituting one's own assignment for the plan offered needs a second person.
+    /// Declared with the rule so one baseline section names both acts D-140 covers;
+    /// enforced by its own gap, not by GAP-203's build.
+    #[serde(default)]
+    pub override_plan: bool,
 }
 
 /// An effector layer at `Hold` that is refusing plans, while no plan is being offered
@@ -346,6 +436,10 @@ pub struct PolicySettings {
     /// [`DelegationSettings`].
     #[serde(default)]
     pub delegation: DelegationSettings,
+    /// D-140's two-person rule, off by default (GAP-203). Defaulted so a baseline written
+    /// before this section existed still loads, and loads as single approval.
+    #[serde(default)]
+    pub two_person: TwoPersonSettings,
     #[serde(default)]
     pub fires: FiresSettings,
 }

@@ -770,8 +770,9 @@ fn two_desktops_show_one_node_queue_and_neither_decides_it_itself() {
                 "and as which role (D-53)"
             );
         }
-        gungnir_remote::queue::Ended::Expired { .. } => {
-            panic!("a decision is not an expiry")
+        gungnir_remote::queue::Ended::Expired { .. }
+        | gungnir_remote::queue::Ended::Withdrawn { .. } => {
+            panic!("a decision is not an expiry or a withdrawal")
         }
     }
     // And it has left both queues, because it has left the node's.

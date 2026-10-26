@@ -42,7 +42,7 @@ use gungnir_api::v3::{
 };
 use gungnir_eventing::{nonfinite, Envelope, Event};
 use gungnir_intercept_service::PlanView;
-use gungnir_model::events::{HealthEvent, InterceptEvent, TrackingEvent};
+use gungnir_model::events::{HealthEvent, InterceptEvent, PolicyEvent, TrackingEvent};
 use gungnir_model::{BearingRayView, DetectionView, PipelineStatsView};
 use gungnir_tracking_service::TrackView;
 use std::sync::{Arc, Mutex};
@@ -126,6 +126,23 @@ pub struct Projection {
     /// `held_layers` on each connection, then every `InterceptEvent::HeldLayers`. PN-06
     /// draws them on a linked desktop exactly as an embedded desktop draws its own desk's.
     pub held_layers: Vec<gungnir_model::HeldLayerView>,
+    /// **The weapons control status in force on the node, per layer** (GAP-203; DN-09
+    /// §10): the snapshot's `control_status` on each connection, then every
+    /// `PolicyEvent::ControlStatusSet` on the stream. Empty from a node that does not
+    /// say, which a desktop reads as the baseline's. See [`crate::policy`].
+    pub control_status: std::collections::BTreeMap<
+        gungnir_model::EffectorLayer,
+        gungnir_model::WeaponsControlStatus,
+    >,
+    /// The node's live changes, oldest first, at most
+    /// [`crate::policy::CONTROL_STATUS_CHANGES_CARRIED`]: the snapshot's on each
+    /// connection, then each one the stream carries. A replayed frame is not added twice.
+    pub control_status_changes: Vec<gungnir_model::ControlStatusChange>,
+    /// Status changes this desktop has made, on their way to
+    /// `POST /v3/policy/control-status`, and the node's answer to each (GAP-203).
+    /// Retried under the same request key until the node answers, as a decision is.
+    pub control_status_outbox: std::collections::VecDeque<crate::policy::OutboundControlStatus>,
+    pub control_status_outcomes: Vec<crate::policy::ControlStatusOutcome>,
     /// When this link's task started asking (GAP-142).
     ///
     /// **So a node that has never answered can be judged silent.** `last_heard` is `None`
@@ -737,6 +754,59 @@ impl NodeLink {
             .unwrap_or_default()
     }
 
+    /// Send a weapons-control-status change to the node (GAP-203; DN-09 §10). **Nothing
+    /// changes on this desktop by calling this**: the node applies and records it, the
+    /// stream carries the change back as `PolicyEvent::ControlStatusSet`, and the node's
+    /// answer comes back through [`NodeLink::take_control_status_outcomes`].
+    pub fn set_control_status(&self, change: crate::policy::OutboundControlStatus) {
+        if let Ok(mut p) = self.projection.lock() {
+            p.control_status_outbox.push_back(change);
+        }
+    }
+
+    /// The node's answers to the status changes posted since the last call.
+    #[must_use]
+    pub fn take_control_status_outcomes(&self) -> Vec<crate::policy::ControlStatusOutcome> {
+        self.projection
+            .lock()
+            .map(|mut p| std::mem::take(&mut p.control_status_outcomes))
+            .unwrap_or_default()
+    }
+
+    /// Status changes posted and not yet answered, oldest first (GAP-203), for the panel.
+    #[must_use]
+    pub fn control_status_in_flight(&self) -> Vec<crate::policy::OutboundControlStatus> {
+        self.read()
+            .map(|p| p.control_status_outbox.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// The weapons control status in force on the node, per layer, while the link is up
+    /// (GAP-203); `None` while it is down, because a status from a node this desktop can
+    /// no longer hear is not one to decide by. Empty from a node that does not say.
+    #[must_use]
+    pub fn control_status(
+        &self,
+    ) -> Option<
+        std::collections::BTreeMap<
+            gungnir_model::EffectorLayer,
+            gungnir_model::WeaponsControlStatus,
+        >,
+    > {
+        self.read()
+            .filter(|p| p.connected)
+            .map(|p| p.control_status.clone())
+    }
+
+    /// The node's live changes as this link holds them, oldest first (GAP-203). Kept
+    /// across a disconnect as the last thing the node said, as `node_health` is.
+    #[must_use]
+    pub fn control_status_changes(&self) -> Vec<gungnir_model::ControlStatusChange> {
+        self.read()
+            .map(|p| p.control_status_changes.clone())
+            .unwrap_or_default()
+    }
+
     /// Hand an outage's decisions to the link, for `POST /v3/decisions/forwarded`
     /// (GAP-134, DN-31 §6.8).
     ///
@@ -901,6 +971,8 @@ struct Urls {
     /// The node's coverage answer, and where an acceptance is posted (GAP-194).
     coverage: String,
     coverage_acceptances: String,
+    /// Where a live control-status change is posted (GAP-203).
+    policy_control_status: String,
     /// True for an `https` endpoint: the stream is `wss` over our own TLS stream.
     tls: bool,
     host: String,
@@ -966,6 +1038,7 @@ fn urls(endpoint: &RemoteEndpoint) -> Result<Urls, RemoteError> {
         audit: format!("{base}{}", path(routes::AUDIT)),
         coverage: format!("{base}{}", path(routes::COVERAGE)),
         coverage_acceptances: format!("{base}{}", path(routes::COVERAGE_ACCEPTANCES)),
+        policy_control_status: format!("{base}{}", path(routes::POLICY_CONTROL_STATUS)),
         events: format!("{scheme}://{rest}{}", path(routes::EVENTS)),
         tls,
         host,
@@ -1178,6 +1251,10 @@ fn set_disconnected(projection: &Arc<Mutex<Projection>>, reason: &str) {
 /// A node with no account store answers `503` here, and the link says so rather than
 /// retrying as though the network were at fault. A machine link has no sign-in: its
 /// certificate is its identity, and the token stays empty.
+// One connection's life from sign-in to the loop that follows it: splitting the
+// sign-in, the snapshot, the subscribe frame and the loop apart would separate the order
+// they must run in from the reasons the comments give for that order.
+#[allow(clippy::too_many_lines)]
 async fn run_link(
     urls: &Urls,
     tls: &LinkTls,
@@ -1243,6 +1320,11 @@ async fn run_link(
         // plan must not inherit what a previous node on this link said.
         p.plan_standing = snapshot.plan_standing;
         p.held_layers = snapshot.held_layers;
+        // GAP-203: the status the node decides by and the changes that put it there,
+        // taken as the snapshot says, empty included, so a node that says nothing does
+        // not inherit what a previous node on this link said.
+        p.control_status = snapshot.control_status;
+        p.control_status_changes = snapshot.control_status_changes;
         p.token = Some(token.clone());
         p.node_time = snapshot.node_time;
         p.connected = true;
@@ -1315,6 +1397,8 @@ async fn run_link(
                 // GAP-194: the acceptances, then the coverage answer they change.
                 flush_acceptances(&client, urls, token, projection).await;
                 refresh_coverage(&client, urls, token, projection).await;
+                // GAP-203: the status changes this desktop made, under the same rule.
+                flush_control_status(&client, urls, token, projection).await;
                 // A picture the stream asked for and a failed fetch left owing. The
                 // stream's own branch below takes it as soon as the event arrives; this
                 // is what bounds the retry at one forward interval rather than at the
@@ -1949,6 +2033,101 @@ fn acceptance_answer_of(status: u16, body: &str) -> crate::coverage::AcceptanceA
     }
 }
 
+/// Post the status changes this desktop has made, oldest first (GAP-203; DN-09 §10): the
+/// decision outbox's rule, so a change goes again under the same request key until the
+/// node has answered it, and a `504` is never taken for "nothing was recorded".
+async fn flush_control_status(
+    client: &reqwest::Client,
+    urls: &Urls,
+    token: &str,
+    projection: &Arc<Mutex<Projection>>,
+) {
+    for _ in 0..16 {
+        let Some(outbound) = projection
+            .lock()
+            .ok()
+            .and_then(|p| p.control_status_outbox.front().cloned())
+        else {
+            return;
+        };
+        let unanswered = |p: &mut Projection| {
+            if let Some(front) = p.control_status_outbox.front_mut() {
+                front.attempts += 1;
+            }
+        };
+        let response = match with_token(client.post(&urls.policy_control_status), token)
+            .json(&outbound.request_body())
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                tracing::warn!(%err, "the node could not be reached with a status change");
+                projection
+                    .lock()
+                    .map(|mut p| unanswered(&mut p))
+                    .unwrap_or_default();
+                return;
+            }
+        };
+        if note_refused_token(projection, response.status())
+            || crate::policy::retry(response.status().as_u16())
+        {
+            projection
+                .lock()
+                .map(|mut p| unanswered(&mut p))
+                .unwrap_or_default();
+            return;
+        }
+        let status = response.status().as_u16();
+        let body = response.text().await.unwrap_or_default();
+        let answer = control_status_answer_of(status, &body);
+        if let Ok(mut p) = projection.lock() {
+            p.control_status_outbox.pop_front();
+            p.control_status_outcomes
+                .push(crate::policy::ControlStatusOutcome {
+                    request: outbound.request,
+                    layer: outbound.layer,
+                    status: outbound.status,
+                    answer,
+                });
+        }
+    }
+}
+
+/// The node's answer to a status change, read: `201` the change, `409` or a `403` with a
+/// refusal body the refusal, anything else a rejection with the body as its reason.
+fn control_status_answer_of(status: u16, body: &str) -> crate::policy::ControlStatusAnswer {
+    use crate::policy::ControlStatusAnswer;
+    let unreadable = |what: &str, err: String| ControlStatusAnswer::Rejected {
+        status,
+        reason: format!("the node {what} that this desktop could not read: {err}"),
+    };
+    match status {
+        201 => nonfinite::from_line::<gungnir_api::v3::ControlStatusRecorded>(body).map_or_else(
+            |e| unreadable("recorded a status change", e.to_string()),
+            ControlStatusAnswer::Recorded,
+        ),
+        409 => nonfinite::from_line::<gungnir_api::v3::ControlStatusRefused>(body).map_or_else(
+            |e| unreadable("refused a status change for a reason", e.to_string()),
+            ControlStatusAnswer::Refused,
+        ),
+        // A `403` is a refusal body where the route refused the second person, and a
+        // plain problem where it refused the requester's role; the body says which.
+        403 => nonfinite::from_line::<gungnir_api::v3::ControlStatusRefused>(body).map_or_else(
+            |_| ControlStatusAnswer::Rejected {
+                status,
+                reason: body.trim().to_owned(),
+            },
+            ControlStatusAnswer::Refused,
+        ),
+        _ => ControlStatusAnswer::Rejected {
+            status,
+            reason: body.trim().to_owned(),
+        },
+    }
+}
+
 /// Post the decisions this desktop has taken on the node's queue, oldest first
 /// (GAP-133, DN-31 §6.3).
 ///
@@ -2537,6 +2716,23 @@ fn apply(projection: &Arc<Mutex<Projection>>, envelope: &Envelope) -> Result<(),
         // GAP-194: an acceptance recorded or re-opened on the node moves the coverage
         // answer's marks, so it is read again on the next forward tick.
         Event::Planning(_) => p.coverage.mark_stale(),
+        // GAP-203: the node's word on what it now decides by. The map follows every
+        // frame, replayed or not, because the last one wins either way; the list does
+        // not take a change it already holds, keyed on what identifies one change --
+        // its layer, its time and who made it -- so a stream resumed from before it
+        // does not show PN-06 the same change twice.
+        Event::Policy(PolicyEvent::ControlStatusSet(change)) => {
+            p.control_status.insert(change.layer, change.status);
+            let held = p.control_status_changes.iter().any(|c| {
+                c.layer == change.layer && c.at == change.at && c.operator == change.operator
+            });
+            if !held {
+                if p.control_status_changes.len() >= crate::policy::CONTROL_STATUS_CHANGES_CARRIED {
+                    p.control_status_changes.remove(0);
+                }
+                p.control_status_changes.push(change.clone());
+            }
+        }
         _ => {}
     }
     Ok(())

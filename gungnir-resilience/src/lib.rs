@@ -25,8 +25,8 @@
 
 use gungnir_eventing::{Envelope, Event};
 use gungnir_model::arbitration::{ConflictSide, SideOutcome};
-use gungnir_model::events::{CommandEvent, EngagementEvent, EngagementSide};
-use gungnir_model::{MissionTime, PlanId, TrackId};
+use gungnir_model::events::{CommandEvent, EngagementEvent, EngagementSide, PolicyEvent};
+use gungnir_model::{ControlStatusChange, MissionTime, PlanId, TrackId};
 use gungnir_store::SessionId;
 use std::collections::VecDeque;
 
@@ -147,6 +147,11 @@ pub struct ReconcileReport {
     /// `conflicts`: the two lists answer different questions and neither bounds the
     /// other.
     pub both_acted: Vec<BothActed>,
+    /// Weapons-control-status changes the local side made that the remote side never
+    /// saw (GAP-203). **Not conflicts**: the owner's rule of 2026-10-26 is that the node's
+    /// status is in force on reconnect, so these are reported for the person at the
+    /// console to read, and nothing arbitrates them. Oldest first.
+    pub local_only_status_changes: Vec<ControlStatusChange>,
 }
 
 /// How an envelope ended a plan's approval, if it did.
@@ -275,11 +280,25 @@ pub fn reconcile(local: &[Envelope], remote: &[Envelope]) -> ReconcileReport {
             merged.push(env.clone());
         }
     }
+    // GAP-203: a status change made while cut off is on the local record only. The
+    // remote side's record is matched on the whole event, so a change the node did see
+    // (it cannot today, since nothing forwards one, but the rule is written for the
+    // record and not for the transport) is not reported twice.
+    let local_only_status_changes = local
+        .iter()
+        .filter_map(|env| match &env.event {
+            Event::Policy(PolicyEvent::ControlStatusSet(change)) => Some((env, change)),
+            _ => None,
+        })
+        .filter(|(env, _)| !remote.iter().any(|r| r.event == env.event))
+        .map(|(_, change)| change.clone())
+        .collect();
     ReconcileReport {
         merged,
         duplicates_dropped,
         conflicts,
         both_acted,
+        local_only_status_changes,
     }
 }
 

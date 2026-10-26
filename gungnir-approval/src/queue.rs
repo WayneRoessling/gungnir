@@ -116,6 +116,9 @@ fn denied_for_authority(verdict: &PolicyVerdict) -> bool {
 pub struct QueueOutcomeCounts {
     /// Offers made to a higher role. Not decisions, and not failures.
     pub escalated: usize,
+    /// Items a live status change took off the queue (GAP-203). Not decisions, not
+    /// expiries, and not failures: the policy changed under them.
+    pub withdrawn: usize,
 }
 
 /// What became of a plan handed to [`ApprovalDesk::submit`].

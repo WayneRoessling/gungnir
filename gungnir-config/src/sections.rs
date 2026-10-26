@@ -118,6 +118,7 @@ pub fn changed_sections(
         authority,
         decisions,
         delegation,
+        two_person,
         fires,
     } = policy;
     let was = in_force;
@@ -195,6 +196,11 @@ pub fn changed_sections(
         (
             decisions != &was.policy.decisions,
             "policy.decisions",
+            EngagementChain,
+        ),
+        (
+            two_person != &was.policy.two_person,
+            "policy.two_person",
             EngagementChain,
         ),
         (
@@ -280,6 +286,22 @@ mod tests {
             changed_sections(&in_force, &candidate),
             vec![ChangedSection {
                 name: "policy.control_status",
+                kind: SectionKind::EngagementChain,
+            }]
+        );
+    }
+
+    /// GAP-203, D-140: turning the two-person rule on or off is the engagement chain
+    /// reached through a file, so it needs `weapons.control_status` to apply.
+    #[test]
+    fn a_two_person_change_is_named_and_is_the_engagement_chain() {
+        let in_force = ConfigBaseline::default();
+        let mut candidate = in_force.clone();
+        candidate.policy.two_person.control_status = true;
+        assert_eq!(
+            changed_sections(&in_force, &candidate),
+            vec![ChangedSection {
+                name: "policy.two_person",
                 kind: SectionKind::EngagementChain,
             }]
         );

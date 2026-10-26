@@ -166,9 +166,60 @@ delegation and are recorded with D-114. This note is human-owned; what the owner
 signed of this amendment is in [`../signatures.md`](../signatures.md). Reasoning:
 `../record/2026-09-26/a-layer-at-hold-refusing-every-plan-is.md`.
 
+## 10. Amendment 2 -- the status changes live, and the record says who (2026-10-26)
+
+**Raised by GAP-203 (plan 12, tranche A); the owner's choices of 2026-10-26 and D-140.**
+§6 said that setting the status is an authorized action and itself a recorded decision,
+and §7 asked PN-01 to show the status and PN-17 to list the changes with who made them;
+until this amendment the only write path was a baseline apply that took effect at the
+next start (`gungnir-app/src/sustainment.rs`), so a raid that began under `Hold` stayed
+under `Hold` until somebody edited a file and restarted the console. **The rule of §5
+stands.** What changes is that the status is a live, recorded act:
+
+1. **The act.** A signed-in supervisor or commander puts one layer at one status, with a
+   reason, from the status dialog that PN-01's chip opens (FL-08). The change is
+   `gungnir_model::ControlStatusChange`: the layer, the new and the previous status, the
+   reason, the person and the role their authenticated session carried, the baseline
+   revision it was made under, the machine it was asked from, and the second person
+   where rule 4 applies. It is journaled as `PolicyEvent::ControlStatusSet`, audited
+   under `weapons.control_status`, and applied to the settings in force in the same act,
+   through `gungnir_approval::ApprovalDesk::set_control_status`, which both binaries run.
+2. **Where it is applied.** On the machine that holds the queue (D-55): a node for the
+   desktops linked to it, through `POST /v3/policy/control-status`, which answers `201`
+   with the change and the items it withdrew; a desktop for itself while it runs its own
+   queue. A linked desktop with the link up sends the request to the node and records
+   nothing, and the node's change reaches every linked console on the stream and in the
+   snapshot's `control_status`. **Cut off, a desktop changes its own status** and journals
+   it, because it runs its own queue; on reconnect the node's status is in force again,
+   and the offline change is listed on PN-18, neither forwarded nor arbitrated.
+3. **The queue's answer.** A tightening re-judges every queued item by §5's control-status
+   engine alone, and an item the new status refuses leaves the queue as
+   `CommandEvent::Withdrawn`, with a record that is neither a decision nor an expiry:
+   nobody chose, the policy changed under it. A loosening resurrects nothing; the next plan
+   is judged under the new status. PN-06's ended rows and a `409` on a decision taken too
+   late say the withdrawal by name.
+4. **Two people where the baseline says so (D-140).** `policy.two_person.control_status`,
+   off by default, requires a second signed-in person who holds `weapons.control_status`
+   and is somebody else to confirm with their own credential, verified against the same
+   store and under the same back-off as a sign-in; the record and the audit entry name
+   both. Where the setting is off, single approval is the rule, as a recorded decision
+   rather than an omission. The override half of D-140 is its own gap.
+5. **Across a restart.** The status in force at start is the baseline's value overridden by
+   the latest journaled change made under that baseline's revision; a later revision
+   supersedes every live change made before it, because a baseline that rewrites the
+   status is a change request under phase H (§1). The baseline file is never rewritten.
+6. **On the strip and on PN-17.** PN-01's chip says who set a layer and when and opens the
+   dialog for a role that may change it; PN-17 lists the session's changes with who made
+   them, which §7 asked for and nothing supplied until now.
+
+The four choices in rules 2, 3 and 5 were the owner's on 2026-10-26, each taken to the
+recommended default; rule 4 is D-140. This note is human-owned; what the owner has signed
+of this amendment is in [`../signatures.md`](../signatures.md). Verification:
+`../verification-capability-table.md` §2, the GAP-203 row. Reasoning:
+`../record/2026-10-26/gap-203-the-status-changes-live.md`.
 ## Traceability
 
-GAP-033, and the specification GAP-058 implements against; CAP-3.6, CAP-6.2; D-05, D-15;
+GAP-033, GAP-203, and the specification GAP-058 implements against; CAP-3.6, CAP-6.2; D-05, D-15, D-140;
 MOP-38; `../mission/roles-and-stakeholders.md` §4;
 `../ux/wireframes/WF-01-status-strip.puml`, `WF-06-approval-queue.puml`; contracts C-01,
 C-04; depends on DN-04 and DN-08.

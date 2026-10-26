@@ -1708,8 +1708,11 @@ async fn spawn_tls(
 /// tracking, planning, journal, transport, health -- in two places, and that order is the
 /// thing a reader comes here to check.
 #[allow(clippy::too_many_lines)]
+/// `config` is `mut` since GAP-203: the weapons control status in force changes while the
+/// node runs, by a live change through `POST /v3/policy/control-status`, and the baseline
+/// the loop judges by is the one place that status lives.
 async fn run(
-    config: ConfigBaseline,
+    mut config: ConfigBaseline,
     node_cfg: NodeConfig,
     handle: tokio::runtime::Handle,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1807,6 +1810,16 @@ async fn run(
     // What an acceptance holds for: this node's own baseline revision and the laydown it
     // marks current (the owner's choice of 2026-10-24).
     let baseline_holds = gungnir_node::gap_acceptance::BaselineHolds::of(&config);
+
+    // GAP-203, DN-09 §10: the live control-status changes made under this baseline's
+    // revision, folded back over it before the mission record is written below, so the
+    // session's record says what the node decides by rather than what the file said. A
+    // change made under an earlier revision is superseded by the baseline and skipped.
+    let mut control_status =
+        gungnir_node::control_status::NodeControlStatus::recover(&journal, &mut config);
+    if let Some(reason) = control_status.unreadable() {
+        tracing::warn!(%reason, "the control status was folded from an incomplete journal");
+    }
 
     // GAP-114: the same late-data policy the tracker below applies, so the two agree.
     let clock = WallClockAuthority::new(config.time.late_data);
@@ -2192,6 +2205,28 @@ async fn run(
         // published as `PlanProposed` would be a recommendation nobody made now, and this
         // node is the system of record for every desktop reading it.
         let outcome = intercept.plan(now, tracking.tracks(), &resources);
+        // GAP-203, DN-09 §10: the live control-status changes the route handed over,
+        // applied to the baseline this loop judges by and to the queue, in arrival order.
+        // **Before the frame below is built**, because a change mutates `config` and the
+        // frame borrows it: the plan proposed this tick and every item re-judged read the
+        // status these changes put in force. Each change is journaled, audited and its
+        // withdrawals published through the desk, so all of it is on disk in this tick's
+        // append.
+        gungnir_node::control_status::tick(
+            &mut control_status,
+            &mut approval_desk,
+            api.take_control_status_requests(),
+            &mut config,
+            &gungnir_node::control_status::Tick {
+                now,
+                tracks: tracking.tracks(),
+                resources: &resources,
+                geofences: &geo,
+                bus: &bus,
+                endpoint_client: endpoint_client.as_ref(),
+                api: &api,
+            },
+        );
         // The picture this tick's approval work judges against, read once (GAP-132).
         let frame = approval::Frame {
             now,
@@ -2267,7 +2302,7 @@ async fn run(
         // a desktop must never hold an envelope the node could lose. After the picture,
         // so a desktop that reads `GET /v3/queue` on this tick's `Queued` reads a queue
         // that holds it (GAP-201).
-        picture::publish_picture(
+        picture::publish_picture_with_control_status(
             &api,
             tracking.tracks(),
             tracking.bearing_rays(),
@@ -2280,6 +2315,13 @@ async fn run(
             // snapshot's `queue` are one publish read through two doors.
             approval_desk.queue_view(&config, &resources, tracking.tracks()),
             approval_desk.held_layers(&config),
+            // GAP-203: the status in force and this run's changes, so a desktop linking
+            // mid-watch draws what the node decides by, and a retry of the route is
+            // answered off this same picture.
+            picture::ControlStatusPicture {
+                in_force: control_status.in_force(&config),
+                changes: control_status.changes().to_vec(),
+            },
             api_rx.try_iter(),
         );
 

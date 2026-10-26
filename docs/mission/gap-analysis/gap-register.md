@@ -197,7 +197,7 @@ history, and an entry is never edited once it has merged.
 | GAP-200 | A NAD83 DEM or point cloud lands at the metre level, NAD83(2011) read as WGS 84 | Technical | CAP-2.10 | 4 | 8 | L | 32 | I4 | UI engineer | Closed |
 | GAP-202 | A cut-off desktop that restarts forgets the gap acceptances it owed its node | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | S | 12 | I3 | Services engineer | Closed |
 | GAP-201 | A linked desktop could miss a queued item until the queue moved again | Technical | CAP-5.9, CAP-4.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
-| GAP-203 | Weapons control status cannot be changed while the desktop runs | Technical | CAP-3.6, CAP-5.9 | 5 | 10 | M | 50 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-203 | Weapons control status cannot be changed while the desktop runs | Technical | CAP-3.6, CAP-5.9 | 5 | 10 | M | 50 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-204 | The desktop cannot provision its own accounts | Technical | CAP-6.1, CAP-7.3 | 3 | 10 | S | 30 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-205 | A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second | Technical | CAP-1.5 | 3 | 7 | M | 21 | I3 | Services engineer | Open |
 | GAP-206 | No production track is releasable, so track exchange has no producer | Technical | CAP-6.6, CAP-7.4, CAP-1.6 | 5 | 5 | M | 25 | I3 | Security engineer (human-owned crate) | Open |
@@ -2896,11 +2896,12 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-10-26, Open: Filed by plan 12 from the review's small-unit findings: the one control an operator must have during a raid is the one the desktop cannot give without a restart.
   - 2026-10-26, Open: D-140 taken 2026-10-26: single approval recorded; the optional two-person rule for override and control status joins this action as a baseline setting, off by default.
+  - 2026-10-26, Closed: Built, tranche A's first. A signed-in supervisor or commander sets a layer live from the strip's chip (FL-08), with a reason and, under D-140's baseline setting, a second person; journaled as `PolicyEvent::ControlStatusSet`, audited, applied in the same act by `ApprovalDesk::set_control_status` on both binaries; a tightening withdraws the queued items it refuses as `CommandEvent::Withdrawn`; the node serves `POST /v3/policy/control-status` and every linked console follows; the status is folded from the journal at a restart. DN-09 §10 is the design; the verification row is drafted, not agreed. See `../../record/2026-10-26/gap-203-the-status-changes-live.md`.
 - Evidence: `gungnir-model/src/policy_settings.rs` (`WeaponsControlStatus` defaults to `Hold`); `gungnir-app/src/sustainment.rs:921` (`SET_CONTROL_STATUS` gates a baseline apply only); `gungnir-app/src/main.rs:1039` ("takes effect when the desktop restarts"); no `control_status` route in `gungnir-api/src/transport.rs`; `../../ux/usability-round-1-session.md:71` (US-07 blocked).
 - Severity: 5. Reach: 10 threads. Effort: M. Priority: 50.
 - Impact: A raid that starts under `Hold` stays under `Hold` until an operator edits the baseline JSON and restarts the application. US-07 is blocked, and one layer at `Hold` refuses every plan on every layer (GAP-183, D-114), so a single operator at a site cannot run the live loop at all.
 - Closing action: A live, audited change of `PolicySettings.control_status` per effector layer from a PN-07-style dialog under `SET_CONTROL_STATUS`, journaled as a command event and applied without a restart; the same through a node route for linked desktops, with the node's policy chain re-running on the next plan; a render test that the dialog never defaults to a more permissive status than the one in force.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: DN-09; GAP-033; GAP-183; D-140; `../../review/2026-10-26-comprehensive-review.md` §6 finding 2.
 
 **GAP-204 The desktop cannot provision its own accounts**

@@ -8,6 +8,7 @@ pub mod approval_queue;
 pub mod audit;
 pub mod commander_summary;
 pub mod config_editor;
+pub mod control_status_dialog;
 pub mod coverage_layers;
 pub mod decision_dialog;
 pub mod handoff;

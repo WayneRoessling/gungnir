@@ -242,6 +242,11 @@ pub fn refusal_sentence(refused: &gungnir_remote::queue::DecisionRefused) -> Str
              nobody chose.",
             at.0
         ),
+        R::Withdrawn { layer, status, at } => format!(
+            "The item was withdrawn at T+{:.0} s: the {layer:?} layer was put at {status:?}, \
+             which refuses the plan. That is not a rejection: the policy changed.",
+            at.0
+        ),
     }
 }
 
@@ -431,6 +436,12 @@ pub fn ended_sentence(state: &AppState, item: PendingId) -> Option<String> {
              rejection: nobody chose.",
             at.0
         ),
+        Ended::Withdrawn { layer, status, at } => format!(
+            "That item was withdrawn at T+{:.0} s on the node: the {layer:?} layer was put \
+             at {status:?}, which refuses the plan. That is not a rejection: nobody chose, \
+             the policy changed.",
+            at.0
+        ),
     })
 }
 
@@ -470,6 +481,11 @@ pub fn decided_rows(state: &AppState) -> Vec<gungnir_ui::panels::approval_queue:
                     at: *at,
                 },
                 Ended::Expired { at } => DecidedBy::Expiry { at: *at },
+                Ended::Withdrawn { layer, status, at } => DecidedBy::Withdrawn {
+                    layer: *layer,
+                    status: *status,
+                    at: *at,
+                },
             },
         })
         .collect()
@@ -502,6 +518,7 @@ pub fn node_queue_stats(state: &AppState) -> NodeQueueStats {
                 }
             }
             Ended::Expired { .. } => counts.expired += 1,
+            Ended::Withdrawn { .. } => counts.withdrawn += 1,
         }
     }
     counts
@@ -519,6 +536,9 @@ pub struct NodeQueueStats {
     pub pending: usize,
     pub decided: usize,
     pub expired: usize,
+    /// Items a live status change took off the node's queue (GAP-203): neither decided
+    /// nor expired.
+    pub withdrawn: usize,
     /// Items waiting that are offered to more than one role, so escalation has added at
     /// least one.
     pub escalated: usize,

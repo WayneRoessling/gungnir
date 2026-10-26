@@ -1207,11 +1207,15 @@ fn the_status_strip_draws_the_joint_control_status_terms() {
             layer: EffectorLayer::Point,
             status: WeaponsControlStatus::Free,
             configured: true,
+            set_by: None,
+            can_change: false,
         },
         ControlStatusLine {
             layer: EffectorLayer::SelfDefence,
             status: WeaponsControlStatus::Hold,
             configured: false,
+            set_by: None,
+            can_change: false,
         },
     ];
     let vocab = Vocabulary::default();
@@ -2407,6 +2411,7 @@ fn the_handover_says_when_nobody_has_taken_the_watch() {
         warnings: crate::panels::commander_summary::WarningCounts::default(),
         queue_authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
         decisions_by_role: &[],
+        control_status_changes: &[],
     };
 
     let probe = RenderProbe::new();
@@ -2612,6 +2617,7 @@ fn outcomes_keep_track_inferred_and_corroborated_apart() {
         warnings: crate::panels::commander_summary::WarningCounts::default(),
         queue_authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
         decisions_by_role: &[],
+        control_status_changes: &[],
     };
     let probe = RenderProbe::new();
     let mut notes = String::new();
@@ -2769,6 +2775,7 @@ fn the_commander_summary_lists_the_most_exposed_assets() {
         warnings: crate::panels::commander_summary::WarningCounts::default(),
         queue_authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
         decisions_by_role: &[],
+        control_status_changes: &[],
     };
     let probe = RenderProbe::new();
     let mut notes = String::new();
@@ -4277,4 +4284,525 @@ fn the_audit_panel_names_a_cut_segment_and_shows_an_earlier_run() {
             frame.joined()
         );
     }
+}
+
+/// A strip for the GAP-203 tests: everything but the control status lines at its
+/// quietest.
+fn strip_with<'a>(
+    vocabulary: &'a Vocabulary,
+    lines: &'a [crate::panels::status_strip::ControlStatusLine<'a>],
+) -> crate::panels::status_strip::StatusStripView<'a> {
+    use crate::panels::status_strip::{
+        AlertSummary, BackendStatus, ClockSource, CoverageStatus, StatusStripView,
+    };
+    StatusStripView {
+        backend: BackendStatus::Embedded,
+        session: None,
+        mission_time: gungnir_model::MissionTime(0.0),
+        clock_source: ClockSource::Wall,
+        clock_skew_s: None,
+        health: gungnir_model::SystemHealth::default(),
+        control_status: lines,
+        delegations: &[],
+        alerts: AlertSummary::Unclassified { total: 0 },
+        role: "Supervisor",
+        vocabulary,
+        coverage: CoverageStatus::NoApproaches,
+        encryption: EncryptionState::Active,
+        validity: BaselineValidity::NoWindowConfigured,
+        profile: None,
+        rehearsal: None,
+        operator: OperatorLine::SignedIn {
+            operator: 7,
+            role: "Supervisor",
+            expires_in_s: None,
+        },
+        queue: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+    }
+}
+
+/// GAP-203, FL-08's first step: a chip the console may change is a control, and clicking
+/// it is the strip's one action, naming the layer. A chip it may not change is drawn
+/// with the same words and clicking it does nothing; the strip itself never changes a
+/// status either way.
+#[test]
+fn a_changeable_control_status_chip_returns_its_layer_when_clicked() {
+    use crate::panels::status_strip::{
+        render_status_strip, ControlStatusLine, SetBy, StatusStripAction,
+    };
+    use gungnir_model::{EffectorLayer, MissionTime, WeaponsControlStatus};
+
+    let vocabulary = vocabulary();
+    let line = |can_change| {
+        [ControlStatusLine {
+            layer: EffectorLayer::Area,
+            status: WeaponsControlStatus::Tight,
+            configured: true,
+            set_by: Some(SetBy {
+                operator: "7",
+                role: "Supervisor",
+                at: MissionTime(120.0),
+                reason: "civil traffic",
+            }),
+            can_change,
+        }]
+    };
+    let chip = format!(
+        "{} {}",
+        vocabulary.layer(EffectorLayer::Area),
+        vocabulary.control_status(WeaponsControlStatus::Tight)
+    );
+    let probe = RenderProbe::new();
+
+    let changeable = line(true);
+    let view = strip_with(&vocabulary, &changeable);
+    let (drawn, frame) = probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &view));
+    assert_eq!(drawn, Some(None), "drawing is not a click");
+    assert!(
+        frame.says(&chip),
+        "the chip was not drawn: {}",
+        frame.joined()
+    );
+    let (clicked, frame) = probe
+        .click(&chip, |ui| {
+            render_status_strip(ui, &theme::Palette::day(), &view)
+        })
+        .unwrap_or_else(|frame| panic!("no chip to click: {}", frame.joined()));
+    assert_eq!(
+        clicked,
+        Some(Some(StatusStripAction::ChangeControlStatus(
+            EffectorLayer::Area
+        ))),
+        "clicking the chip did not name its layer: {}",
+        frame.joined()
+    );
+
+    let fixed = line(false);
+    let view = strip_with(&vocabulary, &fixed);
+    let (clicked, frame) = probe
+        .click(&chip, |ui| {
+            render_status_strip(ui, &theme::Palette::day(), &view)
+        })
+        .unwrap_or_else(|frame| panic!("no chip drawn: {}", frame.joined()));
+    assert_eq!(
+        clicked,
+        Some(None),
+        "a chip the console may not change acted on a click: {}",
+        frame.joined()
+    );
+    // And the words are the same either way: what a person reads does not depend on
+    // what they may do. Who set it is on the hover, which the probe cannot raise, so
+    // the sentence itself is checked in `status_strip::tests`.
+    assert!(frame.says(&chip), "{}", frame.joined());
+}
+
+/// DN-09 §7's PN-17 row (GAP-203): the status changes in the period, with who made them,
+/// newest first, the second person and the console said where the record has them; and
+/// the empty state said rather than drawn as nothing.
+#[test]
+fn the_commander_summary_lists_control_status_changes_newest_first() {
+    use crate::panels::commander_summary::{
+        render_commander_summary, CommanderSummaryView, ControlStatusChangeLine, OutcomeCounts,
+        QueueStats,
+    };
+    use gungnir_model::{EffectorLayer, MissionTime, WeaponsControlStatus};
+
+    let vocabulary = vocabulary();
+    let changes = [
+        ControlStatusChangeLine {
+            layer: EffectorLayer::Area,
+            status: WeaponsControlStatus::Hold,
+            previous: WeaponsControlStatus::Tight,
+            operator: "7",
+            role: "Supervisor",
+            at: MissionTime(120.0),
+            reason: "civil traffic in the sector",
+            confirmed_by: None,
+            origin: None,
+        },
+        ControlStatusChangeLine {
+            layer: EffectorLayer::Point,
+            status: WeaponsControlStatus::Free,
+            previous: WeaponsControlStatus::Tight,
+            operator: "7",
+            role: "Supervisor",
+            at: MissionTime(300.0),
+            reason: "raid inbound",
+            confirmed_by: Some("operator 9 (Commander)"),
+            origin: Some("desktop-1"),
+        },
+    ];
+    let view = CommanderSummaryView {
+        handover: None,
+        queue: Ok(QueueStats {
+            pending: 0,
+            decided_this_session: 0,
+            expired: 0,
+            escalated: 0,
+        }),
+        delegations: &[],
+        accepted_gaps: Err(Unavailable {
+            owner: "gungnir-analytics",
+            gap: "GAP-006",
+        }),
+        plan: None,
+        outcomes: Ok(OutcomeCounts::default()),
+        exposure: Err("not evaluated in this test"),
+        controls_available: false,
+        vocabulary: &vocabulary,
+        warnings: crate::panels::commander_summary::WarningCounts::default(),
+        queue_authority: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+        decisions_by_role: &[],
+        control_status_changes: &changes,
+    };
+    let probe = RenderProbe::new();
+    let mut notes = String::new();
+    let (_, frame) =
+        probe.draw(|ui| render_commander_summary(ui, &theme::Palette::day(), &view, &mut notes));
+    assert!(
+        frame.says("Control status changes this session"),
+        "{}",
+        frame.joined()
+    );
+    let first = frame
+        .position_of(
+            "Area defence: Weapons tight to Weapons hold by operator 7 (Supervisor) at \
+             T+120 s: civil traffic in the sector",
+        )
+        .unwrap_or_else(|| panic!("the earlier change was not drawn: {}", frame.joined()));
+    let second = frame
+        .position_of(
+            "Point defence: Weapons tight to Weapons free by operator 7 (Supervisor) at \
+             T+300 s: raid inbound, confirmed by operator 9 (Commander), from desktop-1",
+        )
+        .unwrap_or_else(|| panic!("the later change was not drawn: {}", frame.joined()));
+    assert!(
+        second < first,
+        "the changes were not drawn newest first: {}",
+        frame.joined()
+    );
+    assert!(
+        !frame.says("No control status change this session"),
+        "{}",
+        frame.joined()
+    );
+
+    let none = CommanderSummaryView {
+        control_status_changes: &[],
+        ..view
+    };
+    let (_, frame) =
+        probe.draw(|ui| render_commander_summary(ui, &theme::Palette::day(), &none, &mut notes));
+    assert!(
+        frame.says("No control status change this session; the baseline's statuses are in force."),
+        "an empty list drew nothing: {}",
+        frame.joined()
+    );
+}
+
+/// A status dialog for the GAP-203 tests, at its plainest.
+fn dialog_view(
+    vocabulary: &Vocabulary,
+    current: gungnir_model::WeaponsControlStatus,
+) -> crate::panels::control_status_dialog::ControlStatusDialogView<'_> {
+    use crate::panels::control_status_dialog::{ControlStatusDialogView, Route};
+    ControlStatusDialogView {
+        layer: gungnir_model::EffectorLayer::Area,
+        current,
+        configured: true,
+        last_change: None,
+        would_withdraw: &[],
+        queued_on_layer: 0,
+        two_person: false,
+        may_set: Ok(()),
+        route: Route::ThisDesktop,
+        vocabulary,
+    }
+}
+
+/// FL-08's dialog (GAP-203): cancel is drawn before set, a drawn dialog returns nothing,
+/// the status in force is shown and not offered, what each change would withdraw is
+/// beside it, the route is said, and set stays shut for every incomplete state while
+/// the dialog says what is missing.
+#[test]
+fn the_control_status_dialog_draws_set_last_and_shut_until_the_rule_is_met() {
+    use crate::panels::control_status_dialog::{
+        render_control_status_dialog, ControlStatusDialogState, Route,
+    };
+    use gungnir_model::{EffectorLayer, WeaponsControlStatus};
+
+    let vocabulary = vocabulary();
+    let withdraw = [
+        (WeaponsControlStatus::Hold, 3),
+        (WeaponsControlStatus::Free, 0),
+    ];
+    let view = crate::panels::control_status_dialog::ControlStatusDialogView {
+        would_withdraw: &withdraw,
+        queued_on_layer: 3,
+        route: Route::Node {
+            endpoint: "node.local:7410",
+        },
+        ..dialog_view(&vocabulary, WeaponsControlStatus::Tight)
+    };
+    let probe = RenderProbe::new();
+    let day = theme::Palette::day();
+
+    // Nothing chosen: shut, and the dialog says so.
+    let mut state = ControlStatusDialogState::open(EffectorLayer::Area);
+    let (action, frame) =
+        probe.draw(|ui| render_control_status_dialog(ui, &day, &view, &mut state));
+    assert_eq!(action, Some(None), "a drawn dialog returned an action");
+    let cancel = frame
+        .position_of("Cancel")
+        .unwrap_or_else(|| panic!("no cancel control: {}", frame.joined()));
+    let set = frame
+        .position_of("Set control status")
+        .unwrap_or_else(|| panic!("no set control: {}", frame.joined()));
+    assert!(cancel < set, "set was not drawn last: {}", frame.joined());
+    assert!(frame.says("Weapons tight in force"), "{}", frame.joined());
+    assert!(frame.says("Weapons tight: in force"), "{}", frame.joined());
+    assert!(frame.says("withdraws 3 queued items"), "{}", frame.joined());
+    assert!(frame.says("withdraws nothing queued"), "{}", frame.joined());
+    assert!(
+        frame.says("Sent to the node at node.local:7410"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("Set by the configuration baseline."),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("Choose a status other than the one in force."),
+        "{}",
+        frame.joined()
+    );
+    let (clicked, _) = probe
+        .click("Set control status", |ui| {
+            render_control_status_dialog(ui, &day, &view, &mut state)
+        })
+        .unwrap_or_else(|frame| panic!("{}", frame.joined()));
+    assert_eq!(
+        clicked,
+        Some(None),
+        "a disabled set control acted on a click"
+    );
+
+    // A target with no reason: still shut, and the sentence changes.
+    state.target = Some(WeaponsControlStatus::Hold);
+    let (_, frame) = probe.draw(|ui| render_control_status_dialog(ui, &day, &view, &mut state));
+    assert!(frame.says("enter one"), "{}", frame.joined());
+    let label = "Set Area defence to Weapons hold";
+    let (clicked, _) = probe
+        .click(label, |ui| {
+            render_control_status_dialog(ui, &day, &view, &mut state)
+        })
+        .unwrap_or_else(|frame| panic!("{}", frame.joined()));
+    assert_eq!(clicked, Some(None), "set acted without a reason");
+
+    // A reason too: open, and a click returns the draft with the reason trimmed.
+    state.reason = "  civil traffic  ".to_owned();
+    let (clicked, frame) = probe
+        .click(label, |ui| {
+            render_control_status_dialog(ui, &day, &view, &mut state)
+        })
+        .unwrap_or_else(|frame| panic!("{}", frame.joined()));
+    let Some(Some(crate::panels::control_status_dialog::ControlStatusDialogAction::Set(draft))) =
+        clicked
+    else {
+        panic!(
+            "set did not return the draft: {clicked:?}: {}",
+            frame.joined()
+        );
+    };
+    assert_eq!(draft.layer, EffectorLayer::Area);
+    assert_eq!(draft.status, WeaponsControlStatus::Hold);
+    assert_eq!(draft.reason, "civil traffic");
+    assert_eq!(draft.confirmation, None);
+
+    // Cancel returns cancel, whatever the state.
+    let (clicked, _) = probe
+        .click("Cancel", |ui| {
+            render_control_status_dialog(ui, &day, &view, &mut state)
+        })
+        .unwrap_or_else(|frame| panic!("{}", frame.joined()));
+    assert_eq!(
+        clicked,
+        Some(Some(
+            crate::panels::control_status_dialog::ControlStatusDialogAction::Cancel
+        ))
+    );
+}
+
+/// The two-person rule (D-140) on screen: its section is drawn, set stays shut with the
+/// passphrase empty, and the draft carries the second person's credential once it is
+/// complete.
+#[test]
+fn the_control_status_dialog_asks_for_the_second_person_under_the_two_person_rule() {
+    use crate::panels::control_status_dialog::{
+        render_control_status_dialog, ControlStatusDialogAction, ControlStatusDialogState,
+    };
+    use gungnir_model::{EffectorLayer, WeaponsControlStatus};
+
+    let vocabulary = vocabulary();
+    let view = crate::panels::control_status_dialog::ControlStatusDialogView {
+        two_person: true,
+        ..dialog_view(&vocabulary, WeaponsControlStatus::Tight)
+    };
+    let probe = RenderProbe::new();
+    let day = theme::Palette::day();
+    let mut state = ControlStatusDialogState {
+        target: Some(WeaponsControlStatus::Hold),
+        reason: "civil traffic".to_owned(),
+        confirm_operator: "9".to_owned(),
+        ..ControlStatusDialogState::open(EffectorLayer::Area)
+    };
+    let label = "Set Area defence to Weapons hold";
+    let (clicked, frame) = probe
+        .click(label, |ui| {
+            render_control_status_dialog(ui, &day, &view, &mut state)
+        })
+        .unwrap_or_else(|frame| panic!("{}", frame.joined()));
+    assert!(
+        frame.says("Two-person rule in force (D-140)"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("be someone other than you"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("operator id and passphrase are needed"),
+        "{}",
+        frame.joined()
+    );
+    assert_eq!(clicked, Some(None), "set acted with an empty passphrase");
+
+    state.confirm_passphrase = "pw".to_owned();
+    let (clicked, frame) = probe
+        .click(label, |ui| {
+            render_control_status_dialog(ui, &day, &view, &mut state)
+        })
+        .unwrap_or_else(|frame| panic!("{}", frame.joined()));
+    let Some(Some(ControlStatusDialogAction::Set(draft))) = clicked else {
+        panic!(
+            "set did not return the draft: {clicked:?}: {}",
+            frame.joined()
+        );
+    };
+    let Some(confirmation) = draft.confirmation else {
+        panic!("the rule was in force and the draft carries no confirmation");
+    };
+    assert_eq!(confirmation.operator, 9);
+    assert_eq!(confirmation.passphrase, "pw");
+    assert!(
+        state.confirm_passphrase.is_empty(),
+        "the state kept the passphrase after the draft took it"
+    );
+    // The passphrase itself is never painted.
+    assert!(!frame.says("pw"), "{}", frame.joined());
+}
+
+/// Loosening is said in so many words for a change towards free, and not for one
+/// towards hold; and the last change's operator and role are named above the choices.
+#[test]
+fn the_control_status_dialog_says_when_a_change_loosens_and_who_set_the_status() {
+    use crate::panels::control_status_dialog::{
+        render_control_status_dialog, ControlStatusDialogState, LastChange,
+    };
+    use gungnir_model::{EffectorLayer, MissionTime, WeaponsControlStatus};
+
+    let vocabulary = vocabulary();
+    let probe = RenderProbe::new();
+    let day = theme::Palette::day();
+    let loosening = "Loosening: engagements this layer could not propose become proposable.";
+
+    // At hold, both other choices loosen.
+    let at_hold = crate::panels::control_status_dialog::ControlStatusDialogView {
+        last_change: Some(LastChange {
+            operator: "7",
+            role: "Supervisor",
+            at: MissionTime(120.0),
+            reason: "civil traffic",
+            confirmed_by: Some("operator 9 (Commander)"),
+        }),
+        ..dialog_view(&vocabulary, WeaponsControlStatus::Hold)
+    };
+    let mut state = ControlStatusDialogState::open(EffectorLayer::Area);
+    let (_, frame) = probe.draw(|ui| render_control_status_dialog(ui, &day, &at_hold, &mut state));
+    assert_eq!(
+        frame
+            .texts
+            .iter()
+            .filter(|t| t.as_str() == loosening)
+            .count(),
+        2,
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("Set to Weapons hold by operator 7 (Supervisor) at T+120 s: civil traffic"),
+        "{}",
+        frame.joined()
+    );
+    assert!(
+        frame.says("Confirmed by operator 9 (Commander)."),
+        "{}",
+        frame.joined()
+    );
+
+    // At free, nothing loosens, and the unset layer is said to be at hold by default.
+    let at_free = crate::panels::control_status_dialog::ControlStatusDialogView {
+        configured: false,
+        ..dialog_view(&vocabulary, WeaponsControlStatus::Free)
+    };
+    let (_, frame) = probe.draw(|ui| render_control_status_dialog(ui, &day, &at_free, &mut state));
+    assert!(!frame.says(loosening), "{}", frame.joined());
+    assert!(
+        frame.says("Hold by default: no baseline sets this layer."),
+        "{}",
+        frame.joined()
+    );
+}
+
+/// A console that may not set is told why, keeps reading the status in force, and can
+/// never return a set, whatever is typed.
+#[test]
+fn the_control_status_dialog_draws_why_the_console_may_not_set_and_never_sets() {
+    use crate::panels::control_status_dialog::{
+        render_control_status_dialog, ControlStatusDialogState,
+    };
+    use gungnir_model::{EffectorLayer, WeaponsControlStatus};
+
+    let vocabulary = vocabulary();
+    let view = crate::panels::control_status_dialog::ControlStatusDialogView {
+        may_set: Err("Nobody is signed in: a control status change is recorded against a person."),
+        ..dialog_view(&vocabulary, WeaponsControlStatus::Tight)
+    };
+    let probe = RenderProbe::new();
+    let day = theme::Palette::day();
+    let mut state = ControlStatusDialogState {
+        target: Some(WeaponsControlStatus::Hold),
+        reason: "civil traffic".to_owned(),
+        ..ControlStatusDialogState::open(EffectorLayer::Area)
+    };
+    let (clicked, frame) = probe
+        .click("Set Area defence to Weapons hold", |ui| {
+            render_control_status_dialog(ui, &day, &view, &mut state)
+        })
+        .unwrap_or_else(|frame| panic!("{}", frame.joined()));
+    assert!(frame.says("Nobody is signed in"), "{}", frame.joined());
+    assert!(
+        frame.says("Weapons tight in force"),
+        "the status in force vanished with the controls: {}",
+        frame.joined()
+    );
+    assert_eq!(
+        clicked,
+        Some(None),
+        "a console that may not set returned a set"
+    );
 }

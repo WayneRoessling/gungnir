@@ -259,6 +259,24 @@ pub trait CallerAuthority: Send + Sync {
 
     /// Verify a presented token.
     fn verify(&self, token: &str, now: MissionTimeSeconds) -> Result<OperatorSession, AuthFailure>;
+
+    /// Verify a second person's credential without establishing a session for them
+    /// (GAP-203; D-140): who they are and which role their account carries, or why not.
+    ///
+    /// **The same store and the same path as a sign-in**, by construction: the default
+    /// signs the credential in and reads the session off the token it minted, so a
+    /// confirmation is subject to the same constant-time comparison and the same back-off
+    /// a sign-in is, and an implementation that verifies sign-ins one way cannot verify
+    /// confirmations another. The token is dropped here and never leaves this call.
+    fn confirm(
+        &self,
+        operator: u64,
+        passphrase: &str,
+        now: MissionTimeSeconds,
+    ) -> Result<OperatorSession, AuthFailure> {
+        let issued = self.sign_in(operator, passphrase, now)?;
+        self.verify(&issued.token, now)
+    }
 }
 
 /// The caller authority a node builds from an account store and a signing key.
@@ -492,6 +510,11 @@ pub struct NodeApi {
     /// answer (GAP-194, D-131). A queue of its own: a different fact, under a different
     /// action, which the loop answers from its own ledger.
     acceptances: Mutex<Vec<PendingAcceptance>>,
+    /// Live control-status changes waiting for the node loop to apply them to the
+    /// baseline it runs and to its queue (GAP-203; DN-09 §10). A queue of its own, for
+    /// the reason `acceptances` has one: a different fact, under a different action,
+    /// which only the loop can apply because only the loop holds the settings in force.
+    control_status: Mutex<Vec<PendingControlStatus>>,
     /// Decision requests the routes refused, waiting for the loop to audit them
     /// (GAP-132, DN-31 §9 row 4). The caller has already been answered; what is owed is
     /// the entry in the record.
@@ -738,6 +761,55 @@ impl std::fmt::Debug for PendingAcceptance {
     }
 }
 
+/// A live control-status change the route let through and the node loop has not yet
+/// applied (GAP-203; DN-09 §10; D-140).
+///
+/// The same carrier as [`PendingAcceptance`] and for the same reason: the settings in
+/// force, the queue the new status is judged against and the journal the change goes on
+/// are all the loop's, so the route hands the request over and waits. **Everything about
+/// the people is verified here, before the loop sees it**: the requester from the token,
+/// the confirmer from the account store. The loop never reads a passphrase.
+pub struct PendingControlStatus {
+    /// The client's key, so a retry is the same request.
+    pub request: gungnir_model::RequestId,
+    pub layer: gungnir_model::EffectorLayer,
+    pub status: gungnir_model::WeaponsControlStatus,
+    /// Why, trimmed and never empty: the route refused an empty one.
+    pub reason: String,
+    /// The verified session the change is attributed to (DN-23 §5 rule 1).
+    pub operator: OperatorId,
+    pub role: gungnir_security::Role,
+    /// The machine the connection was verified as, which is where the change was asked
+    /// from and what the change's `origin` names; `None` over plaintext.
+    pub party: Option<String>,
+    /// The second person, verified by the route against the account store where the
+    /// body carried a confirmation (D-140). `None` where none came; the loop refuses
+    /// that where the baseline's rule is on.
+    pub confirmed_by: Option<(OperatorId, gungnir_security::Role)>,
+    /// What the loop recorded, or why it would not.
+    pub reply: tokio::sync::oneshot::Sender<ControlStatusAnswer>,
+}
+
+/// What the node loop says about one control-status request (GAP-203): the `201` and the
+/// `409` of [`v3::ControlStatusRecorded`] and [`v3::ControlStatusRefused`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum ControlStatusAnswer {
+    Recorded(v3::ControlStatusRecorded),
+    Refused(v3::ControlStatusRefused),
+}
+
+impl std::fmt::Debug for PendingControlStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PendingControlStatus")
+            .field("request", &self.request)
+            .field("layer", &self.layer)
+            .field("status", &self.status)
+            .field("role", &self.role)
+            .field("confirmed", &self.confirmed_by.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
 /// An outage's decisions the route accepted and the node loop has not yet put on its
 /// record (GAP-134, DN-31 §6.8).
 ///
@@ -884,6 +956,7 @@ impl NodeApi {
             tasks: Mutex::new(Vec::new()),
             decisions: Mutex::new(Vec::new()),
             acceptances: Mutex::new(Vec::new()),
+            control_status: Mutex::new(Vec::new()),
             refusals: Mutex::new(Vec::new()),
             forwarded: Mutex::new(Vec::new()),
             reports: Mutex::new(Vec::new()),
@@ -997,6 +1070,39 @@ impl NodeApi {
             .lock()
             .map(|mut queue| std::mem::take(&mut *queue))
             .unwrap_or_default()
+    }
+
+    /// Take the control-status changes the route let through since the last call, in
+    /// arrival order (GAP-203; DN-09 §10). The loop applies each to the settings it runs
+    /// and to its queue, and answers through its `reply`; two people changing one layer
+    /// at once get one change and one `409 unchanged`.
+    #[must_use]
+    pub fn take_control_status_requests(&self) -> Vec<PendingControlStatus> {
+        self.control_status
+            .lock()
+            .map(|mut queue| std::mem::take(&mut *queue))
+            .unwrap_or_default()
+    }
+
+    /// The change the loop recorded under `request`, if the snapshot it last published
+    /// carries one (GAP-203).
+    ///
+    /// Read off the published snapshot, as [`NodeApi::queue`] is, so the route's answer to
+    /// a retry and the snapshot's `control_status_changes` are one publish read through
+    /// two doors. A change recorded since the last publish is not here yet; the loop
+    /// keeps the same list and answers the retry itself, so a retry in that window is
+    /// still answered with the first change and records nothing.
+    #[must_use]
+    pub fn control_status_change_for(
+        &self,
+        request: &gungnir_model::RequestId,
+    ) -> Option<gungnir_model::ControlStatusChange> {
+        self.snapshot.read().ok().and_then(|s| {
+            s.control_status_changes
+                .iter()
+                .find(|c| c.request.as_ref() == Some(request))
+                .cloned()
+        })
     }
 
     /// Record that a route refused a decision request, for the loop to audit
@@ -1286,6 +1392,10 @@ impl NodeApi {
         // which is a recommendation for this deployment's own effectors. Withheld and
         // counted, never silently empty.
         withheld += full.queue.len();
+        // GAP-203: what this deployment decides by, and who changed it, is as internal as
+        // the queue it governs. Withheld and counted, one per layer stated and one per
+        // change carried.
+        withheld += full.control_status.len() + full.control_status_changes.len();
         let health = if self.exchange.may_send(
             party,
             ExchangeItem::Health,
@@ -1318,6 +1428,9 @@ impl NodeApi {
             // GAP-183: a statement about this deployment's approval queue, which is
             // withheld from a partner entirely.
             held_layers: Vec::new(),
+            // GAP-203: the policy this deployment decides by, withheld with the queue.
+            control_status: BTreeMap::new(),
+            control_status_changes: Vec::new(),
         })
     }
 
@@ -1609,7 +1722,14 @@ pub fn router(api: Arc<NodeApi>) -> Router {
         // GAP-194, D-131: a commander's acceptance of a coverage gap, held by the node for
         // its linked desktops and marked on `GET /v3/coverage`. New in `/v3`; not in
         // `RETIRED`.
-        .route(&crate::path(routes::COVERAGE_ACCEPTANCES), post(accept_gap));
+        .route(&crate::path(routes::COVERAGE_ACCEPTANCES), post(accept_gap))
+        // GAP-203, DN-09 §10, D-140: a live change to one layer's weapons control status,
+        // applied by the node loop to the settings it runs and to its queue. New in
+        // `/v3`; not in `RETIRED`.
+        .route(
+            &crate::path(routes::POLICY_CONTROL_STATUS),
+            post(set_control_status),
+        );
     RETIRED
         .iter()
         .fold(served, |router, retired| {
@@ -3371,6 +3491,209 @@ fn vet_gap(gap: &gungnir_model::AcceptedGap) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// How long the control-status route waits for the loop: the decision route's window, for
+/// the same loop.
+const CONTROL_STATUS_REPLY_TIMEOUT: std::time::Duration = DECISION_REPLY_TIMEOUT;
+
+/// `POST /v3/policy/control-status` (GAP-203; DN-09 §10; D-140; human-owned, a
+/// `gungnir-api` write path): a signed-in supervisor or commander puts one layer at a
+/// weapons control status, live, for every desktop linked to this node.
+///
+/// **The shape of the acceptance route -- authenticate, vet, hand over, wait -- and its
+/// reason**: the settings in force, the queue the new status re-judges and the journal the
+/// change goes on are the loop's. The route answers what it can about the people and the
+/// body, each refusal audited under `weapons.control_status` naming the requester, and
+/// nothing recorded:
+///
+/// 1. a valid, unexpired operator token -- `401`: a change names the person who made it,
+///    so nobody signed in changes nothing (DN-09 §6);
+/// 2. `weapons.control_status` -- `403` naming the role: the supervisor and the commander
+///    hold it, the administrator among those who do not;
+/// 3. the body decodes, its request key is a key, and its reason is not blank -- `400`;
+/// 4. where a confirmation came (D-140): it verifies against this node's account store by
+///    the sign-in's own path -- `403 confirmation-rejected`, with an unknown operator and a
+///    wrong passphrase told apart by nothing; it is not the requester -- `403
+///    same-operator`; and its account's role holds `weapons.control_status` -- `403
+///    confirmation-not-permitted`. **A confirmation is verified whether or not the rule is
+///    on**: a body that names a second person is answered about that person, never
+///    silently accepted on a node that happened not to need them.
+///
+/// Then, unless the snapshot already carries a change under this request key -- answered
+/// `201` with that change and nothing recorded -- the loop applies it: `201` with the
+/// change and what it withdrew, or `409` with why not (`unchanged`, or
+/// `two-person-required` where the baseline's rule is on and no confirmation came). A
+/// `504` does not mean nothing was recorded; the caller reads the snapshot's
+/// `control_status` to learn what is in force, or retries under the same key.
+async fn set_control_status(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+    body: Result<Json<v3::ControlStatusRequest>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    const ACTION: &str = actions::SET_CONTROL_STATUS;
+    // 1. Who is asking.
+    let session =
+        match unaudited_operator_caller(&api, &headers, &peer, "setting weapons control status") {
+            Ok(session) => session,
+            Err((status, why)) => {
+                api.audit(
+                    &peer,
+                    None,
+                    ACTION,
+                    format_args!("refused: no valid operator session"),
+                );
+                return problem(status, &why);
+            }
+        };
+    let refuse = |status: StatusCode, why: String| {
+        api.audit(
+            &peer,
+            Some(session.operator),
+            ACTION,
+            format_args!("refused: {why}"),
+        );
+        problem(status, &why)
+    };
+    // 2. Whether that role may set a status at all.
+    if !gungnir_security::authz::role_permits(session.role, ACTION) {
+        return refuse(
+            StatusCode::FORBIDDEN,
+            format!(
+                "the {:?} role may not set weapons control status ({ACTION}); the supervisor \
+                 and the commander may",
+                session.role
+            ),
+        );
+    }
+    // 3. Whether the body is a change at all.
+    let (request, reason) = match vet_control_status(body) {
+        Ok(vetted) => vetted,
+        Err(why) => return refuse(StatusCode::BAD_REQUEST, why),
+    };
+    // 4. The second person, where one is named. Refused with the refusal's own body, so a
+    // desktop reads which of the three it was; the audit entry carries the sentence.
+    let confirmed_by = match verify_confirmation(&api, &session, request.confirmation.as_ref()) {
+        Ok(confirmed) => confirmed,
+        Err(refused) => {
+            api.audit(
+                &peer,
+                Some(session.operator),
+                ACTION,
+                format_args!("refused: {}", refused.sentence()),
+            );
+            return lossless_json_as(StatusCode::FORBIDDEN, &refused);
+        }
+    };
+    // A retry of a change the loop already published: the same answer, nothing recorded.
+    if let Some(change) = api.control_status_change_for(&request.request) {
+        return lossless_json_as(
+            StatusCode::CREATED,
+            &v3::ControlStatusRecorded {
+                change,
+                withdrawn: Vec::new(),
+            },
+        );
+    }
+    let (reply, answer) = tokio::sync::oneshot::channel();
+    {
+        let Ok(mut queue) = api.control_status.lock() else {
+            return problem(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "the control-status queue lock was poisoned",
+            );
+        };
+        queue.push(PendingControlStatus {
+            request: request.request,
+            layer: request.layer,
+            status: request.status,
+            reason,
+            operator: session.operator,
+            role: session.role,
+            party: peer.party.clone(),
+            confirmed_by,
+            reply,
+        });
+    }
+    match tokio::time::timeout(CONTROL_STATUS_REPLY_TIMEOUT, answer).await {
+        Ok(Ok(ControlStatusAnswer::Recorded(recorded))) => {
+            lossless_json_as(StatusCode::CREATED, &recorded)
+        }
+        Ok(Ok(ControlStatusAnswer::Refused(refused))) => {
+            lossless_json_as(StatusCode::CONFLICT, &refused)
+        }
+        Ok(Err(_)) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the node loop dropped the status change without answering",
+        ),
+        Err(_) => problem(
+            StatusCode::GATEWAY_TIMEOUT,
+            "the node loop did not answer within the reply window, which does not mean \
+             nothing was recorded; read the snapshot's control_status to learn what is in \
+             force, or retry under the same request key",
+        ),
+    }
+}
+
+/// Check 3 of [`set_control_status`]: the body decodes, which validates its request key,
+/// and the reason is not blank. The request and the trimmed reason, or why the body is
+/// refused.
+fn vet_control_status(
+    body: Result<Json<v3::ControlStatusRequest>, axum::extract::rejection::JsonRejection>,
+) -> Result<(v3::ControlStatusRequest, String), String> {
+    let request = match body {
+        Ok(Json(request)) => request,
+        Err(rejection) => return Err(format!("the status change does not read: {rejection}")),
+    };
+    let reason = request.reason.trim();
+    if reason.is_empty() {
+        return Err("a status change is recorded with its reason; none was given".to_owned());
+    }
+    let reason = reason.to_owned();
+    Ok((request, reason))
+}
+
+/// Check 4 of [`set_control_status`]: the second person, verified (D-140).
+///
+/// `Ok(None)` where the body named nobody; `Ok(Some(..))` where it named somebody whose
+/// credential verified, who is not the requester, and whose role holds
+/// `weapons.control_status`. Each failure is the refusal the caller is sent, and the
+/// back-off a sign-in is subject to applies here too, because the path is the sign-in's.
+fn verify_confirmation(
+    api: &NodeApi,
+    session: &OperatorSession,
+    confirmation: Option<&v3::ConfirmationRequest>,
+) -> Result<Option<(OperatorId, gungnir_security::Role)>, v3::ControlStatusRefused> {
+    let Some(confirmation) = confirmation else {
+        return Ok(None);
+    };
+    // The caller resolved through this authority a moment ago, so it is there; said
+    // rather than unwrapped all the same.
+    let Some(callers) = api.callers.as_ref() else {
+        return Err(v3::ControlStatusRefused::ConfirmationRejected);
+    };
+    let confirmer = callers
+        .confirm(confirmation.operator, &confirmation.passphrase, api.now())
+        .map_err(|failure| {
+            // The failure's own words stay in the log, never in the answer: a prober told
+            // "unknown operator" from "wrong passphrase" learns which half to work on.
+            tracing::info!(
+                operator = confirmation.operator,
+                %failure,
+                "a control-status confirmation was rejected"
+            );
+            v3::ControlStatusRefused::ConfirmationRejected
+        })?;
+    if confirmer.operator == session.operator {
+        return Err(v3::ControlStatusRefused::SameOperator);
+    }
+    if !gungnir_security::authz::role_permits(confirmer.role, actions::SET_CONTROL_STATUS) {
+        return Err(v3::ControlStatusRefused::ConfirmationNotPermitted {
+            role: format!("{:?}", confirmer.role),
+        });
+    }
+    Ok(Some((confirmer.operator, confirmer.role)))
 }
 
 /// `POST /v3/decisions/forwarded` (DN-31 §6.8 and §7, GAP-134): what a desktop decided
