@@ -114,7 +114,7 @@ the sensor manager together with the supervisor (planning).
 | Sensor operators and maintainers | Modes, tasking, faults, calibration | Sensor management; health |
 | Civil aviation authority and airport | Corridors, flight plans, ADS-B; warnings of engagements | Cooperative data; voice; geofences |
 | Port and maritime authorities | AIS, harbour operations, barriers, warnings | Cooperative data; voice |
-| Coalition partners | Picture and product exchange with releasability | `gungnir-api`, STANAG 4676, ASTERIX |
+| Coalition partners | Picture and product exchange with releasability | `gungnir-api` (`/v3/exchange`, DN-18, GAP-065) in the formats `gungnir_model::ExchangeFormat` names; the encoders that refuse are `../unbuilt.md`'s rows, and STANAG 4676 is out of the release (D-44) |
 | Accreditors and auditors | Evidence that the system enforces policy and records decisions | Audit log, release evidence (`../release-governance.md`) |
 | Software owner (Roessling Digital) | Product decisions, support | Plans 01 and 10 |
 

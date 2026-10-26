@@ -34,8 +34,9 @@ criteria per class, weapons control status per layer, engagement authority by ro
 and class, restrictions as geofences and rules, escalation and timeout behaviour. In
 the system this is a policy configuration validated before it is applied
 (`gungnir-config` validation, `gungnir-policy` engines) and audited on change
-(`gungnir-security`). Weapons control status and authority-by-role are not yet
-modelled (`ARCHITECTURE.md` §10 and plan 05).
+(`gungnir-security`). Weapons control status per layer and the authority matrix are
+`gungnir-model/src/policy_settings.rs` (`ControlStatusSettings`, `AuthoritySettings`;
+`../design/DN-09-authority-and-control-status.md`, GAP-052).
 
 ## 5. Mission plans
 

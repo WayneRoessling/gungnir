@@ -25,7 +25,7 @@ Status: first draft, 2026-09-04 (plan 03).
 The description covers the mission context (why the system exists, from
 `../../mission/`), the capabilities it must provide (`../../mission/capabilities/`),
 the operational performers and activities that use it, the services it exposes, the
-software resources that implement them (the 50 crates, generated from the manifests),
+software resources that implement them (the crates, generated from the manifests),
 the people, the security posture, the information model, the standards, the projects
 that will deliver it, the actual deployments, and the measures that judge it.
 
@@ -62,10 +62,11 @@ cross-cutting functions (`../../mission/mission-analysis.md`).
 
 ## 5. Findings
 
-- **The operational need is broader than the implemented solution.** All 56
-  capabilities have a home in the design; 4 are fully implemented, 32 partly, 20 not
-  at all (`../../mission/gap-analysis/coverage-matrix.md`). The views mark planned
-  elements and relationships as such rather than drawing them as real.
+- **The operational need is broader than the implemented solution.** Every capability
+  has a home in the design; how far each is implemented, and the gaps that follow, is
+  `../../mission/gap-analysis/coverage-matrix.md`, generated from the gap data. The
+  views mark planned elements and relationships as such rather than drawing them as
+  real.
 - **One vocabulary holds across every domain.** The same `gungnir-model` types
   appear in the information views, the service interfaces, the API, the journal,
   and the thread step tables, which is why the operational and resource views
@@ -74,11 +75,12 @@ cross-cutting functions (`../../mission/mission-analysis.md`).
   (OA-07 Decide is performed by roles only), in services (SV-15 never returns
   Approved on its own, SV-16 records every decision), in security (Sc-Pr), and in
   the process views (every S+H step crosses into the human lane).
-- **Connectivity is the largest single dependency.** SV-23's transport (GAP-041)
-  gates peer exchange, handoff, mid-session failover, and caller authentication;
+- **Connectivity was the largest single dependency.** SV-23's transport (GAP-041)
+  gated peer exchange, handoff, mid-session failover and caller authentication; where
+  each stands is the register's (GAP-065, GAP-137, GAP-050, GAP-057 and GAP-060), and
   Ar-Cn shows the connected profiles as intended, not fielded.
-- **Eight roles, five in code.** The three roles adopted under D-05 are in the
-  personnel views as adopted and in the registry as not yet in code (GAP-068).
+- **The roles are in code.** The roles the personnel views name, the three adopted
+  under D-05 among them, are `gungnir_security::Role` (GAP-068).
 
 ## 6. Assumptions
 
@@ -86,8 +88,10 @@ cross-cutting functions (`../../mission/mission-analysis.md`).
   review; the views inherit that status.
 - Deployment profiles and platforms are as `ARCHITECTURE.md` §8 and §9 state on
   2026-09-04; the container host and cloud provider are not yet chosen.
-- Standards marked planned will be adopted as their gaps close (D-09, GAP-041,
-  GAP-060, GAP-064, GAP-069).
+- A standard marked planned in `model/elements.yaml` carries the gap or the obstacle
+  that clears it, and `tools/build_uaf.py` checks that marking against every
+  `conforms_to` edge, so `standards/Sd-Tx.md` and the registry cannot disagree
+  unnoticed.
 
 ## 7. Reading order
 
