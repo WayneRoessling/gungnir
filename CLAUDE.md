@@ -99,8 +99,9 @@ The desktop binary is `gungnir-app` (eframe, `Renderer::Glow`); the headless nod
 `gungnir-node [config.json]`. Both start with the default config and run without
 sensors; both journal to `./gungnir-journal` under the working directory.
 
-`gungnir-node account add|list|add-os-keystore|list-os-keystore` provisions the accounts
-a node authenticates against. It is human-owned because it writes credential material,
+`gungnir-app account add|list|add-os-keystore|list-os-keystore` and the same under
+`gungnir-node` (one implementation, `gungnir_security::provisioning`) provision the accounts
+a desktop or a node authenticates against. It is human-owned because it writes credential material,
 and it reads the passphrase from standard input, never from an argument.
 
 The node stops on Ctrl-C. On Windows it ignores signals sent from Git Bash (`kill`,

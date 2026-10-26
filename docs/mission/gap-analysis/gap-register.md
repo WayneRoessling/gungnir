@@ -198,7 +198,7 @@ history, and an entry is never edited once it has merged.
 | GAP-202 | A cut-off desktop that restarts forgets the gap acceptances it owed its node | Technical | CAP-1.4, CAP-7.3 | 3 | 4 | S | 12 | I3 | Services engineer | Closed |
 | GAP-201 | A linked desktop could miss a queued item until the queue moved again | Technical | CAP-5.9, CAP-4.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 | GAP-203 | Weapons control status cannot be changed while the desktop runs | Technical | CAP-3.6, CAP-5.9 | 5 | 10 | M | 50 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-204 | The desktop cannot provision its own accounts | Technical | CAP-6.1, CAP-7.3 | 3 | 10 | S | 30 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-204 | The desktop cannot provision its own accounts | Technical | CAP-6.1, CAP-7.3 | 3 | 10 | S | 30 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-205 | A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second | Technical | CAP-1.5 | 3 | 7 | M | 21 | I3 | Services engineer | Open |
 | GAP-206 | No production track is releasable, so track exchange has no producer | Technical | CAP-6.6, CAP-7.4, CAP-1.6 | 5 | 5 | M | 25 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-207 | An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop | Technical | CAP-4.4, CAP-4.6 | 4 | 5 | L | 20 | I3 | Services engineer | Open |
@@ -2910,11 +2910,12 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.1 Authenticate; CAP-7.3 Three profiles.
 - History:
   - 2026-10-26, Open: Filed by plan 12. GAP-057 built the account store and the node's command; nothing reaches it from a Windows desktop.
+  - 2026-10-26, Closed: Built. The account commands moved out of the node binary into `gungnir_security::provisioning`, one implementation both binaries call with the name they speak as; `gungnir-app account add|list|add-os-keystore|list-os-keystore` answers before any window, journal or baseline opens, and `gungnir-app/tests/account_provisioning.rs` drives the desktop binary through a provisioned sign-in. The deployment README gains the provisioning section it never had. See `../../record/2026-10-26/gap-204-the-desktop-provisions-its-own-accounts.md`.
 - Evidence: `gungnir-node/src/account.rs:136-153` (the only writer; passphrase echo not suppressed at lines 20-24); `.github/workflows/release.yml:92-97`; `gungnir-app/src/state.rs:974-978`; `gungnir-app/src/failover.rs:29-35`; `gungnir-config/src/lib.rs:1286`.
 - Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
 - Impact: The release ships `gungnir-app` for Windows and `gungnir-node` for Linux, and the only writer of the accounts file is `gungnir-node account add`. A laptop in the field runs with nobody signed in; its decisions record no role, and D-03 arbitration cannot rank them on reconnect.
 - Closing action: `gungnir-app account add|list` sharing `account.rs` as a library target, passphrase from standard input with echo suppressed, documented in `deploy/README.md` beside the node's; or ship `gungnir-node.exe` beside the desktop and document the one line.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: GAP-057; DN-23; `../../review/2026-10-26-comprehensive-review.md` §6 finding 4.
 
 **GAP-205 A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second**

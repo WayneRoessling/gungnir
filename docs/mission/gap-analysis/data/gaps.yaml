@@ -11938,6 +11938,16 @@
     note: >-
       Filed by plan 12. GAP-057 built the account store and the node's command; nothing
       reaches it from a Windows desktop.
+  - date: 2026-10-26
+    status: Closed
+    note: >-
+      Built. The account commands moved out of the node binary into
+      `gungnir_security::provisioning`, one implementation both binaries call with the
+      name they speak as; `gungnir-app account add|list|add-os-keystore|list-os-keystore`
+      answers before any window, journal or baseline opens, and
+      `gungnir-app/tests/account_provisioning.rs` drives the desktop binary through a
+      provisioned sign-in. The deployment README gains the provisioning section it never
+      had. See `../../record/2026-10-26/gap-204-the-desktop-provisions-its-own-accounts.md`.
 
 - id: GAP-205
   name: A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second
