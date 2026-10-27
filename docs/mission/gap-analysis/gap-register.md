@@ -203,7 +203,7 @@ history, and an entry is never edited once it has merged.
 | GAP-206 | No production track is releasable, so track exchange has no producer | Technical | CAP-6.6, CAP-7.4, CAP-1.6 | 5 | 5 | M | 25 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-207 | An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop | Technical | CAP-4.4, CAP-4.6 | 4 | 5 | L | 20 | I3 | Services engineer | Closed |
 | GAP-208 | The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks | Technical | CAP-6.3 | 4 | 9 | M | 36 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-209 | Reconciliation arbitration ranks a role string the desktop's own journal asserts | Technical | CAP-5.4, CAP-4.2 | 4 | 6 | M | 24 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-209 | Reconciliation arbitration ranks a role string the desktop's own journal asserts | Technical | CAP-5.4, CAP-4.2 | 4 | 6 | M | 24 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-210 | Configuration baselines are not signed | Technical | CAP-5.6, CAP-6.4 | 4 | 2 | M | 8 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-211 | Issued identities never expire and nothing revokes them | Technical | CAP-6.1, CAP-6.4 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-212 | Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends | Technical | CAP-6.1, CAP-6.2 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Open |
@@ -2984,11 +2984,12 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.4 Disconnected and reconcile; CAP-4.2 Record every decision.
 - History:
   - 2026-10-26, Open: Filed by plan 12. D-03's rule is right; the input it ranks is the one thing on a disconnected desktop nobody else vouches for.
+  - 2026-10-27, Closed: Built. The node re-derives every forwarded decision's role from its own accounts before checking the batch: a mismatch is refused and audited, and an operator it does not know is recorded with no role. It re-runs the rule on every forwarded settlement with its own ranks, and checks that a hand resolver may decide. DN-31 §16 records the owner's four choices. See `../../record/2026-10-27/gap-209-the-node-ranks-a-forwarded-outage.md`.
 - Evidence: `gungnir-model/src/arbitration.rs:27-30,52-54` (rank of the role the side was decided under, as recorded); `gungnir-command/src/lib.rs:149-156` (`role` as the caller supplied it); `gungnir-remote/src/link.rs:2042`; DN-31 §6.8.
 - Severity: 4. Reach: 6 threads. Effort: M. Priority: 24.
 - Impact: A forged or edited desktop journal can win a decision conflict on reconnect, and a forwarded outage batch carries the self-asserted role to the node. A replayed batch is caught by the request-id key; a fabricated one is not.
 - Closing action: The node re-derives the role of every forwarded decision from its own account store by operator id and refuses a mismatch with an audit entry; arbitration takes the node-derived rank where one exists; the desktop keeps its recorded role for display.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: D-03; DN-31 §13; `../../review/2026-10-26-comprehensive-review.md` §5 finding 2.
 
 **GAP-210 Configuration baselines are not signed**

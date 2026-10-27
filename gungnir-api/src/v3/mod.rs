@@ -1038,6 +1038,34 @@ pub enum ForwardRefused {
     },
     /// The same plan settled two different ways.
     SettledOtherwise { plan: PlanId, held: Settlement },
+    /// A decision names a role its operator's account on this node does not carry
+    /// (GAP-209). The desktop's journal said `recorded`; this node's account store says
+    /// `held`. A role only the desktop vouches for does not rank anything here.
+    RoleMismatch {
+        decision: DecisionId,
+        operator: String,
+        recorded: String,
+        held: String,
+    },
+    /// D-03's rule, run on this node's own ranks, does not give the verdict the batch
+    /// carries for this plan (GAP-209). `node_kept_local` and `node_ground` are what it
+    /// gives here, both `None` where it cannot rank the two sides at all, in which case a
+    /// person settles it.
+    ArbitratedOtherwise {
+        plan: PlanId,
+        node_kept_local: Option<bool>,
+        node_ground: Option<gungnir_model::arbitration::ArbitrationGround>,
+    },
+    /// A conflict a person settled names a resolver whose account on this node may not
+    /// decide (GAP-209): `plan.decide` is what settling a conflict takes.
+    ResolverNotPermitted {
+        plan: PlanId,
+        operator: String,
+        role: String,
+    },
+    /// This node cannot read its own accounts, so it cannot vouch for any role in the
+    /// batch, and takes none of it (GAP-209).
+    CannotVouch { reason: String },
 }
 
 /// Most entries one `GET /v3/audit` answers with (GAP-179, D-116). A page, so a segment

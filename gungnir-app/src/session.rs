@@ -71,19 +71,8 @@ pub fn audit_view<'a>(
 /// role -- a misspelling, or a role a later build added -- is no role at all, never the
 /// nearest one, which leaves a conflict it appears in to a person.
 pub(crate) fn role_named(name: &str) -> Option<gungnir_security::Role> {
-    use gungnir_security::Role;
-    Some(match name {
-        "Operator" => Role::Operator,
-        "Supervisor" => Role::Supervisor,
-        "Analyst" => Role::Analyst,
-        "SensorManager" => Role::SensorManager,
-        "Administrator" => Role::Administrator,
-        "Commander" => Role::Commander,
-        "Planner" => Role::Planner,
-        "SecurityOfficer" => Role::SecurityOfficer,
-        "IntelligenceAnalyst" => Role::IntelligenceAnalyst,
-        _ => return None,
-    })
+    // GAP-209: the one parser the node ranks forwarded decisions with too.
+    gungnir_security::Role::named(name)
 }
 
 /// Assign a role in the account store (GAP-057, PN-20): an authority-checked act on the

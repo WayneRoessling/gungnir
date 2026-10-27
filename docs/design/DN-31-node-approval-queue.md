@@ -550,6 +550,49 @@ measured from the link's own start until there is something later to measure it 
 the sentence says which it is -- "has not answered since this desktop signed in" is a
 different thing to tell an operator than "silent for 12 s".
 
+## 16. Amendment 5 (2026-10-27, GAP-209): the node ranks a forwarded outage by its own accounts
+
+**§6.8 took a forwarded decision's role as the desktop recorded it.** A disconnected
+desktop's journal is unlocked by its own operator, so a role in it is a claim nobody else
+vouches for. D-03's rule is right; the input it ranked was the one thing on a cut-off
+desktop that could be forged (the comprehensive review's §5 finding 2). A replayed batch
+was caught by the request-id key and a fabricated one was not. The owner's four choices of
+2026-10-27, each the recommended default:
+
+| Question | Chosen |
+|---|---|
+| An operator the node has no account for | Recorded, with no role: the decision happened, and a conflict over it goes to a person |
+| A rule settlement the node's ranks do not give | The batch is refused, whole, as every contradiction is |
+| The desktop's own reconciliation | Unchanged: it ranks by its recorded roles and shows them; the node re-ranks what it is sent |
+| A conflict a person settled | Its resolver's account here must hold `plan.decide`, or the batch is refused |
+
+**Before anything is compared or written**, the node re-derives each forwarded decision's
+role from its own account store by the operator the record names. The same account with
+the same role is recorded as it is. A different role refuses the batch,
+`ForwardRefused::RoleMismatch`, naming both. No account, or no operator, is recorded with
+no role. An account store that cannot be read refuses the batch, `CannotVouch`. The
+derivation is deterministic, so a batch forwarded twice is the same records twice and is
+`already_held`, never a contradiction.
+
+**A rule settlement is re-run on the node's ranks.** The desktop's side is the forwarded
+decision at the rank just vouched for. The node's side is the node's own record of the plan
+where it holds one, which it authenticated itself; otherwise it is the side as forwarded,
+its rank re-derived from the operator it names. A verdict that differs, or one the node
+cannot reach at all, refuses the batch, `ArbitratedOtherwise`, carrying what the node's
+ranks give. **A person's settlement** names its resolver; an account here that may not
+decide refuses the batch, `ResolverNotPermitted`. Every refusal is audited, as §6.8's
+contradictions already are, and nothing of the batch is applied. The desktop shows it on
+PN-18 for a person.
+
+Human-owned (the `gungnir-api` write path and `gungnir-security`'s role parser); see
+[`../signatures.md`](../signatures.md). The record item is
+[`../record/2026-10-27/gap-209-the-node-ranks-a-forwarded-outage.md`](../record/2026-10-27/gap-209-the-node-ranks-a-forwarded-outage.md).
+Verification: `gungnir-node/tests/forwarded_roles.rs`, over the real route against the
+node's own approval loop. It covers a forged role refused and audited, an honest one
+recorded, an unknown operator recorded with no role, a re-forwarded batch held, a rule
+settlement the node's ranks contradict refused and one they agree with taken, and a
+resolver who may not decide refused.
+
 ## Traceability
 
 GAP-129, GAP-130 to GAP-134, GAP-113, GAP-127, GAP-140, GAP-142; D-03, D-15, D-53,

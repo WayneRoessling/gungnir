@@ -29,7 +29,7 @@
 
 use gungnir_api::transport::{
     DecisionAnswer, ExchangeProducer, ForwardAnswer, NodeApi, PendingDecision, PendingForward,
-    RefusedDecision,
+    RefusedDecision, RoleLookup,
 };
 use gungnir_api::v3;
 use gungnir_approval::{
@@ -656,11 +656,26 @@ fn take_forwarded(
     frame: &Frame<'_>,
     pending: &PendingForward,
 ) -> ForwardAnswer {
-    let records: Vec<(DecisionRecord, Option<v3::Settlement>)> = pending
-        .decisions
-        .iter()
-        .map(|f| (record_of(f), f.settled.clone()))
-        .collect();
+    // GAP-209: every role re-derived from this node's own accounts, and every settlement
+    // re-ranked on them, before anything is compared or written. A refusal here is the
+    // same whole-batch refusal a contradiction is.
+    let records = match vouched(approval, frame, pending) {
+        Ok(records) => records,
+        Err(refused) => {
+            tracing::warn!(
+                ?refused,
+                "a forwarded outage names a role or a settlement this node does not vouch for; nothing applied"
+            );
+            audit_refusal(
+                approval,
+                frame,
+                Some(pending.operator),
+                pending.party.as_deref(),
+                &format!("forwarded decisions: {refused:?}"),
+            );
+            return ForwardAnswer::Refused(refused);
+        }
+    };
     if let Some(refused) = contradiction(approval, &records) {
         tracing::warn!(
             ?refused,
@@ -715,6 +730,184 @@ fn take_forwarded(
         "a forwarded outage is on the record"
     );
     ForwardAnswer::Accepted(accepted)
+}
+
+/// Every forwarded decision as this node will record it, its role re-derived from this
+/// node's own accounts, and every settlement in the batch checked against this node's
+/// ranks (GAP-209; D-03; the owner's choices of 2026-10-27).
+///
+/// **The role a desktop's journal states is not the one ranked.** A disconnected desktop's
+/// journal is unlocked by its own operator, so a role in it is a claim nobody else vouches
+/// for. Here, by the operator the record names:
+///
+/// - **an account here with that role**: recorded as it is;
+/// - **an account here with another role**: the batch is refused, naming both;
+/// - **no account here**, or no operator named: recorded with no role. The decision
+///   happened and stays on the record, and a conflict over it can only be settled by a
+///   person, because an unknown authority is not a low one (`arbitrate`);
+/// - **accounts that cannot be read**: the batch is refused, since nothing can be vouched for.
+///
+/// A rule settlement is re-run on the node's ranks and refused where the verdict differs;
+/// a person's settlement is refused where its resolver's account here may not decide.
+fn vouched(
+    approval: &NodeApproval,
+    frame: &Frame<'_>,
+    pending: &PendingForward,
+) -> Result<Vec<(DecisionRecord, Option<v3::Settlement>)>, Box<v3::ForwardRefused>> {
+    let mut out = Vec::with_capacity(pending.decisions.len());
+    for forwarded in &pending.decisions {
+        let mut record = record_of(forwarded);
+        record.role = vouched_role(frame.api, &record)?;
+        if let Some(settlement) = &forwarded.settled {
+            check_settlement(approval, frame.api, &record, settlement)?;
+        }
+        out.push((record, forwarded.settled.clone()));
+    }
+    Ok(out)
+}
+
+/// The role this node vouches for on `record`, or the refusal (GAP-209).
+fn vouched_role(
+    api: &NodeApi,
+    record: &DecisionRecord,
+) -> Result<Option<String>, Box<v3::ForwardRefused>> {
+    let Some(operator) = record.operator_id.as_deref() else {
+        return Ok(None);
+    };
+    let Ok(id) = operator.parse::<u64>() else {
+        return Ok(None);
+    };
+    match api.role_of(id) {
+        RoleLookup::Known(role) => {
+            let held = format!("{role:?}");
+            match &record.role {
+                Some(recorded) if *recorded != held => {
+                    Err(Box::new(v3::ForwardRefused::RoleMismatch {
+                        decision: record.id,
+                        operator: operator.to_owned(),
+                        recorded: recorded.clone(),
+                        held,
+                    }))
+                }
+                _ => Ok(Some(held)),
+            }
+        }
+        RoleLookup::Unknown => Ok(None),
+        RoleLookup::Unavailable => Err(cannot_vouch()),
+    }
+}
+
+fn cannot_vouch() -> Box<v3::ForwardRefused> {
+    Box::new(v3::ForwardRefused::CannotVouch {
+        reason: "this node's account store cannot be read, so no role in the batch can be \
+                 vouched for"
+            .into(),
+    })
+}
+
+/// A forwarded settlement against this node's ranks (GAP-209).
+fn check_settlement(
+    approval: &NodeApproval,
+    api: &NodeApi,
+    record: &DecisionRecord,
+    settlement: &v3::Settlement,
+) -> Result<(), Box<v3::ForwardRefused>> {
+    use gungnir_model::arbitration::{arbitrate, ArbitrationFacts, Resolution, SideOutcome};
+    let plan = record.plan.id;
+    let rank_of_operator = |operator: Option<&str>| -> Result<Option<u8>, Box<v3::ForwardRefused>> {
+        let Some(id) = operator.and_then(|o| o.parse::<u64>().ok()) else {
+            return Ok(None);
+        };
+        match api.role_of(id) {
+            RoleLookup::Known(role) => Ok(Some(role.rank())),
+            RoleLookup::Unknown => Ok(None),
+            RoleLookup::Unavailable => Err(cannot_vouch()),
+        }
+    };
+    match settlement {
+        v3::Settlement::Rule {
+            kept_local,
+            ground,
+            remote,
+            ..
+        } => {
+            // This desktop's side is the forwarded decision itself, at the rank the node
+            // just vouched for: a decision, never an expiry.
+            let local = ArbitrationFacts {
+                expiry: false,
+                rank: record
+                    .role
+                    .as_deref()
+                    .and_then(gungnir_security::Role::named)
+                    .map(gungnir_security::Role::rank),
+                mission_time: record.mission_time,
+            };
+            // The node's side from the node's own record of the plan where it holds one,
+            // which it authenticated itself; otherwise the side as forwarded, its rank
+            // re-derived from the operator it names.
+            let own = approval
+                .desk
+                .approvals
+                .records()
+                .iter()
+                .rev()
+                .find(|r| r.plan.id == plan && r.origin.is_none() && r.id != record.id);
+            let remote = match own {
+                Some(own) => ArbitrationFacts {
+                    expiry: matches!(
+                        own.decision,
+                        OperatorDecision::Expired { .. } | OperatorDecision::Withdrawn { .. }
+                    ),
+                    rank: own
+                        .role
+                        .as_deref()
+                        .and_then(gungnir_security::Role::named)
+                        .map(gungnir_security::Role::rank),
+                    mission_time: own.mission_time,
+                },
+                None => ArbitrationFacts {
+                    expiry: remote.outcome == SideOutcome::Expired,
+                    rank: rank_of_operator(remote.operator.as_deref())?,
+                    mission_time: remote.at,
+                },
+            };
+            // The desktop's side first, as `gungnir-app`'s reconciliation reads it.
+            let node = arbitrate(local, remote);
+            let agrees = node.is_some_and(|v| {
+                (v.keep == Resolution::KeepFirst) == *kept_local && v.ground == *ground
+            });
+            if agrees {
+                Ok(())
+            } else {
+                Err(Box::new(v3::ForwardRefused::ArbitratedOtherwise {
+                    plan,
+                    node_kept_local: node.map(|v| v.keep == Resolution::KeepFirst),
+                    node_ground: node.map(|v| v.ground),
+                }))
+            }
+        }
+        v3::Settlement::Person { operator, .. } => {
+            let Some(name) = operator.as_deref() else {
+                return Ok(());
+            };
+            let Ok(id) = name.parse::<u64>() else {
+                return Ok(());
+            };
+            match api.role_of(id) {
+                RoleLookup::Known(role)
+                    if !gungnir_security::authz::role_permits(role, actions::DECIDE_PLAN) =>
+                {
+                    Err(Box::new(v3::ForwardRefused::ResolverNotPermitted {
+                        plan,
+                        operator: name.to_owned(),
+                        role: format!("{role:?}"),
+                    }))
+                }
+                RoleLookup::Unavailable => Err(cannot_vouch()),
+                RoleLookup::Known(_) | RoleLookup::Unknown => Ok(()),
+            }
+        }
+    }
 }
 
 /// The node's record of a forwarded decision: the forwarding machine's own, field for

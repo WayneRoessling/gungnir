@@ -12164,6 +12164,15 @@
     note: >-
       Filed by plan 12. D-03's rule is right; the input it ranks is the one thing on a
       disconnected desktop nobody else vouches for.
+  - date: 2026-10-27
+    status: Closed
+    note: >-
+      Built. The node re-derives every forwarded decision's role from its own accounts
+      before checking the batch: a mismatch is refused and audited, and an operator it does
+      not know is recorded with no role. It re-runs the rule on every forwarded settlement
+      with its own ranks, and checks that a hand resolver may decide. DN-31 §16 records the
+      owner's four choices. See
+      `../../record/2026-10-27/gap-209-the-node-ranks-a-forwarded-outage.md`.
 
 - id: GAP-210
   name: Configuration baselines are not signed
