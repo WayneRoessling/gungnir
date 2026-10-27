@@ -127,6 +127,19 @@ pub enum EffectorReport {
         at: MissionTime,
         reason: String,
     },
+    /// The effector says its task is over and **says nothing about the effect** (GAP-207).
+    ///
+    /// What a SAPIENT `TaskAck` of `TASK_STATUS_COMPLETED` is: BSI Flex 335 v2.0 has no
+    /// field for whether a target was defeated, so reading it as [`Completed`] would claim
+    /// an effect nobody reported, either way. The engagement stays open, and closes on the
+    /// track's own evidence as it does when no effector reports at all (the owner's choice
+    /// of 2026-10-27). `detail` is whatever reasons the effector gave, verbatim.
+    ///
+    /// [`Completed`]: EffectorReport::Completed
+    Finished {
+        at: MissionTime,
+        detail: String,
+    },
 }
 
 impl EffectorReport {
@@ -135,7 +148,8 @@ impl EffectorReport {
             EffectorReport::Acknowledged { at }
             | EffectorReport::Executing { at }
             | EffectorReport::Completed { at, .. }
-            | EffectorReport::Refused { at, .. } => *at,
+            | EffectorReport::Refused { at, .. }
+            | EffectorReport::Finished { at, .. } => *at,
         }
     }
 }

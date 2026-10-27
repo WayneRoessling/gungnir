@@ -31,5 +31,7 @@ pub mod approval;
 pub mod audit_record;
 pub mod clock_discipline;
 pub mod control_status;
+// GAP-207: the SAPIENT effectors a handoff is sent to and heard from.
+pub mod effectors;
 pub mod gap_acceptance;
 pub mod picture;

@@ -142,6 +142,9 @@ pub struct AppState {
     /// Every bound SAPIENT feed's `TaskAck` sink, drained each frame (GAP-004): the
     /// inbound half of the outbound-tasking round trip `sapient_task.rs` issues.
     pub sapient_task_acks: Vec<gungnir_ingest::adapters::sapient::TaskAckSink>,
+    /// Every SAPIENT effector a handoff can be sent to, by endpoint (GAP-207): the one
+    /// return path for an effector's outcome on a desktop with no node.
+    pub sapient_effectors: gungnir_ingest::adapters::sapient_effector::SapientEffectors,
     /// `tracking.bearing_rays()` as of the previous tick, so `bearings::tick` can tell a
     /// newly retained bearing from one already on the alert list (GAP-096). Not the
     /// picture: `tracking.bearing_rays()` is what PN-02 and PN-09 read live, every frame.
@@ -740,6 +743,7 @@ impl AppState {
 
         let (ingest, feeds, ais, adsb, misb, sapient, endpoint_client, peers, machine_identity) =
             build_ingest(&config, runtime.handle(), &mut alerts);
+        let sapient_effectors = crate::sapient::bind_effectors(&config, &mut alerts);
         let identification_settings = config.policy.identification.clone();
 
         // The calibration baseline every record is stamped with. One string for the
@@ -790,6 +794,7 @@ impl AppState {
             misb_stats: misb.stats,
             sapient_stats: sapient.stats,
             sapient_task_acks: sapient.task_acks,
+            sapient_effectors,
             last_bearing_rays: Vec::new(),
             dense_group_reported: None,
             identification: gungnir_identification::EvidenceFusionEngine::with_settings(

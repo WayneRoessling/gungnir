@@ -193,7 +193,7 @@ apply is decided by what it changes against the baseline in force, section by se
 | Sensing: sensors, the radar, AIS, ADS-B, MISB and SAPIENT feeds, laydowns, tracking calibration, the late-data policy (`time`), terrain, point clouds, the sensor-task acknowledgement window | `config.apply_sensing` | Sensor manager, supervisor, commander, administrator |
 | Engagement chain: every policy section (identification, staleness, control status, authority, decisions, delegation, fires), resources, assets, geofences, hazards, approaches, the allocation horizon and solve budget, assessment | `weapons.control_status` as well as `config.apply` | Supervisor, commander |
 | Security: accounts and authentication, key provider, TLS, escrow, machine identities, retention | `account.assign_role` as well as `config.apply` | Administrator |
-| Everything else: backend, node, peers, exchange agreements, releasability (GAP-206), endpoints, data directory, frame origin, profiles, display, vocabulary, analytics, reporting, validity window | `config.apply` | Supervisor, commander, administrator |
+| Everything else: backend, node, peers, exchange agreements, releasability (GAP-206), endpoints, SAPIENT effectors (GAP-207), data directory, frame origin, profiles, display, vocabulary, analytics, reporting, validity window | `config.apply` | Supervisor, commander, administrator |
 
 A candidate that changes any section its applier may not change is refused whole and
 nothing is written; PN-14 names each refused section and the action it needs, so the

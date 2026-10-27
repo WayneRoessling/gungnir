@@ -82,7 +82,11 @@ pub fn http_address_in(
 /// The tick step.
 pub fn sweep(state: &mut AppState) {
     let now = state.clock.now();
+    // GAP-207: the effectors are read first, so a task they acknowledged reads as
+    // delivered in this sweep, and what they reported is applied after it.
+    let reports = state.sapient_effectors.pump(now);
     crate::desk::with_desk(state, |desk, cx, host| desk.sweep_handoffs(host, cx.now));
+    crate::sapient::effector_reports(state, reports);
     sweep_warnings(state, now);
 }
 

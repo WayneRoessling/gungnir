@@ -136,6 +136,116 @@ pub fn bind_feeds(
     bound
 }
 
+/// Every SAPIENT effector the baseline puts behind a `sapient` endpoint (GAP-207),
+/// connected now if its middleware answers.
+///
+/// A middleware that does not answer at start is said, not fatal: the link is kept, and
+/// the first handoff to it connects again, so an effector that comes up after the desktop
+/// is reached without a restart.
+pub fn bind_effectors(
+    config: &ConfigBaseline,
+    alerts: &mut Vec<String>,
+) -> gungnir_ingest::adapters::sapient_effector::SapientEffectors {
+    use gungnir_ingest::adapters::sapient_effector::{
+        SapientEffectorLink, SapientEffectors, CONNECT_TIMEOUT,
+    };
+    let mut effectors = SapientEffectors::default();
+    for row in &config.sapient_effectors {
+        let Some(addr) = config
+            .endpoints
+            .iter()
+            .find(|e| e.name == row.endpoint)
+            .and_then(|e| e.address.parse().ok())
+        else {
+            // Unreachable once `validate` has run, which checks both.
+            alerts.push(format!(
+                "SAPIENT effector behind {} not bound: its endpoint has no ip:port",
+                row.endpoint
+            ));
+            continue;
+        };
+        let link = SapientEffectorLink::new(
+            row.endpoint.clone(),
+            addr,
+            row.destination_id.clone(),
+            row.node_type.node_type(),
+        );
+        if let Err(err) = link.connect(CONNECT_TIMEOUT) {
+            alerts.push(format!(
+                "SAPIENT effector behind {} is not reachable yet ({err}); a handoff to it \
+                 connects again when it is sent",
+                row.endpoint
+            ));
+        }
+        effectors.insert(row.endpoint.clone(), link);
+    }
+    effectors
+}
+
+/// What a handoff to `endpoint` is sent as (GAP-207): a SAPIENT `Task` when an effector
+/// is behind it, the handoff's own JSON otherwise.
+///
+/// The task carries only the solutions of the resources whose `handoff_endpoint` is this
+/// one, and the task id is remembered against the decision, so the effector's `TaskAck`s
+/// can be applied to the handoff they are about.
+///
+/// # Errors
+///
+/// Why the handoff cannot be put as a SAPIENT task, in the record's words.
+pub fn effector_payload(
+    config: &ConfigBaseline,
+    effectors: &gungnir_ingest::adapters::sapient_effector::SapientEffectors,
+    endpoint: &str,
+    handoff: &gungnir_model::handoff::Handoff,
+) -> Result<serde_json::Value, String> {
+    match gungnir_sensor_management::sapient_task::engage_payload(config, endpoint, handoff) {
+        None => gungnir_approval::handoffs::endpoint_payload(handoff),
+        Some(task) => {
+            let task = task?;
+            effectors.remember(endpoint, &task.task_id, handoff.decision);
+            Ok(task.message)
+        }
+    }
+}
+
+/// One handoff task in flight to a SAPIENT effector, answering in the desk's terms.
+///
+/// The same three answers an HTTP post gives. **Accepted means a `TaskAck` came back**,
+/// of any status: SAPIENT has no status code, so `0` stands in the place an HTTP status
+/// would, and nothing reads it. What the effector then did is its reports.
+#[derive(Debug)]
+pub struct Sent(pub gungnir_ingest::adapters::sapient_effector::SapientPost);
+
+impl gungnir_approval::HandoffInFlight for Sent {
+    fn poll(&self) -> Option<gungnir_approval::DeliveryAnswer> {
+        use gungnir_approval::DeliveryAnswer;
+        use gungnir_ingest::adapters::sapient_effector::TaskDelivery;
+        self.0.poll().map(|delivery| match delivery {
+            TaskDelivery::Acknowledged => DeliveryAnswer::Accepted { status: 0 },
+            TaskDelivery::Unreachable(reason) => DeliveryAnswer::Unreachable { reason },
+            TaskDelivery::Unsendable(body) => DeliveryAnswer::Refused { status: 0, body },
+        })
+    }
+}
+
+/// Read every SAPIENT effector, and apply what each said to the handoff it is about
+/// (GAP-207): the desktop's outcome path with no node. Called by the delivery sweep after
+/// the desk has polled its posts, so a handoff is delivered before a report about it
+/// lands.
+pub fn effector_reports(
+    state: &mut AppState,
+    reports: Vec<(
+        gungnir_model::DecisionId,
+        String,
+        gungnir_model::handoff::EffectorReport,
+    )>,
+) {
+    let now = state.clock.now();
+    for (decision, endpoint, report) in reports {
+        crate::handoffs::apply_report(state, decision, &endpoint, &report, now);
+    }
+}
+
 /// Drain every bound feed's `TaskAck`s and apply each to [`AppState::sensors`]
 /// (GAP-004).
 pub fn tick(state: &mut AppState) {

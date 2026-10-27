@@ -2088,6 +2088,9 @@ async fn run(
             None
         }
     };
+    // GAP-207: the SAPIENT effectors a handoff this node issues can be sent to, and the
+    // connection their outcomes come back on.
+    let effectors = gungnir_node::effectors::bind(&config);
     let mut ticker = tokio::time::interval(TICK);
     // What has already been said about the picture: the tracks, the plan, the health.
     let mut announcer = picture::Announcer::new();
@@ -2248,6 +2251,7 @@ async fn run(
             geofences: &geo,
             bus: &bus,
             endpoint_client: endpoint_client.as_ref(),
+            effectors: Some(&effectors),
             api: &api,
         };
         if let Some(plan) = announcer.plan(&bus, now, &outcome)? {

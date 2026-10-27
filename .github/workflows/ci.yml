@@ -52,6 +52,18 @@ jobs:
     # looked exactly like that), and the default limit is six hours of runner for nothing.
     timeout-minutes: 60
     steps:
+      # The runner ran out of disk twice in a day (pull requests #232 and #234, both on
+      # 2026-10-27), after every test had passed, in the release budget build and then in
+      # the bench build: debug and release artifacts of the whole workspace, side by side,
+      # outgrew what ubuntu-latest leaves free. Deleting `target/debug` before the release
+      # steps would also strip it from the cache main saves, so every pull request would
+      # build cold; this removes toolchains the image preinstalls and this job never uses
+      # instead, which frees well over twenty gigabytes and touches nothing cargo built.
+      - name: free disk the build does not use
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:

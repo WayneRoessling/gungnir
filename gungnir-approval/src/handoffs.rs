@@ -219,6 +219,20 @@ impl ApprovalDesk {
                 }
                 said
             }
+            // GAP-207: over, with no word on the effect. The engagement is left open, so
+            // the track's own evidence closes it as it would with no effector report; a
+            // close here would be an outcome nobody stated.
+            EffectorReport::Finished { detail, .. } => {
+                let detail = if detail.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({detail})")
+                };
+                format!(
+                    "{endpoint} reports its task finished{detail} and does not say whether it \
+                     was effective; the engagement stays open for the track's evidence"
+                )
+            }
             EffectorReport::Refused { at, reason } => {
                 if let Some(record) = self
                     .handoffs
@@ -334,7 +348,7 @@ impl ApprovalDesk {
             Some(name) => {
                 let reason = match host
                     .address_for(name)
-                    .and_then(|address| Ok((address, endpoint_payload(handoff)?)))
+                    .and_then(|address| Ok((address, host.payload_for(name, handoff)?)))
                 {
                     Ok((address, payload)) => {
                         self.post_handoff(host, decision, name.to_string(), address, payload, now);

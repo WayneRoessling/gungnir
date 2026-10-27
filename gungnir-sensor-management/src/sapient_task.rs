@@ -451,6 +451,177 @@ mod ulid {
     }
 }
 
+/// The free-text `request` a handoff is sent as (GAP-207, the owner's choice of
+/// 2026-10-27).
+///
+/// BSI Flex 335 v2.0's `Task.Command` has no engage member: its `oneof` is `request`,
+/// three thresholds, `mode_change`, `look_at`, `move_to`, `patrol` and `follow`, and the
+/// effector node types (`NODE_TYPE_KINETIC`, `_JAMMER`, `_CYBER`, `_LDEW`, `_RFDEW`)
+/// register without a command of their own. So the vocabulary is ours, documented here as
+/// the mode names above are, and an effector has to agree on it out of band. `request` was
+/// chosen over `look_at` because a node that does not know the word rejects the task,
+/// where a pointable sensor handed `look_at` would point and accept.
+pub const ENGAGE_REQUEST: &str = "engage";
+
+/// A handoff as a SAPIENT `Task`, ready for the wire (GAP-207).
+#[derive(Debug, Clone, PartialEq)]
+pub struct EngageTask {
+    /// The ULID `task_id` an effector's `TaskAck` will name.
+    pub task_id: String,
+    /// The whole `SapientMessage`, in the pinned protobuf-JSON mapping.
+    pub message: serde_json::Value,
+}
+
+/// Build the `Task` that hands `handoff` to the SAPIENT effector at `destination_id`
+/// (GAP-207; DN-07 §5).
+///
+/// * `command` is `{"request": "engage"}` ([`ENGAGE_REQUEST`]).
+/// * One `REGION_TYPE_AREA_OF_INTEREST` per engaged target, each a one-point
+///   `LocationList` at the solved intercept point -- the same single-point encoding a
+///   [`SensorCommand::Cue`] uses, for the reason given there -- named for the track.
+/// * `task_name` is `engage`, and `task_description` names the decision, the plan and who
+///   decided, so the effector's own log can be matched to this deployment's record.
+///
+/// Only the solutions tasking one of `resources` -- the resources whose
+/// `handoff_endpoint` is this effector -- are sent: a plan that tasks two effectors is two
+/// handoffs in DN-07's shape, and this one has no business telling a jammer about a
+/// missile's target.
+///
+/// **Deterministic.** The task id is minted from the decision and the issue time, so a
+/// handoff posted again by store-and-forward carries the same `task_id`, and an effector
+/// that already has it can say so rather than act twice.
+///
+/// # Errors
+///
+/// Why the handoff cannot be sent, in words for the record. A refusal here is final for
+/// this handoff -- no retry would change it -- and DN-07 §5 case 3 then records it
+/// undelivered and tells the operator to reach the effector another way:
+///
+/// * a fires task, which SAPIENT has no shape for;
+/// * no solution tasking one of `resources`;
+/// * a solution with no intercept point, because the task has to say where. A resource
+///   with no `intercept_speed_mps` has no geometry solved (DN-04 §9), and that is what to
+///   set.
+pub fn engage_task(
+    node_id: &str,
+    destination_id: &str,
+    handoff: &gungnir_model::handoff::Handoff,
+    resources: &[gungnir_model::ResourceId],
+) -> Result<EngageTask, String> {
+    if handoff.kind.fires().is_some() {
+        return Err(
+            "a fires task has no SAPIENT representation: BSI Flex 335 v2.0 tasks a node, \
+             and a fire mission is a request to a fires system"
+                .into(),
+        );
+    }
+    let solutions: Vec<_> = handoff
+        .kind
+        .solutions()
+        .iter()
+        .filter(|s| resources.contains(&s.resource))
+        .collect();
+    if solutions.is_empty() {
+        return Err("the plan tasks no resource this effector serves".into());
+    }
+    let mut regions = Vec::new();
+    for (index, s) in solutions.iter().enumerate() {
+        let Some(point) = s.intercept_point else {
+            return Err(format!(
+                "no intercept point is solved for track {} and a SAPIENT task has to say \
+                 where; give resource {} an intercept_speed_mps so its geometry is solved",
+                s.track.0, s.resource.0
+            ));
+        };
+        if ![point.lat_rad, point.lon_rad, point.alt_m]
+            .iter()
+            .all(|v| v.is_finite())
+        {
+            return Err(format!(
+                "the intercept point for track {} is not finite",
+                s.track.0
+            ));
+        }
+        let sequence = u32::try_from(index + 1).unwrap_or(u32::MAX);
+        regions.push(serde_json::json!({
+            "type": "REGION_TYPE_AREA_OF_INTEREST",
+            "regionId": ulid::task_id(handoff.issued, s.track.0, sequence),
+            "regionName": format!("track {}", s.track.0),
+            "regionArea": {
+                "locationList": { "locations": [location_json(point)] },
+            },
+        }));
+    }
+    // The decision's low 64 bits: a UUID v7's random half, so two decisions issued in the
+    // same millisecond still mint different ids.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the low 64 bits are taken on purpose; the mapping back is by table"
+    )]
+    let folded = handoff.decision.0 as u64;
+    let task_id = ulid::task_id(handoff.issued, folded, 0);
+    let issued_at = ulid::rfc3339(handoff.issued.0);
+    let decided = &handoff.decided_by;
+    let message = serde_json::json!({
+        "timestamp": issued_at,
+        "nodeId": node_id,
+        "destinationId": destination_id,
+        "task": {
+            "taskId": task_id,
+            "taskName": ENGAGE_REQUEST,
+            "taskDescription": format!(
+                "decision {} on plan {}, by {} ({})",
+                handoff.decision, handoff.plan, decided.operator, decided.role
+            ),
+            "control": "CONTROL_START",
+            "taskStartTime": issued_at,
+            "region": regions,
+            "command": { "request": ENGAGE_REQUEST },
+        },
+    });
+    Ok(EngageTask { task_id, message })
+}
+
+/// The task a handoff to `endpoint` is sent as, when the baseline puts a SAPIENT effector
+/// behind that endpoint (GAP-207); `None` when it does not, and the endpoint is sent the
+/// handoff's own JSON as before.
+///
+/// Both binaries ask this from their handoff transport, so a desktop and a node build the
+/// same task for the same baseline: the effector's row, this deployment's
+/// `sapient_node_id`, and the resources whose `handoff_endpoint` is this one.
+///
+/// # Errors
+///
+/// As [`engage_task`], and a missing `sapient_node_id`, which validation already refuses.
+#[must_use]
+pub fn engage_payload(
+    config: &gungnir_config::ConfigBaseline,
+    endpoint: &str,
+    handoff: &gungnir_model::handoff::Handoff,
+) -> Option<Result<EngageTask, String>> {
+    let row = config
+        .sapient_effectors
+        .iter()
+        .find(|r| r.endpoint == endpoint)?;
+    let Some(node_id) = config.sapient_node_id.as_deref() else {
+        return Some(Err(
+            "no sapient_node_id is configured for a task to come from".into(),
+        ));
+    };
+    let resources: Vec<gungnir_model::ResourceId> = config
+        .resources
+        .iter()
+        .filter(|r| r.handoff_endpoint.as_deref() == Some(endpoint))
+        .map(|r| gungnir_model::ResourceId(r.id))
+        .collect();
+    Some(engage_task(
+        node_id,
+        &row.destination_id,
+        handoff,
+        &resources,
+    ))
+}
+
 /// Recover the local task id [`SapientTaskAdapter::issue`] folded into a SAPIENT-shaped
 /// ULID `taskId`, from a `TaskAck` a `gungnir-ingest` reader parsed off the wire.
 /// `None` for a string that is not a validly-shaped 26-character Crockford ULID --
@@ -684,6 +855,89 @@ mod tests {
             other => panic!("expected a refusal, got {other:?}"),
         }
         assert!(sink.lock().unwrap().is_empty());
+    }
+
+    /// A handoff of plan 3, decided by `op-1`, engaging `tracks` with resource 5, each
+    /// at the given intercept point.
+    fn handoff(points: &[(u64, Option<Geodetic>)]) -> gungnir_model::handoff::Handoff {
+        use gungnir_model::handoff::{DecisionAttribution, Handoff};
+        use gungnir_model::{DecisionId, InterceptSolutionView, PlanId, PlanKind, ResourceId};
+        Handoff::from_decision(
+            DecisionId(0x0193_5c1d_7e00_7abc_9def_0123_4567_89ab),
+            PlanId(3),
+            PlanKind::Intercept {
+                solutions: points
+                    .iter()
+                    .map(|(track, point)| InterceptSolutionView {
+                        resource: ResourceId(5),
+                        track: gungnir_model::TrackId(*track),
+                        intercept_point: *point,
+                        time_to_intercept_s: Some(12.0),
+                    })
+                    .collect(),
+            },
+            DecisionAttribution {
+                operator: "op-1".into(),
+                role: "Supervisor".into(),
+                at: MissionTime(1_469_922_850.0),
+                authority_rule: None,
+            },
+            Vec::new(),
+            gungnir_model::Releasability::default(),
+            MissionTime(1_469_922_850.0),
+        )
+    }
+
+    const POINT: Geodetic = Geodetic {
+        lat_rad: 0.9,
+        lon_rad: 0.2,
+        alt_m: 150.0,
+    };
+
+    /// GAP-207: a handoff becomes a request to engage, one area of interest per target at
+    /// its intercept point, naming the decision, and the same task id every time it is
+    /// built, so a retry is the same task.
+    #[test]
+    fn a_handoff_becomes_an_engage_request_at_each_intercept_point() {
+        let h = handoff(&[(10, Some(POINT)), (11, Some(POINT))]);
+        let resources = [gungnir_model::ResourceId(5)];
+        let task = engage_task("our-node", "effector-node", &h, &resources).expect("built");
+        let v = &task.message;
+        assert_eq!(v["nodeId"], "our-node");
+        assert_eq!(v["destinationId"], "effector-node");
+        assert_eq!(v["task"]["command"]["request"], ENGAGE_REQUEST);
+        assert_eq!(v["task"]["control"], "CONTROL_START");
+        assert_eq!(v["task"]["taskId"], task.task_id.as_str());
+        assert_eq!(task.task_id.len(), 26);
+        let regions = v["task"]["region"].as_array().expect("regions");
+        assert_eq!(regions.len(), 2, "one per target");
+        assert_eq!(regions[0]["type"], "REGION_TYPE_AREA_OF_INTEREST");
+        assert_eq!(regions[0]["regionName"], "track 10");
+        assert_ne!(regions[0]["regionId"], regions[1]["regionId"]);
+        let loc = &regions[0]["regionArea"]["locationList"]["locations"][0];
+        assert!((loc["y"].as_f64().expect("lat") - 0.9).abs() < 1e-12);
+        assert!((loc["x"].as_f64().expect("lon") - 0.2).abs() < 1e-12);
+        assert!(v["task"]["taskDescription"]
+            .as_str()
+            .is_some_and(|d| d.contains(&h.decision.to_string()) && d.contains("op-1")));
+        let again = engage_task("our-node", "effector-node", &h, &resources).expect("built");
+        assert_eq!(again, task, "a retry is the same task");
+    }
+
+    /// GAP-207: what cannot be said is refused by name, never sent with a guess in it.
+    #[test]
+    fn a_handoff_with_no_point_or_no_resource_here_is_refused() {
+        let resources = [gungnir_model::ResourceId(5)];
+        let err = engage_task("n", "e", &handoff(&[(10, None)]), &resources).expect_err("no point");
+        assert!(err.contains("intercept_speed_mps"), "{err}");
+        let err = engage_task(
+            "n",
+            "e",
+            &handoff(&[(10, Some(POINT))]),
+            &[gungnir_model::ResourceId(9)],
+        )
+        .expect_err("not this effector's");
+        assert!(err.contains("no resource this effector serves"), "{err}");
     }
 
     #[test]

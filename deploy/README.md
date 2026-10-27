@@ -170,6 +170,43 @@ and that certificate is what its peers see.
 its peer-link certificate was made fresh at every start, so no peer could pin it. Re-pin
 each node's serving certificate once, and pin its peer certificate for the first time.
 
+## A SAPIENT effector
+
+A resource can hand its engagements to an effector that speaks SAPIENT, through the same
+middleware a SAPIENT sensor's feed uses (GAP-207). The desktop and the node both do it, and
+the effector's answers come back on the connection they open, so a desktop with no node
+still learns the outcome.
+
+```json
+{
+  "version": 1,
+  "sapient_node_id": "a1b2c3d4-0000-0000-0000-000000000000",
+  "endpoints": [{ "name": "jammer", "kind": "sapient", "address": "10.0.0.20:7600" }],
+  "sapient_effectors": [
+    { "endpoint": "jammer", "destination_id": "7c0e6a2b-1d3f-4e5a-9b8c-0d1e2f3a4b5c", "node_type": "jammer" }
+  ],
+  "resources": [
+    { "id": 1, "position": [0.9599, 0.2094, 0.0], "capacity": 2, "layer": "point",
+      "handoff_endpoint": "jammer", "intercept_speed_mps": 300.0 }
+  ]
+}
+```
+
+- **`address`** is the middleware's `ip:port`, serving the protobuf-JSON mapping one message
+  per line.
+- **`destination_id`** is the effector's own SAPIENT node id. Answers from any other node
+  are refused.
+- **`node_type`** is `kinetic`, `jammer`, `cyber`, `ldew` or `rfdew`. An effector that
+  registers as another type is refused.
+- **`intercept_speed_mps`** must be set on the resource. The task says where to engage,
+  and with no solved intercept point the handoff is refused rather than sent.
+
+The effector is sent a `Task` with `command.request` set to `engage`. BSI Flex 335 v2.0 has
+no engage command, so the effector's integrator has to accept that word. One that does not
+rejects the task, and PN-06 shows the refusal. An acceptance reads as acknowledged, a
+completion as finished with no effect stated, and a failure as ineffective. A middleware
+that is down at start is said and connected again when the first handoff is sent.
+
 ## Releasing tracks to a partner
 
 Nothing leaves a deployment until its baseline says so. Two gates decide whether a track

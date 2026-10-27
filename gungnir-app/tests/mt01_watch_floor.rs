@@ -294,6 +294,7 @@ impl Node {
                             geofences: &*geo,
                             bus: &bus,
                             endpoint_client: None,
+                            effectors: None,
                             api: &api,
                         };
                         approval::sweep(&mut state.approval, &frame);
@@ -355,6 +356,7 @@ impl Node {
                 geofences: &*self.geo,
                 bus: &self.bus,
                 endpoint_client: None,
+                effectors: None,
                 api: &self.api,
             };
             approval::propose(&mut state.approval, &frame, plan);
