@@ -34,7 +34,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-mod account;
 mod auth;
 mod entities;
 
@@ -88,7 +87,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // because it must not start a server, open a journal, or bind a port: it reads one
     // file, writes it back, and exits.
     if args.first().map(String::as_str) == Some("account") {
-        match account::run(&args[1..]) {
+        // GAP-204: one implementation for both binaries, in the crate that owns the
+        // stores; this binary only says which name it speaks as.
+        match gungnir_security::provisioning::run("gungnir-node", &args[1..]) {
             Ok(said) => {
                 println!("{said}");
                 return Ok(());

@@ -19,6 +19,7 @@ pub mod keystore;
 pub mod managed_service;
 mod os_keystore;
 pub mod provider;
+pub mod provisioning;
 pub mod session;
 pub mod token;
 

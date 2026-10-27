@@ -40,6 +40,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // attached, means this binary logs the same way regardless of how it was started.
     tracing_subscriber::fmt().with_ansi(false).init();
 
+    // GAP-204: `gungnir-app account ...` provisions the accounts this desktop signs in
+    // against, the same commands the node has, so a laptop with no node provisions
+    // itself. Answered before the state is built: it must open no window, no journal
+    // and no baseline; it reads one file, writes it back, and exits.
+    let cli: Vec<String> = std::env::args().skip(1).collect();
+    if cli.first().map(String::as_str) == Some("account") {
+        match gungnir_security::provisioning::run("gungnir-app", &cli[1..]) {
+            Ok(said) => {
+                println!("{said}");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        }
+    }
+
     let mut state = AppState::new()?;
     // GAP-089: `--rehearsal <seed.json>` seeds the session and marks the record.
     let args: Vec<String> = std::env::args().collect();

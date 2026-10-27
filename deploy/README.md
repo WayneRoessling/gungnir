@@ -85,6 +85,32 @@ When the node answers again the desktop reconciles the outage on PN-18 -- two en
 of one track on the two sides are shown first, for a person -- and forwards every decision
 it took while cut off to the node, which puts each on its record once.
 
+## Provisioning operator accounts
+
+Both binaries carry the same `account` commands (GAP-204, one implementation in
+`gungnir_security::provisioning`), so a desktop with no node provisions itself:
+
+```bash
+printf '%s' 'the passphrase' | gungnir-app account add accounts.json 7 commander
+```
+
+```bash
+gungnir-app account list accounts.json
+```
+
+`gungnir-node account ...` is the same, speaking as the node. The passphrase is read from
+standard input and never from an argument, because arguments are visible to every process
+on the host; its echo is not suppressed, so pipe it in rather than type it where somebody
+can read the screen. `add` refuses an operator that already has an account unless
+`--replace` is given, lists never show the hash, and every change writes one
+`account.assign_role` entry to the `audit` directory beside the file, attributed to nobody
+because the command runs outside any session (DN-23 §5). `add-os-keystore` and
+`list-os-keystore` seal the accounts under the operating system's keystore instead of a
+file (D-39). On Windows the file inherits its directory's permissions; the command says so.
+
+Point the baseline at the file with `security.authentication.local_accounts.accounts_path`
+and sign in on PN-20. The roles are `operator`, `supervisor`, `analyst`, `sensor-manager`,
+`administrator`, `commander`, `planner`, `security-officer` and `intelligence-analyst`.
 ## Machine identities
 
 Every node and desktop presents its own certificate, named from a fingerprint of its own

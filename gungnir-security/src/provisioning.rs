@@ -2,16 +2,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
 
-//! Creating the accounts a node authenticates against (GAP-057,
+//! Creating the accounts a binary authenticates against (GAP-057, GAP-204;
 //! `docs/design/DN-23-operator-authentication.md`).
 //!
-//! **Why this exists.** `FileAccountStore` reads a JSON array of `{operator, role, phc}`
-//! records and `hash_passphrase` produces the `phc`. Until 2026-09-07 that function was
-//! called from tests and from nowhere else, so a deployment following DN-23 had a
-//! documented file format, a node that refused to authenticate anybody without it, and
-//! **no way to write one**. The authentication half of GAP-057 was built and
-//! unreachable in practice: the node warned `no caller authority` and the only remedy
-//! was to run a Rust test.
+//! **Why this lives here.** Until GAP-204 this was `gungnir-node/src/account.rs`, and the
+//! only way to write an account file was the node binary, which the release ships for
+//! Linux alone; a Windows desktop in the field could not create its own accounts and ran
+//! with nobody signed in. A binary may not depend on a binary, so the commands moved down
+//! into the crate that owns the account stores and that both binaries already depend on.
+//! `gungnir-app account ...` and `gungnir-node account ...` are one implementation,
+//! [`run`], told which binary it is speaking for.
+//!
+//! **Why this exists at all.** `FileAccountStore` reads a JSON array of
+//! `{operator, role, phc}` records and `hash_passphrase` produces the `phc`. Until
+//! 2026-09-07 that function was called from tests and from nowhere else, so a deployment
+//! following DN-23 had a documented file format, a binary that refused to authenticate
+//! anybody without it, and **no way to write one**.
 //!
 //! **The passphrase is read from standard input and never from an argument.** Command
 //! arguments are visible to every process on the host through the process table, and a
@@ -24,29 +30,23 @@
 //! screen of whoever is provisioning the account.
 //!
 //! Nothing here writes key material to a configuration baseline. The file holds argon2
-//! PHC strings, which is what DN-22 §6 and DN-23 §5 rule 6 permit, and the node's token
-//! signing key stays in the environment where [`crate::auth`] reads it.
+//! PHC strings, which is what DN-22 §6 and DN-23 §5 rule 6 permit, and a node's token
+//! signing key stays in the environment where the node reads it.
 //!
-//! **Human-owned: this CLI writes credential material** (`hash_passphrase`'s output)
-//! **into the account store both `gungnir-security` and `gungnir-app`/`gungnir-node`
-//! trust** (`ARCHITECTURE.md` §10 item 125; signatures: docs/signatures.md). Its
+//! **Human-owned: this writes credential material** (`hash_passphrase`'s output) **into
+//! the account store both binaries trust** (signatures: docs/signatures.md). Its first
 //! review found and closed a real gap: `role_from_str` had every role this workspace had
-//! when this file was written (2026-09-07) but not `Role::IntelligenceAnalyst`, added to
-//! the enum afterward and never re-checked against this CLI -- the one role this system
-//! grants coalition-exchange release authority to
-//! (`gungnir_security::authz::role_permits`) could not be provisioned on a node at all.
-//! `role_to_cli_str` (test-only) now maps every variant with no wildcard arm, so a tenth
-//! role added without a line here fails to compile rather than repeating the defect.
+//! when it was written (2026-09-07) but not `Role::IntelligenceAnalyst`, added to the enum
+//! afterward and never re-checked against this CLI. `role_to_cli_str` (test-only) maps
+//! every variant with no wildcard arm, so a tenth role added without a line here fails to
+//! compile rather than repeating the defect.
 //!
 //! **`add-os-keystore` and `list-os-keystore` (GAP-057's node half, D-39).** The same
-//! provisioning need, against `gungnir_security::EncryptedAccountStore` instead of a
-//! plaintext file: accounts sealed under a key the operating system's own keystore
-//! holds, rather than protected only by whatever file permissions the platform grants
-//! (Windows grants none -- see [`permissions_note`]). This path names a data directory
-//! and a keystore account rather than a file, and reaches the real backend on this
-//! machine every time it runs: there is no mock to redirect it to outside
-//! `gungnir-security`'s own tests, the same way provisioning a real file always writes
-//! a real file.
+//! provisioning need, against [`EncryptedAccountStore`] instead of a plaintext file:
+//! accounts sealed under a key the operating system's own keystore holds, rather than
+//! protected only by whatever file permissions the platform grants (Windows grants none:
+//! see [`permissions_note`]). This path names a data directory and a keystore account
+//! rather than a file, and reaches the real backend on this machine every time it runs.
 //!
 //! **Every account change is on the audit record** (GAP-111, D-87): an `account.assign_role`
 //! entry in the `audit` directory beside the store the command changed, naming the operator
@@ -55,7 +55,7 @@
 //! that could not be recorded is refused rather than made. Listing changes nothing and is
 //! not recorded.
 
-use gungnir_security::{
+use crate::{
     actions, hash_passphrase, Account, AuditEntry, AuditLog, AuditStatus, AuditSync,
     EncryptedAccountStore, FileAuditLog, OperatorId, Role, SecurityError, AUDIT_DIR,
 };
@@ -66,8 +66,9 @@ use std::path::Path;
 /// What went wrong provisioning an account.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AccountError {
-    /// The arguments did not name an operation this understands.
-    Usage(String),
+    /// The arguments did not name an operation this understands; carries the usage text
+    /// for the binary that was asked.
+    Usage { what: String, usage: String },
     /// The role is not one the system has.
     UnknownRole(String),
     /// The operator id was not a number.
@@ -76,8 +77,9 @@ pub enum AccountError {
     FileUnreadable(String),
     /// The operator already has an account and `--replace` was not given.
     AlreadyExists(u64),
-    /// Nothing arrived on standard input, or only whitespace did.
-    EmptyPassphrase,
+    /// Nothing arrived on standard input, or only whitespace did; carries the binary's
+    /// name for the example.
+    EmptyPassphrase { binary: String },
     /// The passphrase could not be hashed.
     HashFailed(String),
     /// The file could not be written.
@@ -94,7 +96,7 @@ pub enum AccountError {
 impl std::fmt::Display for AccountError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AccountError::Usage(what) => write!(f, "{what}\n\n{USAGE}"),
+            AccountError::Usage { what, usage } => write!(f, "{what}\n\n{usage}"),
             AccountError::UnknownRole(role) => write!(
                 f,
                 "no such role: {role}. One of: operator, supervisor, analyst, \
@@ -112,10 +114,10 @@ impl std::fmt::Display for AccountError {
                  because silently overwriting a credential is how an account is taken \
                  over rather than provisioned"
             ),
-            AccountError::EmptyPassphrase => write!(
+            AccountError::EmptyPassphrase { binary } => write!(
                 f,
                 "no passphrase arrived on standard input. Pipe one in, for example: \
-                 printf '%s' 'the passphrase' | gungnir-node account add accounts.json 7 operator"
+                 printf '%s' 'the passphrase' | {binary} account add accounts.json 7 operator"
             ),
             AccountError::HashFailed(why) => write!(f, "the passphrase was refused: {why}"),
             AccountError::WriteFailed(why) => write!(f, "the account file was not written: {why}"),
@@ -133,16 +135,20 @@ impl std::fmt::Display for AccountError {
 
 impl std::error::Error for AccountError {}
 
-const USAGE: &str = "\
-usage: gungnir-node account add <accounts.json> <operator-id> <role> [--replace]
-       gungnir-node account list <accounts.json>
-       gungnir-node account add-os-keystore <data-dir> <keystore-account> <operator-id> <role> [--replace]
-       gungnir-node account list-os-keystore <data-dir> <keystore-account>
+/// The usage text for `binary` (`gungnir-app` or `gungnir-node`).
+#[must_use]
+pub fn usage(binary: &str) -> String {
+    format!(
+        "\
+usage: {binary} account add <accounts.json> <operator-id> <role> [--replace]
+       {binary} account list <accounts.json>
+       {binary} account add-os-keystore <data-dir> <keystore-account> <operator-id> <role> [--replace]
+       {binary} account list-os-keystore <data-dir> <keystore-account>
 
 The passphrase is read from standard input, never from an argument, because
 arguments are visible to every process on the host.
 
-  printf '%s' 'the passphrase' | gungnir-node account add accounts.json 7 operator
+  printf '%s' 'the passphrase' | {binary} account add accounts.json 7 operator
 
 add-os-keystore and list-os-keystore seal the accounts in <data-dir> under a key the
 operating system's own keystore holds, naming <keystore-account> the way `add` names a
@@ -150,7 +156,9 @@ file; where this machine has no reachable keystore they refuse, the same as a da
 directory that cannot be written.
 
 Roles: operator, supervisor, analyst, sensor-manager, administrator, commander,
-       planner, security-officer, intelligence-analyst";
+       planner, security-officer, intelligence-analyst"
+    )
+}
 
 /// Parse a role as it is written on a command line.
 fn role_from_str(s: &str) -> Result<Role, AccountError> {
@@ -232,14 +240,16 @@ pub fn permissions_note() -> &'static str {
 }
 
 /// Read a passphrase from standard input.
-fn passphrase_from_stdin() -> Result<String, AccountError> {
+fn passphrase_from_stdin(binary: &str) -> Result<String, AccountError> {
     let mut buf = String::new();
     std::io::stdin()
         .read_to_string(&mut buf)
         .map_err(|e| AccountError::HashFailed(e.to_string()))?;
     let pass = buf.trim_end_matches(['\n', '\r']).to_string();
     if pass.trim().is_empty() {
-        return Err(AccountError::EmptyPassphrase);
+        return Err(AccountError::EmptyPassphrase {
+            binary: binary.to_owned(),
+        });
     }
     Ok(pass)
 }
@@ -302,9 +312,9 @@ fn store_dir(path: &Path) -> &Path {
 /// The audit log a provisioning command records into (GAP-111, D-87): the `audit`
 /// directory beside the store it changes.
 ///
-/// For an operating-system-keystore store that is always the node's data directory, so
-/// the entry joins the node's own chain; a plaintext file joins it when the deployment
-/// keeps the file in that directory, as `docs/design/DN-23-operator-authentication.md` §13
+/// For an operating-system-keystore store that is always the data directory, so the entry
+/// joins the binary's own chain; a plaintext file joins it when the deployment keeps the
+/// file in that directory, as `docs/design/DN-23-operator-authentication.md` §13
 /// recommends, and otherwise has a chain of its own beside it. **Attributed to nobody**:
 /// the command runs outside any session, and whoever has the shell is not a verified
 /// operator (DN-23 §5 rule 1). The passphrase and its hash are in no entry.
@@ -322,10 +332,14 @@ fn provisioning_audit(store_dir: &Path) -> Result<FileAuditLog, AccountError> {
     .map_err(|e| AccountError::AuditUnavailable(e.to_string()))
 }
 
-/// The time a provisioning entry carries: the wall clock, which is the mission time a node
-/// runs on (`gungnir_time::WallClockAuthority`), so the entry sorts among the node's own.
+/// The time a provisioning entry carries: the wall clock, which is the mission time a
+/// live session runs on (`gungnir_time::WallClockAuthority` reads the same clock), so the
+/// entry sorts among the binary's own. Read directly here because this crate depends on
+/// no workspace crate (`ARCHITECTURE.md` §7.1).
 fn provisioning_time() -> f64 {
-    gungnir_time::TimeAuthority::now(&gungnir_time::WallClockAuthority::default()).0
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0.0, |d| d.as_secs_f64())
 }
 
 /// Record one account change and say where it went, or that it did not.
@@ -364,9 +378,9 @@ pub fn list(path: &Path) -> Result<String, AccountError> {
     Ok(out.trim_end().to_string())
 }
 
-/// Add or replace one account in a node's operating-system-keystore-backed store
-/// (GAP-057's node half, D-39). This reaches the real keystore on this machine --
-/// there is no mock to redirect it to outside `gungnir-security`'s own tests.
+/// Add or replace one account in an operating-system-keystore-backed store (GAP-057's
+/// node half, D-39). This reaches the real keystore on this machine; there is no mock to
+/// redirect it to outside this crate's own tests.
 ///
 /// # Errors
 ///
@@ -410,8 +424,8 @@ pub fn add_os_keystore(
     }
 }
 
-/// List the accounts a node's operating-system-keystore-backed store holds: operator
-/// and role, never the hash.
+/// List the accounts an operating-system-keystore-backed store holds: operator and
+/// role, never the hash.
 ///
 /// # Errors
 ///
@@ -442,56 +456,63 @@ pub fn list_os_keystore(dir: &Path, keystore_account: &str) -> Result<String, Ac
     Ok(out.trim_end().to_string())
 }
 
-/// Run the `account` subcommand from the arguments after the word `account`.
+/// Run the `account` subcommand of `binary` from the arguments after the word `account`.
+///
+/// `binary` is the name the usage text and the examples speak as (`gungnir-app` or
+/// `gungnir-node`); the behaviour is the same for both, which is the point of GAP-204.
 ///
 /// # Errors
 ///
 /// [`AccountError`] for anything refused; the message says what was not changed.
-pub fn run(args: &[String]) -> Result<String, AccountError> {
+pub fn run(binary: &str, args: &[String]) -> Result<String, AccountError> {
+    let usage_err = |what: &str| AccountError::Usage {
+        what: what.to_owned(),
+        usage: usage(binary),
+    };
     match args.first().map(String::as_str) {
         Some("add") => {
             let path = args
                 .get(1)
-                .ok_or_else(|| AccountError::Usage("account add needs a file path".into()))?;
+                .ok_or_else(|| usage_err("account add needs a file path"))?;
             let operator = args
                 .get(2)
-                .ok_or_else(|| AccountError::Usage("account add needs an operator id".into()))?;
+                .ok_or_else(|| usage_err("account add needs an operator id"))?;
             let role = args
                 .get(3)
-                .ok_or_else(|| AccountError::Usage("account add needs a role".into()))?;
+                .ok_or_else(|| usage_err("account add needs a role"))?;
             let operator: u64 = operator
                 .parse()
                 .map_err(|_| AccountError::BadOperatorId(operator.clone()))?;
             let role = role_from_str(role)?;
             let replace = args.iter().any(|a| a == "--replace");
-            let passphrase = passphrase_from_stdin()?;
+            let passphrase = passphrase_from_stdin(binary)?;
             add(Path::new(path), operator, role, &passphrase, replace)
         }
         Some("list") => {
             let path = args
                 .get(1)
-                .ok_or_else(|| AccountError::Usage("account list needs a file path".into()))?;
+                .ok_or_else(|| usage_err("account list needs a file path"))?;
             list(Path::new(path))
         }
         Some("add-os-keystore") => {
-            let dir = args.get(1).ok_or_else(|| {
-                AccountError::Usage("account add-os-keystore needs a data directory".into())
-            })?;
+            let dir = args
+                .get(1)
+                .ok_or_else(|| usage_err("account add-os-keystore needs a data directory"))?;
             let keystore_account = args.get(2).ok_or_else(|| {
-                AccountError::Usage("account add-os-keystore needs a keystore account name".into())
+                usage_err("account add-os-keystore needs a keystore account name")
             })?;
-            let operator = args.get(3).ok_or_else(|| {
-                AccountError::Usage("account add-os-keystore needs an operator id".into())
-            })?;
-            let role = args.get(4).ok_or_else(|| {
-                AccountError::Usage("account add-os-keystore needs a role".into())
-            })?;
+            let operator = args
+                .get(3)
+                .ok_or_else(|| usage_err("account add-os-keystore needs an operator id"))?;
+            let role = args
+                .get(4)
+                .ok_or_else(|| usage_err("account add-os-keystore needs a role"))?;
             let operator: u64 = operator
                 .parse()
                 .map_err(|_| AccountError::BadOperatorId(operator.clone()))?;
             let role = role_from_str(role)?;
             let replace = args.iter().any(|a| a == "--replace");
-            let passphrase = passphrase_from_stdin()?;
+            let passphrase = passphrase_from_stdin(binary)?;
             add_os_keystore(
                 Path::new(dir),
                 keystore_account,
@@ -502,28 +523,25 @@ pub fn run(args: &[String]) -> Result<String, AccountError> {
             )
         }
         Some("list-os-keystore") => {
-            let dir = args.get(1).ok_or_else(|| {
-                AccountError::Usage("account list-os-keystore needs a data directory".into())
-            })?;
+            let dir = args
+                .get(1)
+                .ok_or_else(|| usage_err("account list-os-keystore needs a data directory"))?;
             let keystore_account = args.get(2).ok_or_else(|| {
-                AccountError::Usage("account list-os-keystore needs a keystore account name".into())
+                usage_err("account list-os-keystore needs a keystore account name")
             })?;
             list_os_keystore(Path::new(dir), keystore_account)
         }
-        Some(other) => Err(AccountError::Usage(format!(
-            "no such account command: {other}"
-        ))),
-        None => Err(AccountError::Usage("account needs a command".into())),
+        Some(other) => Err(usage_err(&format!("no such account command: {other}"))),
+        None => Err(usage_err("account needs a command")),
     }
 }
 
 /// The inverse of [`role_from_str`], over every [`Role`] variant with no wildcard arm:
 /// a tenth role added to the enum without a line here fails to compile rather than
 /// silently leaving this CLI unable to provision it, which is exactly the defect found
-/// and fixed 2026-09-10 -- `IntelligenceAnalyst` reached every other role-aware surface
-/// in the workspace (`gungnir-app`, `gungnir-security::authz`, `gungnir-workflow`) but
-/// not this one, because it was added to [`Role`] after this file was written and
-/// nothing here re-checked the enum against it.
+/// and fixed 2026-09-10: `IntelligenceAnalyst` reached every other role-aware surface in
+/// the workspace but not this one, because it was added to [`Role`] after this file was
+/// written and nothing here re-checked the enum against it.
 #[cfg(test)]
 fn role_to_cli_str(role: Role) -> &'static str {
     match role {
@@ -540,8 +558,8 @@ fn role_to_cli_str(role: Role) -> &'static str {
 }
 
 #[cfg(test)]
-mod role_coverage {
-    use super::{role_from_str, role_to_cli_str, Role};
+mod tests {
+    use super::{role_from_str, role_to_cli_str, run, usage, AccountError, Role};
 
     /// Every role this workspace has must be provisionable through this CLI. Walking
     /// `role_to_cli_str`'s exhaustive match rather than a hand-maintained list here is
@@ -567,6 +585,25 @@ mod role_coverage {
                 role,
                 "role {role:?} does not round-trip through {s:?}"
             );
+        }
+    }
+
+    /// GAP-204: the usage and the examples speak as the binary that was asked, so a
+    /// desktop operator is not told to run the node.
+    #[test]
+    fn the_usage_names_the_binary_it_speaks_for() {
+        for binary in ["gungnir-app", "gungnir-node"] {
+            let text = usage(binary);
+            assert!(text.contains(&format!("{binary} account add")), "{text}");
+            assert!(!text.contains(if binary == "gungnir-app" {
+                "gungnir-node"
+            } else {
+                "gungnir-app"
+            }));
+            let Err(AccountError::Usage { usage: shown, .. }) = run(binary, &[]) else {
+                panic!("no command is a usage error");
+            };
+            assert_eq!(shown, text);
         }
     }
 }

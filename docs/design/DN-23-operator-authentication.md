@@ -310,7 +310,9 @@ amendment shares that helper and the fix applies here too.
 Amendment 1 gave the node a way to write its account file; that file is still plaintext
 JSON with argon2-hashed passphrases, protected only by whatever the platform's file
 permissions grant -- owner-only on Unix, nothing on Windows, per
-[`permissions_note`](../../gungnir-node/src/account.rs). DN-22 amendment 4 admitted
+[`permissions_note`](../../gungnir-security/src/provisioning.rs) (the module moved out of
+the node binary under GAP-204, so both binaries provision; the link is the only change
+here). DN-22 amendment 4 admitted
 `keyring` and used it to seal the desktop's own key material; this amendment reaches the
 same crate for a node's account list instead, closing the remaining item both DN-22
 amendment 4 and `ARCHITECTURE.md` item 103 named and left.
