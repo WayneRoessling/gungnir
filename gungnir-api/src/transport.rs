@@ -277,6 +277,26 @@ pub trait CallerAuthority: Send + Sync {
         let issued = self.sign_in(operator, passphrase, now)?;
         self.verify(&issued.token, now)
     }
+
+    /// The role this node's own account store holds for `operator`, without any
+    /// credential (GAP-209): what a forwarded decision is re-ranked by. `Ok(None)` for an
+    /// operator the store has no account for.
+    ///
+    /// # Errors
+    ///
+    /// `AuthFailure::Unavailable` when the store cannot be read.
+    fn role_of(&self, operator: u64) -> Result<Option<gungnir_security::Role>, AuthFailure>;
+}
+
+/// What this node's accounts say about one operator (GAP-209).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoleLookup {
+    /// The operator has an account here, with this role.
+    Known(gungnir_security::Role),
+    /// No account here for that operator.
+    Unknown,
+    /// The node cannot say: it has no caller authority, or its store cannot be read.
+    Unavailable,
 }
 
 /// The caller authority a node builds from an account store and a signing key.
@@ -376,6 +396,13 @@ impl CallerAuthority for AccountTokenAuthority {
 
     fn verify(&self, token: &str, now: MissionTimeSeconds) -> Result<OperatorSession, AuthFailure> {
         self.issuer.verify(token, now)
+    }
+
+    fn role_of(&self, operator: u64) -> Result<Option<gungnir_security::Role>, AuthFailure> {
+        self.store
+            .account(gungnir_security::OperatorId(operator))
+            .map(|account| account.map(|a| a.role))
+            .map_err(|_| AuthFailure::Unavailable)
     }
 }
 
@@ -1530,6 +1557,17 @@ impl NodeApi {
     pub fn with_callers(mut self, callers: Arc<dyn CallerAuthority>) -> Self {
         self.callers = Some(callers);
         self
+    }
+
+    /// What this node's own accounts say about `operator` (GAP-209), for the loop to
+    /// re-rank a forwarded decision by.
+    #[must_use]
+    pub fn role_of(&self, operator: u64) -> RoleLookup {
+        match self.callers.as_ref().map(|c| c.role_of(operator)) {
+            Some(Ok(Some(role))) => RoleLookup::Known(role),
+            Some(Ok(None)) => RoleLookup::Unknown,
+            Some(Err(_)) | None => RoleLookup::Unavailable,
+        }
     }
 
     /// Whether this node can authenticate anybody.

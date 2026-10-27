@@ -126,6 +126,15 @@ pub enum Role {
 }
 
 impl Role {
+    /// The role a record names, by the name `{:?}` gives it (`"Supervisor"`), or `None`
+    /// for a name this build does not know (GAP-209). The one parser: a decision record,
+    /// a forwarded batch and the desktop's reconciliation all spell roles this way, and a
+    /// node and a desktop that parsed them differently would rank one record two ways.
+    #[must_use]
+    pub fn named(name: &str) -> Option<Role> {
+        Role::ALL.iter().copied().find(|r| format!("{r:?}") == name)
+    }
+
     /// Authority rank for conflict resolution (`gungnir-collab`): higher wins.
     ///
     /// The order was set by the owner on 2026-09-05 when the three D-05 roles entered
