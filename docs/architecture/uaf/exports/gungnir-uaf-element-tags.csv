@@ -1549,6 +1549,10 @@ IE-source-authentication,uafId,IE-source-authentication
 IE-source-authentication,uafKind,InformationElement
 IE-source-authentication,registry.code,gungnir_model::SourceAuthentication
 IE-source-authentication,registry.domain,"Core identifiers, frames & quality"
+IE-source-markings,uafId,IE-source-markings
+IE-source-markings,uafKind,InformationElement
+IE-source-markings,registry.code,gungnir_model::SourceMarkings
+IE-source-markings,registry.domain,"Assets, exchange & releasability"
 IE-staleness-settings,uafId,IE-staleness-settings
 IE-staleness-settings,uafKind,InformationElement
 IE-staleness-settings,registry.code,gungnir_model::StalenessSettings

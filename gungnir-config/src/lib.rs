@@ -1208,6 +1208,130 @@ pub struct ClockDisciplineConfig {
     pub sensor: u32,
 }
 
+/// Who this deployment's tracks may be released to (GAP-206; DN-17 §5 and §6).
+///
+/// DN-17 §6 gives the baseline a deployment default "plus a per-sensor and per-peer
+/// override". They are kept together in one section, keyed by the sensor's id and the
+/// peer's name, rather than as a field on each sensor and peer row: the marking is a
+/// distribution rule a release authority reviews as one table, and a row scattered across
+/// the sensor list is a rule nobody reads in one place.
+///
+/// ```json
+/// "releasability": {
+///   "default": {"kind": "internal"},
+///   "sensors": [{"sensor": 4, "marking": {"kind": "parties", "parties": ["partner-a"]}}]
+/// }
+/// ```
+///
+/// A track is marked by the most restrictive of the sources that fed it
+/// (`gungnir_model::SourceMarkings`), and the exchange agreement is the second gate after
+/// that (DN-18 §5): a marking releases nothing to a party with no agreement.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReleasabilityConfig {
+    /// The marking of every sensor with no row of its own. Absent means `internal`.
+    #[serde(default)]
+    pub default: gungnir_model::Releasability,
+    /// A sensor's own marking, over the default. Each names a configured sensor, once.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sensors: Vec<SensorReleasabilityConfig>,
+    /// A peer's marking. **Only `internal` is accepted** until GAP-218's re-ingest guard
+    /// is built; a peer is `Internal` with or without a row, and the row exists so that
+    /// one written to release a peer's tracks is refused by name rather than ignored.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub peers: Vec<PeerReleasabilityConfig>,
+}
+
+/// One sensor's marking (GAP-206).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SensorReleasabilityConfig {
+    pub sensor: u32,
+    pub marking: gungnir_model::Releasability,
+}
+
+/// One peer's marking (GAP-206), by the peer's name in `peers`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PeerReleasabilityConfig {
+    pub peer: String,
+    pub marking: gungnir_model::Releasability,
+}
+
+/// The `releasability` section's rules (GAP-206; DN-17 §6).
+///
+/// DN-17 §6: "named parties must appear in the peer table or the endpoint table". An
+/// exchange agreement's party is accepted too (the owner's choice of 2026-10-27), because
+/// that is the name the exchange gate checks a marking against. Today that adds no name
+/// the other two do not: [`validate`] already requires every exchange party to be a peer
+/// or an endpoint. It is written here so the rule stays true if that one ever widens. A
+/// party set that names nobody is refused rather than read as `internal`: a release
+/// authority who wrote one meant somebody.
+fn validate_releasability(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    let section = &baseline.releasability;
+    let known_party = |name: &str| {
+        baseline.peers.iter().any(|p| p.name == name)
+            || baseline.endpoints.iter().any(|e| e.name == name)
+            || baseline.exchange.iter().any(|a| a.party == name)
+    };
+    let check_marking = |what: &str, marking: &gungnir_model::Releasability| {
+        let gungnir_model::Releasability::Parties { parties } = marking else {
+            return Ok(());
+        };
+        if parties.is_empty() {
+            return Err(ConfigError::Invalid(format!(
+                "{what} names no parties; name at least one, or say \"internal\""
+            )));
+        }
+        match parties.iter().find(|p| !known_party(p)) {
+            Some(unknown) => Err(ConfigError::Invalid(format!(
+                "{what} names the party {unknown:?}, which is not a peer, an endpoint or \
+                 an exchange agreement's party in this baseline"
+            ))),
+            None => Ok(()),
+        }
+    };
+    check_marking("releasability.default", &section.default)?;
+    let mut seen = std::collections::BTreeSet::new();
+    for row in &section.sensors {
+        if !baseline.sensors.iter().any(|s| s.id == row.sensor) {
+            return Err(ConfigError::Invalid(format!(
+                "releasability.sensors names sensor {}, which this baseline does not \
+                 configure",
+                row.sensor
+            )));
+        }
+        if !seen.insert(row.sensor) {
+            return Err(ConfigError::Invalid(format!(
+                "releasability.sensors names sensor {} twice; one marking per sensor",
+                row.sensor
+            )));
+        }
+        check_marking(
+            &format!("releasability for sensor {}", row.sensor),
+            &row.marking,
+        )?;
+    }
+    for row in &section.peers {
+        if !baseline.peers.iter().any(|p| p.name == row.peer) {
+            return Err(ConfigError::Invalid(format!(
+                "releasability.peers names the peer {:?}, which this baseline does not \
+                 configure",
+                row.peer
+            )));
+        }
+        if row.marking != gungnir_model::Releasability::Internal {
+            return Err(ConfigError::Invalid(format!(
+                "releasability for peer {:?} releases what that peer sent us; a track a \
+                 peer fed stays internal until the re-ingest guard (GAP-218) stops it \
+                 coming back to that peer as a new source",
+                row.peer
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// The `time` section's rules (GAP-114, D-99).
 fn validate_time(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     match baseline.time.late_data {
@@ -1531,6 +1655,11 @@ pub struct ConfigBaseline {
     /// exchange: a party that authenticates and has no agreement can do nothing.
     #[serde(default)]
     pub exchange: Vec<gungnir_model::ExchangeAgreement>,
+    /// Who this deployment's tracks may be released to, by the sources that fed them
+    /// (GAP-206; DN-17 §5 and §6). Absent means every source `Internal`, which is what
+    /// every track was before GAP-206: nothing leaves until the deployment says so.
+    #[serde(default)]
+    pub releasability: ReleasabilityConfig,
     /// Client certificates this deployment recognises and what each speaks for (D-02;
     /// GAP-002, GAP-009, GAP-040). Empty means a certificate authenticates a party and
     /// nothing more, which the exchange agreements alone then govern.
@@ -1782,6 +1911,7 @@ impl Default for ConfigBaseline {
             sapient_node_id: None,
             peers: Vec::new(),
             exchange: Vec::new(),
+            releasability: ReleasabilityConfig::default(),
             machine_identities: Vec::new(),
             resources: Vec::new(),
             // No alternatives declared, which is what a deployment that has not
@@ -1865,6 +1995,27 @@ impl ConfigBaseline {
 
     pub fn resource_views(&self) -> Vec<ResourceView> {
         self.resources.iter().map(ResourceConfig::to_view).collect()
+    }
+
+    /// What each source's contribution may be released as (GAP-206, DN-17 §5 and §6):
+    /// the deployment's default, each sensor's own row over it, and **every peer
+    /// `Internal`**, whatever the default.
+    ///
+    /// The peers are fixed rather than defaulted (the owner's choice of 2026-10-27): a
+    /// track a peer fed, released back out, would arrive at that peer as a new source and
+    /// be fused with the track it came from. GAP-218's re-ingest guard is what makes
+    /// releasing one safe, and until it is built [`validate`] refuses a peer row that says
+    /// anything but `internal`. Both binaries hand this to the tracker.
+    #[must_use]
+    pub fn source_markings(&self) -> gungnir_model::SourceMarkings {
+        let mut markings = gungnir_model::SourceMarkings::new(self.releasability.default.clone());
+        for row in &self.releasability.sensors {
+            markings = markings.with_source(row.sensor, row.marking.clone());
+        }
+        for peer in &self.peers {
+            markings = markings.with_source(peer.source_id, gungnir_model::Releasability::Internal);
+        }
+        markings
     }
 
     /// This deployment's local frame, and `None` where it declares no origin.
@@ -4312,6 +4463,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     validate_peers(baseline)?;
     validate_sensor_control(baseline)?;
     validate_time(baseline)?;
+    validate_releasability(baseline)?;
     if let Some(t) = &baseline.tracking {
         if !(t.gate_threshold.is_finite() && t.gate_threshold > 0.0) {
             return Err(ConfigError::Invalid(
@@ -7052,6 +7204,131 @@ MFkw
             elevation_band: None,
         });
         assert!(validate(&named).is_ok(), "{:?}", validate(&named));
+    }
+
+    /// GAP-206: the releasability section parses as documented, is `internal` when
+    /// absent, refuses what DN-17 §6 refuses, and holds every peer in whatever the
+    /// default says.
+    // Every refusal DN-17 §6 names against one valid baseline, so each is shown to be
+    // the rule that refused it and not some other defect in the file.
+    #[allow(clippy::too_many_lines)]
+    #[test]
+    fn releasability_is_configured_per_sensor_and_every_peer_stays_internal() {
+        use gungnir_model::Releasability;
+        let absent: ConfigBaseline = serde_json::from_str(r#"{"version": 1}"#).expect("parses");
+        assert_eq!(absent.releasability, ReleasabilityConfig::default());
+        assert_eq!(
+            absent.source_markings().mark(&[1]),
+            Releasability::Internal,
+            "a deployment that says nothing releases nothing"
+        );
+
+        let mut b: ConfigBaseline = serde_json::from_str(
+            r#"{"version": 1,
+                "releasability": {
+                    "default": {"kind": "all-peers"},
+                    "sensors": [{"sensor": 2, "marking": {"kind": "parties", "parties": ["partner-a"]}}]
+                },
+                "exchange": [{"party": "partner-a", "inbound": [], "outbound": ["tracks"], "format": "canonical"}]}"#,
+        )
+        .expect("parses");
+        for id in [1, 2] {
+            b.sensors.push(SensorConfig {
+                id,
+                modality: "radar".into(),
+                position: [0.9, 0.2, 10.0],
+                max_range_m: 20_000.0,
+                control_endpoint: None,
+                maintenance: Vec::new(),
+                detection_model: None,
+                azimuth_sector: None,
+                elevation_band: None,
+            });
+        }
+        b.peers.push(PeerConfig {
+            name: "kal-cell".into(),
+            endpoint: "kal".into(),
+            source_id: 900,
+            assigned_quality: 0.5,
+            max_age_s: 30.0,
+        });
+        // The peer's endpoint, and the partner the agreement names: an exchange party
+        // must itself be a peer or an endpoint.
+        for (name, address) in [
+            ("kal", "https://kal.local:7410"),
+            ("partner-a", "https://partner-a.local:7410"),
+        ] {
+            b.endpoints.push(EndpointConfig {
+                name: name.into(),
+                kind: "peer".into(),
+                address: address.into(),
+            });
+        }
+        assert!(validate(&b).is_ok(), "{:?}", validate(&b));
+        let markings = b.source_markings();
+        assert_eq!(markings.mark(&[1]), Releasability::AllPeers, "the default");
+        assert_eq!(markings.mark(&[2]), Releasability::parties(["partner-a"]));
+        assert_eq!(
+            markings.mark(&[900]),
+            Releasability::Internal,
+            "a peer stays internal under an all-peers default"
+        );
+
+        let refused = |edit: &dyn Fn(&mut ConfigBaseline), says: &str| {
+            let mut c = b.clone();
+            edit(&mut c);
+            match validate(&c) {
+                Err(ConfigError::Invalid(m)) => assert!(m.contains(says), "{m}"),
+                other => panic!("accepted, expected {says:?}: {other:?}"),
+            }
+        };
+        refused(
+            &|c| c.releasability.sensors[0].sensor = 7,
+            "does not configure",
+        );
+        refused(
+            &|c| {
+                c.releasability.sensors.push(SensorReleasabilityConfig {
+                    sensor: 2,
+                    marking: Releasability::Internal,
+                });
+            },
+            "twice",
+        );
+        refused(
+            &|c| c.releasability.default = Releasability::parties(["stranger"]),
+            "\"stranger\"",
+        );
+        refused(
+            &|c| c.releasability.default = Releasability::parties(Vec::<String>::new()),
+            "names no parties",
+        );
+        refused(
+            &|c| {
+                c.releasability.peers.push(PeerReleasabilityConfig {
+                    peer: "kal-cell".into(),
+                    marking: Releasability::AllPeers,
+                });
+            },
+            "GAP-218",
+        );
+        let mut internal_row = b.clone();
+        internal_row
+            .releasability
+            .peers
+            .push(PeerReleasabilityConfig {
+                peer: "kal-cell".into(),
+                marking: Releasability::Internal,
+            });
+        assert!(
+            validate(&internal_row).is_ok(),
+            "an internal peer row is what holds"
+        );
+        assert!(
+            serde_json::from_str::<ReleasabilityConfig>(r#"{"defualt": {"kind": "all-peers"}}"#)
+                .is_err(),
+            "a misspelt key is refused, never read as internal"
+        );
     }
 
     /// GAP-114: a baseline that says nothing about late data reads as the one-second

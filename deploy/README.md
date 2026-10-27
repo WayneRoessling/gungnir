@@ -144,6 +144,7 @@ configures.
 which tolerates five seconds of drift before reports are dropped, at the cost of holding
 every report up to five seconds for reordering. The default stays one second (D-98, D-99);
 a site with a time source should leave it there.
+
 ## Machine identities
 
 Every node and desktop presents its own certificate, named from a fingerprint of its own
@@ -168,6 +169,46 @@ and that certificate is what its peers see.
 **Upgrading from before D-135:** a node's serving certificate was named `gungnir-node`, and
 its peer-link certificate was made fresh at every start, so no peer could pin it. Re-pin
 each node's serving certificate once, and pin its peer certificate for the first time.
+
+## Releasing tracks to a partner
+
+Nothing leaves a deployment until its baseline says so. Two gates decide whether a track
+reaches a partner, and both must agree (DN-18 §5):
+
+1. **The exchange agreement** says what kind of thing the partner may receive. A partner
+   with no agreement, or one without `tracks` outbound, receives no track.
+2. **The marking** says whether this particular track may go to that partner. A track is
+   marked by the most restrictive of the sources that fed it (DN-17 §5, GAP-206).
+
+The `releasability` section sets the markings. Its default applies to every sensor with no
+row of its own, and is `internal` when absent:
+
+```json
+{
+  "version": 1,
+  "releasability": {
+    "default": { "kind": "internal" },
+    "sensors": [
+      { "sensor": 4, "marking": { "kind": "parties", "parties": ["node-peer-3f9a..."] } },
+      { "sensor": 7, "marking": { "kind": "all-peers" } }
+    ]
+  }
+}
+```
+
+The three markings are `internal`, `parties` with the names that may receive it, and
+`all-peers`. A named party must be a peer, an endpoint or an exchange agreement's party in
+the same baseline, so a misspelt name is refused at load rather than releasing nothing.
+A track once fed by an `internal` sensor stays internal for the rest of its life, because
+its estimate carries what that sensor saw.
+
+**A track a peer fed is always internal.** A partner's tracks arrive as a peer source, and
+releasing them again would send each one back to where it came from, as a new source to
+fuse with itself. A `peers` row in this section may only say `internal`, until the
+re-ingest guard (GAP-218) is built.
+
+A partner that receives a filtered picture is told how many items were withheld, so it
+knows its picture is partial.
 
 ## The geoid grids
 

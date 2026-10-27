@@ -1,6 +1,6 @@
 # DN-17 Releasability marking and enforcement
 
-Closes GAP-062. Status: design only; no code exists yet.
+Closes GAP-062. Status: built. GAP-062 built the marking and its filtering, GAP-065 the exchange gate (DN-18 §5), and GAP-206 the producer: tracks marked from the baseline by the sources that fed them (§9).
 **Human-owned**: this is `gungnir-security`'s enforcement and the interface's
 write path. What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
@@ -131,6 +131,40 @@ change until it configures parties.
 
 The `combine` property is exhaustively testable over the small variant set, and it should
 be, because it is the rule an aggregation bug would silently break.
+
+## 9. Amendment 1: the producer, per source (2026-10-27, GAP-206)
+
+**§5 said a configured sensor's detections inherit its marking, and until GAP-206 nothing
+did.** Both projections stamped `Internal` on every track and no baseline field could
+say otherwise, so the gate §5 describes withheld everything it was ever asked about. The
+owner's four choices of 2026-10-27, each the recommended default, settle what §5 and §6
+left open:
+
+| Question | Chosen |
+|---|---|
+| How is a track's marking derived? | Per track: the pipeline records every source id that moved it, and the track is marked by `combine` over those sources' markings |
+| What does a peer-sourced input carry? | `Internal`, fixed: a peer row may say nothing else until GAP-218's re-ingest guard is built |
+| Operator raise and lower | Not here: the configured markings only; the `product.release` action §6 names is left to a gap of its own |
+| Where must a named party appear? | In the peer table, the endpoint table, or an exchange agreement's party |
+
+**The configuration is one section, not a field on each row.** §6 gives `ConfigBaseline`
+a `default_releasability` "plus a per-sensor and per-peer override". The build keeps all
+three in one `releasability` section, with `default`, `sensors` keyed by sensor id and
+`peers` keyed by peer name. The marking is a distribution rule a release authority reviews
+as one table, and a rule scattered across the sensor list is one nobody reads whole.
+
+**The source is the gateway's.** A source is the identifier the ingest gateway admits a
+report under, a sensor's id or a peer's `source_id`, so one map, `SourceMarkings`, covers
+§5's two cases. A source the map does not name takes the deployment default; every peer is
+`Internal` whatever the default.
+
+**A track keeps every source that ever fed it.** The marking only tightens over a track's
+life, because its estimate keeps what a sensor told it after that sensor goes quiet. The
+same list is the provenance's `source_sensor_ids`, which was empty on every track before.
+
+**Why peers are fixed.** A track a peer fed, released again, reaches that peer as a new
+source and is fused with the track it came from. Nothing yet recognises it on the way
+back; GAP-218 is that guard. Until it is built the restrictive reading holds.
 
 ## Traceability
 

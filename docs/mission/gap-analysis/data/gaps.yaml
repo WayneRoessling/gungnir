@@ -12028,6 +12028,15 @@
     note: >-
       Filed by plan 12. GAP-062 built the marking and GAP-065 the gate; nothing in a
       production path ever sets a track to anything but `Internal`.
+  - date: 2026-10-27
+    status: Closed
+    note: >-
+      Built. The pipeline records every source that fed each track, and both binaries mark
+      a track by the most restrictive of those sources' markings, from a `releasability`
+      section in the baseline: a deployment default and per-sensor rows. A peer's tracks stay
+      `Internal` until GAP-218. A two-node test sends one track over mutual TLS and holds the
+      other. Peers are fixed `Internal` by the owner's choice; DN-17 §9 records the shape.
+      See `../../record/2026-10-27/gap-206-tracks-releasable-from-configuration.md`.
 
 - id: GAP-207
   name: An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop

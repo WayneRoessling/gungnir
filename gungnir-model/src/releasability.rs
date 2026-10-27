@@ -23,7 +23,7 @@
 //! Everything in this repository is unclassified (AP-04); the marking governs
 //! distribution between deployments, which is a different question.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Who may receive this.
 ///
@@ -112,6 +112,57 @@ impl Releasability {
             _ if a.restriction() >= b.restriction() => a,
             _ => b,
         }
+    }
+}
+
+/// What each source's contribution may be released as, and so what a product built from
+/// some of them is marked (DN-17 §5 and §6; GAP-206).
+///
+/// DN-17 §5: "a configured sensor carries a default marking that its detections inherit;
+/// a peer-sourced track inherits the peer's". A source is the identifier the ingest
+/// gateway admits a report under -- a sensor's id, or a peer's `source_id` -- so one map
+/// covers both. A source the map does not name takes the deployment's default.
+///
+/// **A product is marked by [`Releasability::combine`] over the sources that fed it**,
+/// so a track one restricted sensor ever touched is restricted for the rest of its life:
+/// its estimate carries what that sensor saw. And a product nothing is recorded as
+/// feeding is `Internal`, which is `combine`'s own answer for no inputs.
+///
+/// The default of this type is a deployment that configured nothing: every source
+/// `Internal`, which is what every track was before GAP-206.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SourceMarkings {
+    default: Releasability,
+    by_source: BTreeMap<u32, Releasability>,
+}
+
+impl SourceMarkings {
+    /// Every source marked `default` until [`SourceMarkings::with_source`] says otherwise.
+    #[must_use]
+    pub fn new(default: Releasability) -> Self {
+        Self {
+            default,
+            by_source: BTreeMap::new(),
+        }
+    }
+
+    /// Mark one source's contribution, replacing the default for it.
+    #[must_use]
+    pub fn with_source(mut self, source: u32, marking: Releasability) -> Self {
+        self.by_source.insert(source, marking);
+        self
+    }
+
+    /// What `source`'s contribution is marked.
+    #[must_use]
+    pub fn marking_of(&self, source: u32) -> &Releasability {
+        self.by_source.get(&source).unwrap_or(&self.default)
+    }
+
+    /// The marking of a product fed by `sources`: the most restrictive of theirs.
+    #[must_use]
+    pub fn mark(&self, sources: &[u32]) -> Releasability {
+        Releasability::combine(sources.iter().map(|s| self.marking_of(*s).clone()))
     }
 }
 
@@ -282,6 +333,32 @@ mod tests {
         assert_eq!(
             out.withheld, 2,
             "a silently shortened list makes a peer believe it has everything"
+        );
+    }
+
+    /// GAP-206: a track is marked by the sources that fed it, the most restrictive
+    /// deciding, a source with no row of its own taking the deployment's default, and a
+    /// track nothing is recorded as feeding staying in.
+    #[test]
+    fn a_product_is_marked_by_the_sources_that_fed_it() {
+        let markings = SourceMarkings::new(Releasability::AllPeers)
+            .with_source(2, Releasability::Internal)
+            .with_source(3, Releasability::parties(["partner-a"]));
+        assert_eq!(markings.mark(&[1]), Releasability::AllPeers, "the default");
+        assert_eq!(
+            markings.mark(&[1, 3]),
+            Releasability::parties(["partner-a"])
+        );
+        assert_eq!(
+            markings.mark(&[1, 3, 2]),
+            Releasability::Internal,
+            "one restricted source restricts the track"
+        );
+        assert_eq!(markings.mark(&[]), Releasability::Internal);
+        assert_eq!(
+            SourceMarkings::default().mark(&[1, 2]),
+            Releasability::Internal,
+            "a deployment that configured nothing releases nothing"
         );
     }
 

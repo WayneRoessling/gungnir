@@ -84,6 +84,8 @@ enum "Releasability" as Releasability <<InformationElement>> {
   Parties { parties: BTreeSet<String> }
   AllPeers
 }
+class "SourceMarkings" as SourceMarkings <<InformationElement>> {
+}
 enum "Classification\n(see If-Sr-picture-tracking-vocabulary)" as Classification <<External>> #line.dashed {
 }
 class "MissionTime\n(see If-Sr-core-identifiers-frames-quality)" as MissionTime <<External>> #line.dashed {

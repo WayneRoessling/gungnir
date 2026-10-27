@@ -128,14 +128,17 @@ use gungnir_filters::{
 use gungnir_rfs::GaussianComponent;
 use gungnir_track::{Track, TrackId, TrackManager};
 use nalgebra::{DMatrix, SMatrix, SVector};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 /// What one scan's association decided: the track/measurement pairs to update, the
 /// tracks that got nothing, and the measurements that matched no track.
+///
+/// Each measurement keeps the source id it came under, so the track it updates or starts
+/// records who fed it (GAP-206).
 type ScanAssociation = (
-    Vec<(TrackId, SVector<f64, 3>)>,
+    Vec<(TrackId, SVector<f64, 3>, u32)>,
     Vec<TrackId>,
-    Vec<SVector<f64, 3>>,
+    Vec<(SVector<f64, 3>, u32)>,
 );
 
 /// One track's estimator: the position-only measurement shape every sensor in
@@ -821,6 +824,15 @@ pub struct TimedTrack {
     /// pipeline's cursor rather than retrodicted to their own source time; see
     /// [`FusionPipeline::offer_bearing`]).
     pub estimate_time_s: f64,
+    /// Every source id whose report has moved this track since it was started, ascending
+    /// and without repeats: the detection that initiated it, each one associated to it,
+    /// and each bearing that refined it (GAP-206).
+    ///
+    /// **What the track's releasability is computed from** (DN-17 §5): a track is marked
+    /// by the most restrictive of its sources, so the list only grows -- an estimate keeps
+    /// what a sensor told it after that sensor goes quiet. It is also the provenance's
+    /// `source_sensor_ids`, which until GAP-206 was empty on every track.
+    pub sources: Vec<u32>,
 }
 
 /// The out-of-sequence, multi-rate fusion pipeline.
@@ -836,6 +848,9 @@ pub struct FusionPipeline {
     /// update or initiation, or the cursor a bearing refinement was applied at. What
     /// [`FusionPipeline::timed_snapshot`] reports instead of a poller's own time.
     estimate_time_s: HashMap<TrackId, f64>,
+    /// Which source ids have moved each live track (GAP-206); see
+    /// [`TimedTrack::sources`]. Removed with the track.
+    sources: HashMap<TrackId, BTreeSet<u32>>,
     /// Buffered detections, kept sorted by source time. Small by construction: it
     /// holds one reorder horizon of one sector's detections.
     buffer: Vec<Detection>,
@@ -892,6 +907,7 @@ impl FusionPipeline {
             manager,
             filters: HashMap::new(),
             estimate_time_s: HashMap::new(),
+            sources: HashMap::new(),
             buffer: Vec::new(),
             cursor_s: None,
             newest_seen_s: f64::NEG_INFINITY,
@@ -944,6 +960,11 @@ impl FusionPipeline {
                     .get(&track.id)
                     .copied()
                     .unwrap_or(self.cursor_s.unwrap_or(f64::NAN)),
+                sources: self
+                    .sources
+                    .get(&track.id)
+                    .map(|s| s.iter().copied().collect())
+                    .unwrap_or_default(),
                 track: track.clone(),
             })
             .collect()
@@ -1089,6 +1110,10 @@ impl FusionPipeline {
                 // method's documentation on why the update itself is not retrodicted.
                 self.estimate_time_s
                     .insert(id, self.cursor_s.unwrap_or(bearing.timestamp_s));
+                self.sources
+                    .entry(id)
+                    .or_default()
+                    .insert(bearing.sensor_id);
                 self.stats.bearings_updated = self.stats.bearings_updated.saturating_add(1);
                 return BearingOutcome::Updated(id);
             }
@@ -1311,21 +1336,23 @@ impl FusionPipeline {
         let live: Vec<TrackId> = self.manager.live_tracks().map(|t| t.id).collect();
         let (hits, misses, unassigned) = self.associate(&live, &scan);
 
-        for (track, detection) in &hits {
+        for (track, measurement, source) in &hits {
             if let Some(filter) = self.filters.get_mut(track) {
-                filter.update(detection);
+                filter.update(measurement);
             }
+            self.sources.entry(*track).or_default().insert(*source);
         }
         self.stats.associated = self
             .stats
             .associated
             .saturating_add(hits.len().try_into().unwrap_or(u64::MAX));
 
-        let hit_ids: Vec<TrackId> = hits.iter().map(|(id, _)| *id).collect();
+        let hit_ids: Vec<TrackId> = hits.iter().map(|(id, _, _)| *id).collect();
         let outcome = self.manager.step(&hit_ids, &misses);
         for id in &outcome.deleted {
             self.filters.remove(id);
             self.estimate_time_s.remove(id);
+            self.sources.remove(id);
         }
 
         // The estimates the filters hold are the truth about kinematics; write them
@@ -1338,8 +1365,8 @@ impl FusionPipeline {
             self.estimate_time_s.insert(*id, epoch_s);
         }
 
-        for measurement in unassigned {
-            self.initiate(&measurement, epoch_s);
+        for (measurement, source) in unassigned {
+            self.initiate(&measurement, source, epoch_s);
         }
 
         // Last, and reading `scan` rather than anything association produced: the
@@ -1480,7 +1507,7 @@ impl FusionPipeline {
             return (
                 Vec::new(),
                 Vec::new(),
-                scan.iter().map(|d| d.measurement).collect(),
+                scan.iter().map(|d| (d.measurement, d.sensor_id)).collect(),
             );
         }
         if scan.is_empty() {
@@ -1521,7 +1548,7 @@ impl FusionPipeline {
                 return (
                     Vec::new(),
                     live.to_vec(),
-                    scan.iter().map(|d| d.measurement).collect(),
+                    scan.iter().map(|d| (d.measurement, d.sensor_id)).collect(),
                 );
             }
         };
@@ -1533,7 +1560,7 @@ impl FusionPipeline {
             match assignment.get(row).copied().flatten() {
                 Some(col) if admitted[row][col] => {
                     taken[col] = true;
-                    hits.push((*id, scan[col].measurement));
+                    hits.push((*id, scan[col].measurement, scan[col].sensor_id));
                 }
                 _ => misses.push(*id),
             }
@@ -1542,18 +1569,19 @@ impl FusionPipeline {
             .iter()
             .enumerate()
             .filter(|(col, _)| !taken[*col])
-            .map(|(_, d)| d.measurement)
+            .map(|(_, d)| (d.measurement, d.sensor_id))
             .collect();
         (hits, misses, unassigned)
     }
 
     /// Start a tentative track from one detection: position measured, velocity unknown,
-    /// current as of `epoch_s`.
-    fn initiate(&mut self, measurement: &SVector<f64, 3>, epoch_s: f64) {
+    /// current as of `epoch_s`, fed so far by `source` alone (GAP-206).
+    fn initiate(&mut self, measurement: &SVector<f64, 3>, source: u32, epoch_s: f64) {
         let mut state = SVector::<f64, 6>::zeros();
         state.fixed_rows_mut::<3>(0).copy_from(measurement);
         let covariance = self.single_detection_covariance();
         let id = self.manager.initiate(state, covariance);
+        self.sources.insert(id, BTreeSet::from([source]));
         if let Some(filter) = self.new_filter(state, &covariance) {
             self.filters.insert(id, filter);
             self.estimate_time_s.insert(id, epoch_s);
@@ -1812,6 +1840,49 @@ mod tests {
             pipeline.filters.len(),
             pipeline.snapshot().len(),
             "a deleted track's filter is released"
+        );
+    }
+
+    /// GAP-206: each track records the source ids that moved it -- the one that started
+    /// it and every one associated to it since -- and a track no source touched stays
+    /// apart from one that two did. A deleted track's record goes with it.
+    #[test]
+    fn each_track_records_the_sources_that_fed_it() {
+        let mut pipeline = FusionPipeline::new(PipelineSettings::default());
+        for k in 0..6 {
+            let t = f64::from(k);
+            // One target seen by sensors 1 and 2 on alternate scans; another, far away,
+            // by sensor 3 alone.
+            let sensor = if k % 2 == 0 { 1 } else { 2 };
+            pipeline
+                .push(detection(sensor, t, [10.0 * t, 0.0, 500.0]))
+                .expect("accepted");
+            pipeline
+                .push(detection(3, t + 0.01, [50_000.0, 50_000.0, 500.0]))
+                .expect("accepted");
+        }
+        pipeline.flush();
+        let mut sources: Vec<Vec<u32>> = pipeline
+            .timed_snapshot()
+            .into_iter()
+            .map(|t| t.sources)
+            .collect();
+        sources.sort();
+        assert_eq!(sources, vec![vec![1, 2], vec![3]], "{sources:?}");
+
+        // The far target goes quiet and its track is deleted; its record goes too.
+        for k in 6..14 {
+            let t = f64::from(k);
+            pipeline
+                .push(detection(1, t, [10.0 * t, 0.0, 500.0]))
+                .expect("accepted");
+        }
+        pipeline.flush();
+        assert_eq!(pipeline.snapshot().len(), 1);
+        assert_eq!(
+            pipeline.sources.len(),
+            1,
+            "a deleted track's sources are released"
         );
     }
 
