@@ -39,6 +39,7 @@ use gungnir_eventing::{Envelope, Event};
 use gungnir_model::events::{AuditEvent, AuditHead};
 use gungnir_model::MissionTime;
 use gungnir_security::audit::events;
+use gungnir_security::audit::signing::AuditVerifyingKey;
 use gungnir_security::{
     verify_audit_record, AnchorLedger, AuditEntry, AuditLog, AuditVerification, HeadStatement,
     PurgedSegment, SecurityError, SegmentEntries, SegmentHead, SessionHeads,
@@ -63,6 +64,11 @@ pub struct AuditRecordState {
     pub purged_total: u64,
     /// The last purge failure, so the same one is not raised every hour.
     last_purge_error: Option<String>,
+    /// Which of the heads the last verification read were signed, and by what (GAP-208).
+    pub signing: Option<gungnir_security::audit::signing::SigningReport>,
+    /// What the last check against the node's heads found, on reconnect (GAP-208):
+    /// `None` until one has run.
+    pub against_node: Option<Vec<String>>,
 }
 
 /// Where this desktop's audit segments are.
@@ -71,21 +77,32 @@ pub fn audit_dir(state: &AppState) -> PathBuf {
     std::path::Path::new(&state.config.data_dir).join(gungnir_security::AUDIT_DIR)
 }
 
-fn to_model(head: SegmentHead) -> AuditHead {
+pub fn to_model(head: SegmentHead) -> AuditHead {
     AuditHead {
         segment: head.segment,
         entries: head.entries,
         seq: head.seq,
         hash: head.hash,
+        // GAP-208: carried as hex on the journal.
+        signature: head
+            .signature
+            .map(|s| gungnir_model::events::AnchorSignature::from_der(s.key_version, &s.der)),
     }
 }
 
-fn from_model(head: &AuditHead) -> SegmentHead {
+pub fn from_model(head: &AuditHead) -> SegmentHead {
     SegmentHead {
         segment: head.segment.clone(),
         entries: head.entries,
         seq: head.seq,
         hash: head.hash.clone(),
+        // GAP-208: hex that is not a signature reads as one that does not verify.
+        signature: head.signature.as_ref().map(|s| {
+            gungnir_security::audit::signing::AnchorSignature {
+                key_version: s.key_version,
+                der: s.der().unwrap_or_default(),
+            }
+        }),
     }
 }
 
@@ -122,6 +139,167 @@ fn ledger(journal: &dyn EventJournal) -> Result<AnchorLedger, String> {
     )))
 }
 
+/// The baseline's audit-signing public key, read at start (GAP-208). A key the baseline
+/// names and that does not read is an alert, and nothing is then checked against it.
+pub fn verifying_key(
+    config: &gungnir_config::ConfigBaseline,
+    alerts: &mut Vec<String>,
+) -> Option<AuditVerifyingKey> {
+    let pem = &config.security.audit_signing.as_ref()?.public_key_pem;
+    match AuditVerifyingKey::from_pem(pem) {
+        Ok(key) => {
+            alerts.push(
+                "Audit anchors are unsigned until an administrator unlocks the audit-signing \
+                 key on PN-20"
+                    .into(),
+            );
+            Some(key)
+        }
+        Err(err) => {
+            alerts.push(format!(
+                "The baseline's audit-signing key does not read ({err}); anchors are neither \
+                 signed nor checked"
+            ));
+            None
+        }
+    }
+}
+
+/// `head`, signed when the audit-signing key is unlocked (GAP-208). A head the signer
+/// refuses goes unsigned, with an error logged, rather than not at all.
+fn sign(state: &AppState, mut head: SegmentHead) -> SegmentHead {
+    if head.signature.is_some() {
+        return head;
+    }
+    if let Some(signer) = &state.audit_signer {
+        match signer.sign(&head) {
+            Ok(signature) => head.signature = Some(signature),
+            Err(err) => tracing::error!(%err, "an audit head could not be signed"),
+        }
+    }
+    head
+}
+
+/// Unlock the audit-signing key with the administrator's passphrase (GAP-208, D-142),
+/// from PN-20. Recorded either way, attributed to whoever is signed in: a failed attempt
+/// is somebody trying the administrator's passphrase.
+///
+/// Refused when the baseline names no key, and when the key that opens is not the one the
+/// baseline names: anchors signed by it would verify nowhere.
+pub fn unlock_signing(state: &mut AppState, passphrase: &str) {
+    use gungnir_security::audit::signing::AuditSigner;
+    let Some(key) = state.audit_key.clone() else {
+        state.alerts.push(
+            "No audit-signing key is configured in the baseline; there is nothing to unlock".into(),
+        );
+        return;
+    };
+    let data_dir = std::path::PathBuf::from(&state.config.data_dir);
+    let opened = AuditSigner::unlock(&data_dir, passphrase)
+        .map_err(|e| e.to_string())
+        .and_then(|signer| {
+            // The same key as the baseline's, by a signature over a probe head: two PEM
+            // encodings of one key need not be byte-equal.
+            let probe = SegmentHead {
+                segment: "probe".into(),
+                entries: 0,
+                seq: 0,
+                hash: String::new(),
+                signature: None,
+            };
+            let signature = signer.sign(&probe).map_err(|e| e.to_string())?;
+            match key.check(&probe, &signature.der) {
+                gungnir_security::audit::signing::SignatureCheck::Valid => Ok(signer),
+                gungnir_security::audit::signing::SignatureCheck::Invalid => {
+                    Err("the key that opened is not the one the baseline names".to_owned())
+                }
+            }
+        });
+    match opened {
+        Ok(signer) => {
+            state.audit_signer = Some(signer);
+            crate::audit::record(
+                state,
+                events::SIGNING_UNLOCK,
+                "the audit-signing key was unlocked; anchors from now on are signed",
+            );
+            state
+                .alerts
+                .push("Audit signing unlocked: anchors from now on are signed".into());
+        }
+        Err(why) => {
+            crate::audit::record(state, events::SIGNING_UNLOCK, format!("refused: {why}"));
+            state
+                .alerts
+                .push(format!("Audit signing was not unlocked: {why}"));
+        }
+    }
+}
+
+/// Hand what is owed to the node, and check the file against what the node holds
+/// (GAP-208). Called every tick; does nothing without a link.
+///
+/// **On reconnect** the link reads the node's heads for this desktop once; the file is
+/// checked against them before anything new is forwarded, and the result goes to the node
+/// with the heads. A segment found cut or rewritten against them is damage, said as the
+/// local verification says it. A segment gone is the local verification's to find: the
+/// node does not know which segments retention purged.
+pub fn forward(state: &mut AppState) {
+    let Some(link) = state.link.clone() else {
+        // Nothing to forward to: a desktop with no node holds its heads in its journal.
+        state.audit_forward.clear();
+        return;
+    };
+    let findings = link
+        .take_node_audit_heads()
+        .map(|held| check_against_node(state, &held));
+    let heads = std::mem::take(&mut state.audit_forward);
+    link.queue_audit_anchors(heads, findings);
+}
+
+/// The file against the node's heads for it: the cuts and rewrites found, each in words.
+fn check_against_node(state: &mut AppState, held: &[AuditHead]) -> Vec<String> {
+    let mut ledger = AnchorLedger::default();
+    for head in held {
+        ledger.apply(HeadStatement::Anchored(from_model(head)));
+    }
+    let dir = audit_dir(state);
+    let at = state.clock.now();
+    // Every segment, this run's included: the local verification leaves the current one
+    // to its own run's anchors, and a node head for it is exactly what that run cannot
+    // vouch for once its file has been edited under it.
+    let findings: Vec<String> = match verify_audit_record(&dir, &ledger, None) {
+        Ok(v) => v
+            .findings
+            .iter()
+            .filter(|f| !matches!(f, gungnir_security::AnchorFinding::Removed { .. }))
+            .map(ToString::to_string)
+            .collect(),
+        Err(err) => vec![format!(
+            "the audit record could not be checked against the node's heads: {err}"
+        )],
+    };
+    for finding in &findings {
+        tracing::error!(%finding, "the audit record does not reach a head the node holds");
+        state.alerts.push(format!(
+            "Audit record does not reach the node's head: {finding}"
+        ));
+    }
+    if !findings.is_empty() {
+        state.audit.record(AuditEntry::new(
+            None,
+            events::ANCHOR_MISMATCH,
+            at.0,
+            format!(
+                "checked against the node's heads on reconnect: {}",
+                findings.join("; ")
+            ),
+        ));
+    }
+    state.audit_record.against_node = Some(findings.clone());
+    findings
+}
+
 /// Journal the head the log says is due. Called by `update::tick` before the journal
 /// drain, so the head is appended in the frame it was taken.
 pub fn tick(state: &mut AppState) {
@@ -132,11 +310,13 @@ pub fn tick(state: &mut AppState) {
 pub fn tick_at(state: &mut AppState, now: Instant) {
     if let Some(head) = state.audit.take_anchor(now) {
         let at = state.clock.now();
+        let head = to_model(sign(state, head));
+        state.audit_forward.push(head.clone());
         publish(
             state,
             at,
             Event::Audit(AuditEvent::Anchored {
-                head: to_model(head),
+                head,
                 closing: false,
                 at,
             }),
@@ -148,11 +328,16 @@ pub fn tick_at(state: &mut AppState, now: Instant) {
 pub fn close(state: &mut AppState) {
     if let Some(head) = state.audit.take_closing_anchor() {
         let at = state.clock.now();
+        let head = to_model(sign(state, head));
+        // Queued for the node as it closes; the link carries it if it is still up.
+        if let Some(link) = &state.link {
+            link.queue_audit_anchors(vec![head.clone()], None);
+        }
         publish(
             state,
             at,
             Event::Audit(AuditEvent::Anchored {
-                head: to_model(head),
+                head,
                 closing: true,
                 at,
             }),
@@ -179,24 +364,48 @@ pub fn verify(state: &mut AppState) {
     let dir = audit_dir(state);
     let current = state.audit.current_segment();
     let outcome = ledger(&state.journal).and_then(|ledger| {
+        // GAP-208: which of the heads the file is judged against were signed.
+        state.audit_record.signing = Some(gungnir_security::audit::signing::signing_report(
+            ledger.heads(),
+            state.audit_key.as_ref(),
+        ));
         verify_audit_record(&dir, &ledger, current.as_deref()).map_err(|e| e.to_string())
     });
     let at = state.clock.now();
     match &outcome {
         Ok(verification) => {
+            // A signature that does not verify is damage, said with the rest.
+            let mut problems = verification.problems();
+            problems.extend(
+                state
+                    .audit_record
+                    .signing
+                    .as_ref()
+                    .map(gungnir_security::audit::signing::SigningReport::problems)
+                    .unwrap_or_default(),
+            );
+            // GAP-208: the inventory is signed too, or a rewritten journal could carry a
+            // forged one; and it is what the node is sent, so a restarted desktop's whole
+            // record reaches it.
+            let heads: Vec<AuditHead> = verification
+                .heads
+                .iter()
+                .cloned()
+                .map(|h| to_model(sign(state, h)))
+                .collect();
+            state.audit_forward.extend(heads.iter().cloned());
             publish(
                 state,
                 at,
                 Event::Audit(AuditEvent::Verified {
-                    heads: verification.heads.iter().cloned().map(to_model).collect(),
+                    heads,
                     segments: verification.segments as u64,
                     entries: verification.entries,
-                    findings: verification.problems(),
+                    findings: problems.clone(),
                     unread_sessions: verification.unread_sessions.clone(),
                     at,
                 }),
             );
-            let problems = verification.problems();
             for problem in &problems {
                 tracing::error!(%problem, "the audit record does not verify");
                 state
@@ -421,6 +630,10 @@ pub struct RecordText {
     pub shown_note: String,
     pub shown_sound: bool,
     pub retention: String,
+    /// Whether anchors are signed, and which heads were (GAP-208).
+    pub signing: String,
+    /// A key is configured and nobody has unlocked it this run.
+    pub signing_locked: bool,
 }
 
 /// The audit record in words, from the last verification.
@@ -513,6 +726,7 @@ pub fn record_text(state: &AppState) -> RecordText {
         ),
         None => "Audit segments are never purged: the baseline declares no retention.".into(),
     };
+    let (signing, signing_locked) = signing_text(state);
     RecordText {
         summary,
         sound,
@@ -521,7 +735,45 @@ pub fn record_text(state: &AppState) -> RecordText {
         shown_note,
         shown_sound,
         retention,
+        signing,
+        signing_locked,
     }
+}
+
+/// PN-20's signing sentence (GAP-208): whether anchors are being signed, which heads the
+/// last verification found signed, and what the check against the node found; and
+/// whether the unlock field is offered.
+fn signing_text(state: &AppState) -> (String, bool) {
+    use std::fmt::Write as _;
+    let signing_locked = state.audit_key.is_some() && state.audit_signer.is_none();
+    let now_signing = match (&state.audit_key, &state.audit_signer) {
+        (None, _) => "No audit-signing key is configured in the baseline, so anchors are not \
+                      signed."
+            .to_owned(),
+        (Some(_), None) => "Audit anchors are UNSIGNED: no administrator has unlocked the \
+                            audit-signing key this run."
+            .to_owned(),
+        (Some(_), Some(_)) => {
+            "Audit anchors are signed by the deployment's audit-signing key.".to_owned()
+        }
+    };
+    let mut signing = match &state.audit_record.signing {
+        Some(report) if report.key_configured => format!("{now_signing} {}", report.summary()),
+        _ => now_signing,
+    };
+    if let Some(found) = &state.audit_record.against_node {
+        if found.is_empty() {
+            signing
+                .push_str(" Checked against the node's heads on reconnect: it reaches every one.");
+        } else {
+            let _ = write!(
+                signing,
+                " Checked against the node's heads on reconnect: {} problem(s).",
+                found.len()
+            );
+        }
+    }
+    (signing, signing_locked)
 }
 
 /// The segment lines PN-20 lists, borrowing `text`.
@@ -580,6 +832,8 @@ pub fn record_view<'a>(
                 sound: text.shown_sound,
             }),
         retention: &text.retention,
+        signing: &text.signing,
+        signing_locked: text.signing_locked,
     }
 }
 

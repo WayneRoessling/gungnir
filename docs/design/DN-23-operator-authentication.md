@@ -597,6 +597,58 @@ said); `gungnir-node/tests/node_audit_record.rs` (a cut made while the node runs
 request against the heads held); `gungnir-security/tests/role_matrix.rs`;
 `gungnir-ui/src/panels/rendered.rs` (PN-20 draws the node's section).
 
+## 16. Amendment 7 (2026-10-27, D-142): anchors signed, and held by the node
+
+**§14 put the head where the operator could reach it.** It holds the audit log's head in
+the event journal, and on a disconnected desktop the journal's key is unlocked by the
+operator's own passphrase or OS session (DN-22 amendments 3 and 4). So the operator who
+can rewrite the audit file can reseal the journal with a head to match (GAP-208, the
+comprehensive review's §5 finding 1). D-142 chose the answer, and the owner's four choices
+of 2026-10-27, each the recommended default, settle how:
+
+| Question | Chosen |
+|---|---|
+| Who unlocks the signing key | An administrator, with a passphrase the operator does not hold, when the desktop starts |
+| Who detects a rewrite on reconnect | The node judges each forwarded head's signature and what it contradicts; the desktop checks its file against the node's heads and forwards what it found |
+| While the key is locked | Anchors are journaled unsigned and said so; nothing is refused |
+| The node's own anchors | Not signed: its operator cannot reach them |
+
+**The key.** `KeyPurpose::AuditSigning`, a P-256 key in its own sealed file under
+`<data dir>/audit-signing/` (DN-22 amendment 3's format), made once by
+`gungnir-app audit-key provision`, which prints the public half for
+`security.audit_signing.public_key_pem`. An existing key is never replaced. Unlocking is
+refused when the key that opens is not the one the baseline names. Every attempt, opened or
+refused, is an `audit.signing_unlock` entry.
+
+**What is signed.** Every head the desktop journals: each periodic and closing anchor, and
+each head of a verification's inventory, so a rewritten journal cannot carry a forged
+inventory either. The signature covers the segment, the line count, the sequence number
+and the hash, in a fixed text form. Verification reports which heads were signed, which
+were not, and which carry a signature the key did not make. Only the last is damage: an
+unsigned head is also what an honest desktop writes while the key is locked.
+
+**The node.** A linked desktop posts its heads to `POST /v3/audit/anchors`. The node holds
+them under the name the desktop's certificate was verified under, never the body's, and
+journals each as `AuditEvent::Forwarded` with its signature verdict. It also records what
+the head contradicts in what it already held: the same line count with another hash is a
+rewrite, and fewer lines than a head already held is a cut. On each connection the desktop
+reads `GET /v3/audit/anchors`, checks every segment against those heads, this run's
+included, and forwards what it found as `AuditEvent::ForwardedVerification`.
+
+**What it does not claim.** Once unlocked, the key is in the running desktop's memory, and
+someone able to read that process's memory can sign. The node then still holds every head
+forwarded while linked, and that is the check this does not depend on the desktop for. A
+segment gone entirely is left to the local verification, because the node does not know
+which segments retention purged.
+
+Human-owned (`gungnir-security`, the `gungnir-api` routes); see
+[`../signatures.md`](../signatures.md). The record item is
+[`../record/2026-10-27/gap-208-audit-anchors-signed-and-held-by.md`](../record/2026-10-27/gap-208-audit-anchors-signed-and-held-by.md).
+Verification: `gungnir-security/src/audit/signing.rs`'s tests; `gungnir-node/src/desktop_anchors.rs`
+(a rewrite and a cut found from the heads alone); `gungnir-api/tests/audit_anchors.rs`
+(over mutual TLS); `gungnir-app/tests/audit_signing.rs` (unlock, refusal, and a cut file
+found against the node's heads on reconnect).
+
 ## Traceability
 
 GAP-057; CAP-6.1, and CAP-6.2/CAP-6.3 through PN-20; D-02 for the mechanism, D-20 for the

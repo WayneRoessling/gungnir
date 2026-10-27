@@ -983,6 +983,19 @@ fn audit_head(segment: &str, entries: u64) -> AuditHead {
         entries,
         seq: entries + 1_000,
         hash: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08".into(),
+        signature: None,
+    }
+}
+
+/// GAP-208: a head as a desktop with its signing key unlocked takes it.
+fn signed_head(segment: &str, entries: u64) -> AuditHead {
+    AuditHead {
+        signature: Some(gungnir_model::events::AnchorSignature {
+            key_version: 1,
+            scheme: "ecdsa-p256-sha256".into(),
+            der_hex: "3045022100ab".into(),
+        }),
+        ..audit_head(segment, entries)
     }
 }
 
@@ -991,6 +1004,11 @@ fn audit_events() -> Vec<AuditEvent> {
         AuditEvent::Anchored {
             head: audit_head("audit-000007.jsonl", 64),
             closing: true,
+            at: T0,
+        },
+        AuditEvent::Anchored {
+            head: signed_head("audit-000008.jsonl", 64),
+            closing: false,
             at: T0,
         },
         AuditEvent::Verified {
@@ -1015,6 +1033,27 @@ fn audit_events() -> Vec<AuditEvent> {
             idle_days: 366.7,
             max_audit_log_age_days: 365,
             completed: false,
+            at: T2,
+        },
+        AuditEvent::Forwarded {
+            party: "desktop-3f9a".into(),
+            head: signed_head("audit-000008.jsonl", 64),
+            verdict: gungnir_model::events::AnchorVerdict::Signed { key_version: 1 },
+            finding: None,
+            at: T2,
+        },
+        AuditEvent::Forwarded {
+            party: "desktop-3f9a".into(),
+            head: audit_head("audit-000008.jsonl", 64),
+            verdict: gungnir_model::events::AnchorVerdict::Unsigned,
+            finding: Some(
+                "audit-000008.jsonl at entry 64 has another hash than the one held".into(),
+            ),
+            at: T2,
+        },
+        AuditEvent::ForwardedVerification {
+            party: "desktop-3f9a".into(),
+            findings: vec!["audit-000008.jsonl line 64 is not the entry the journal holds".into()],
             at: T2,
         },
     ]
@@ -1338,6 +1377,28 @@ impl Variant for ReviewEvent {
     }
 }
 
+impl Variant for gungnir_model::events::AnchorVerdict {
+    fn variant(&self) -> &'static str {
+        match self {
+            Self::Signed { .. } => "Signed",
+            Self::Unsigned => "Unsigned",
+            Self::BadSignature => "BadSignature",
+            Self::NoKeyConfigured => "NoKeyConfigured",
+        }
+    }
+}
+
+/// GAP-208: every verdict the node gives a forwarded audit head.
+fn anchor_verdicts() -> Vec<gungnir_model::events::AnchorVerdict> {
+    use gungnir_model::events::AnchorVerdict;
+    vec![
+        AnchorVerdict::Signed { key_version: 2 },
+        AnchorVerdict::Unsigned,
+        AnchorVerdict::BadSignature,
+        AnchorVerdict::NoKeyConfigured,
+    ]
+}
+
 impl Variant for VerdictSummary {
     fn variant(&self) -> &'static str {
         match self {
@@ -1396,6 +1457,8 @@ impl Variant for AuditEvent {
             Self::Anchored { .. } => "Anchored",
             Self::Verified { .. } => "Verified",
             Self::Purged { .. } => "Purged",
+            Self::Forwarded { .. } => "Forwarded",
+            Self::ForwardedVerification { .. } => "ForwardedVerification",
         }
     }
 }
@@ -1564,6 +1627,10 @@ fn event_tables() -> BTreeMap<&'static str, BTreeSet<String>> {
         (
             "VerdictSummary",
             enum_round_trip("VerdictSummary", &verdicts()),
+        ),
+        (
+            "AnchorVerdict",
+            enum_round_trip("AnchorVerdict", &anchor_verdicts()),
         ),
         (
             "HealthEvent",

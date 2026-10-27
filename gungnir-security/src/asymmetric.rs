@@ -47,6 +47,7 @@ fn purpose_code(purpose: KeyPurpose) -> u8 {
         KeyPurpose::TransportIdentity => 1,
         KeyPurpose::JournalAtRest => 2,
         KeyPurpose::BaselineSigning => 3,
+        KeyPurpose::AuditSigning => 4,
     }
 }
 

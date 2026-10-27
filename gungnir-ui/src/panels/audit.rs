@@ -167,6 +167,11 @@ pub struct AuditRecordView<'a> {
     pub shown: Option<ShownSegment<'a>>,
     /// Whether and how old audit segments are purged.
     pub retention: &'a str,
+    /// Whether this desktop's anchors are being signed, and which heads were (GAP-208).
+    pub signing: &'a str,
+    /// The baseline names an audit-signing key and nobody has unlocked it this run: PN-20
+    /// offers the administrator's passphrase field.
+    pub signing_locked: bool,
 }
 
 impl AuditRecordView<'static> {
@@ -178,6 +183,8 @@ impl AuditRecordView<'static> {
         segments: &[],
         shown: None,
         retention: "",
+        signing: "",
+        signing_locked: false,
     };
 }
 
@@ -193,6 +200,9 @@ pub struct SignInDraft {
     /// The assign-role form (GAP-057): the operator and the role name chosen.
     pub assign_operator: String,
     pub assign_role: String,
+    /// The administrator's audit-signing passphrase (GAP-208). Cleared by the host on
+    /// submit, whatever the outcome.
+    pub audit_signing_passphrase: String,
 }
 
 /// The role names PN-20 offers, in the order `gungnir_security::Role` declares them.
@@ -241,6 +251,10 @@ pub enum SessionAction {
     },
     /// Stop showing the node's segment.
     HideNodeAuditSegment,
+    /// Unlock the audit-signing key with the passphrase in
+    /// [`SignInDraft::audit_signing_passphrase`] (GAP-208, D-142): the administrator's,
+    /// not the operator's.
+    UnlockAuditSigning,
 }
 
 /// PN-20's audit-record section: the verification, every segment with its state, and an
@@ -249,6 +263,7 @@ fn draw_record(
     ui: &mut Ui,
     palette: &theme::Palette,
     record: &AuditRecordView<'_>,
+    draft: &mut SignInDraft,
 ) -> Option<SessionAction> {
     let mut action = None;
     ui.separator();
@@ -268,6 +283,34 @@ fn draw_record(
                 .small()
                 .color(palette.muted_text_color()),
         );
+    }
+    // GAP-208: whether anchors are signed, said in the warning colour while they are not.
+    if !record.signing.is_empty() {
+        let colour = if record.signing_locked {
+            palette.warning_color
+        } else {
+            palette.muted_text_color()
+        };
+        ui.label(RichText::new(record.signing).color(colour));
+    }
+    if record.signing_locked {
+        ui.horizontal(|ui| {
+            ui.label("Administrator's audit-signing passphrase:");
+            ui.add(
+                egui::TextEdit::singleline(&mut draft.audit_signing_passphrase)
+                    .password(true)
+                    .desired_width(160.0),
+            );
+            if ui
+                .add_enabled(
+                    !draft.audit_signing_passphrase.is_empty(),
+                    egui::Button::new("Unlock audit signing"),
+                )
+                .clicked()
+            {
+                action = Some(SessionAction::UnlockAuditSigning);
+            }
+        });
     }
     if ui.button("Verify now").clicked() {
         action = Some(SessionAction::VerifyAuditRecord);
@@ -703,7 +746,7 @@ pub fn render_audit(
 
     draw_handoffs(ui, palette, view);
 
-    if let Some(a) = draw_record(ui, palette, &view.record) {
+    if let Some(a) = draw_record(ui, palette, &view.record, draft) {
         action = Some(a);
     }
     if let Some(node) = &view.node {

@@ -284,6 +284,8 @@ IE-33,Information Elements,InformationElement,Mission and SessionId,A session wi
 IE-accepted-gap,Information Elements,InformationElement,AcceptedGap,"A coverage gap as an acceptance names it: enough to find the same gap in a later coverage report (DN-33 \u00a74, \u00a75).",Class
 IE-acknowledgement,Information Elements,InformationElement,Acknowledgement,"Something the person deciding a plan was told and acknowledged before acting on it (GAP-107, docs/design/DN-26-laydown-options.md \u00a711 item 6): carried on the decision record and on CommandEvent::Decided, so what they were told travels with what they decided.",Class
 IE-algorithm-baseline-id,Information Elements,InformationElement,AlgorithmBaselineId,"Which candidate, in which profile.",Class
+IE-anchor-signature,Information Elements,InformationElement,AnchorSignature,"An audit head's signature (GAP-208): which version of the deployment's audit-signing key made it, the scheme, and the signature, DER, hex.",Class
+IE-anchor-verdict,Information Elements,InformationElement,AnchorVerdict,"What the node made of a head a desktop forwarded, by its signature (GAP-208).",Class
 IE-anomaly-settings,Information Elements,InformationElement,AnomalySettings,"Which anomaly detectors a baseline turns on, and how each is tuned.",Class
 IE-arbitration-facts,Information Elements,InformationElement,ArbitrationFacts,"What the rule reads from one side of a conflict, and nothing else.",Class
 IE-arbitration-ground,Information Elements,InformationElement,ArbitrationGround,Why the rule kept the side it kept.,Class

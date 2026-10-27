@@ -950,6 +950,78 @@ pub struct AuditHead {
     pub seq: u64,
     /// The head line's SHA-256, hex, as the line stores it.
     pub hash: String,
+    /// The desktop's audit-signing key's signature over the four fields above (GAP-208,
+    /// D-142), when the key was unlocked as the head was taken. Absent on a head taken
+    /// with the key locked, on every head written before GAP-208, and on the node's own,
+    /// which its operator cannot reach to rewrite (the owner's choice of 2026-10-27).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<AnchorSignature>,
+}
+
+/// An audit head's signature (GAP-208): which version of the deployment's audit-signing
+/// key made it, the scheme, and the signature, DER, hex.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AnchorSignature {
+    pub key_version: u32,
+    /// `ecdsa-p256-sha256`, the only scheme there is; named so a reader of the record
+    /// does not have to know that.
+    pub scheme: String,
+    pub der_hex: String,
+}
+
+impl AnchorSignature {
+    /// The scheme every anchor is signed under (`gungnir_security`'s `SCHEME`).
+    pub const SCHEME: &'static str = "ecdsa-p256-sha256";
+
+    /// A signature from its DER bytes.
+    #[must_use]
+    pub fn from_der(key_version: u32, der: &[u8]) -> Self {
+        use std::fmt::Write as _;
+        let der_hex = der
+            .iter()
+            .fold(String::with_capacity(der.len() * 2), |mut s, b| {
+                let _ = write!(s, "{b:02x}");
+                s
+            });
+        Self {
+            key_version,
+            scheme: Self::SCHEME.to_owned(),
+            der_hex,
+        }
+    }
+
+    /// The DER bytes back, or `None` for a hex string that is not one -- which a
+    /// verifier reads as a signature that does not verify.
+    #[must_use]
+    pub fn der(&self) -> Option<Vec<u8>> {
+        let hex = self.der_hex.as_bytes();
+        if !hex.len().is_multiple_of(2) {
+            return None;
+        }
+        hex.chunks(2)
+            .map(|pair| {
+                std::str::from_utf8(pair)
+                    .ok()
+                    .and_then(|p| u8::from_str_radix(p, 16).ok())
+            })
+            .collect()
+    }
+}
+
+/// What the node made of a head a desktop forwarded, by its signature (GAP-208).
+///
+/// Externally tagged, as every enum on the journal is, so a reader of the record sees the
+/// variant's own name.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum AnchorVerdict {
+    /// Signed by the baseline's audit-signing key, this version.
+    Signed { key_version: u32 },
+    /// Carries no signature: the desktop's key was locked, or the head predates GAP-208.
+    Unsigned,
+    /// Carries a signature the baseline's key did not make, or not over this head.
+    BadSignature,
+    /// The node's baseline names no audit-signing key, so nothing could be checked.
+    NoKeyConfigured,
 }
 
 /// The audit log's head, kept in the event journal beside it (GAP-163, D-104; GAP-152,
@@ -1001,6 +1073,30 @@ pub enum AuditEvent {
         max_audit_log_age_days: u32,
         /// An interrupted earlier purge began this removal.
         completed: bool,
+        at: MissionTime,
+    },
+    /// **On the node's journal**: a head a linked desktop forwarded of its own audit log
+    /// (GAP-208, D-142), so the node holds a head the desktop's operator cannot reach.
+    ///
+    /// `party` is the desktop, by the name its certificate was verified under. `verdict`
+    /// is the signature check against the node's baseline; `finding`, when there is one,
+    /// is what the head contradicts in what the node already held for that segment: the
+    /// same line count with another hash (rewritten), or fewer lines than a head already
+    /// held (cut).
+    Forwarded {
+        party: String,
+        head: AuditHead,
+        verdict: AnchorVerdict,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        finding: Option<String>,
+        at: MissionTime,
+    },
+    /// **On the node's journal**: what a linked desktop found when it checked its audit
+    /// file against the heads this node holds for it, on reconnect (GAP-208). Empty
+    /// `findings` is a desktop whose file reaches every one.
+    ForwardedVerification {
+        party: String,
+        findings: Vec<String>,
         at: MissionTime,
     },
 }

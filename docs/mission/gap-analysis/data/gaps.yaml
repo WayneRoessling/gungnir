@@ -12114,6 +12114,15 @@
     note: >-
       D-142 taken 2026-10-26: a deployment `AuditSigning` purpose provisioned with the
       baseline; anchors forwarded to the node when linked. The action stands.
+  - date: 2026-10-27
+    status: Closed
+    note: >-
+      Built. The desktop signs every audit head with an `AuditSigning` key sealed under the
+      administrator's passphrase, unlocked on PN-20; verification says which heads were
+      signed. Heads go to the node, which judges each signature and finds a rewrite or a
+      cut from the heads alone, and the desktop checks its file against the node's heads
+      on reconnect. DN-23 §16 records the owner's four choices. See
+      `../../record/2026-10-27/gap-208-audit-anchors-signed-and-held-by.md`.
 
 - id: GAP-209
   name: Reconciliation arbitration ranks a role string the desktop's own journal asserts

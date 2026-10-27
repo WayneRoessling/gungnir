@@ -570,6 +570,7 @@ mod tests {
                 authentication: gungnir_config::AuthenticationConfig::default(),
                 tls: gungnir_config::TlsClientConfig::default(),
                 escrow: None,
+                audit_signing: None,
             },
             ..ConfigBaseline::default()
         };

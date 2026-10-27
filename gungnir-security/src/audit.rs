@@ -51,6 +51,8 @@
 
 pub mod anchor;
 pub mod retention;
+// GAP-208: anchors signed under a key the operator's session does not hold.
+pub mod signing;
 
 pub use anchor::{
     verify_audit_record, AnchorFinding, AnchorLedger, HeadStatement, SegmentReport, SegmentState,
@@ -103,6 +105,10 @@ pub mod events {
     pub const ANCHOR_MISMATCH: &str = "audit.anchor_mismatch";
     /// Retention removed a segment past the deployment's audit-log age (GAP-152, D-105).
     pub const PURGED: &str = "audit.purged";
+    /// An attempt to unlock the audit-signing key, and whether it opened (GAP-208,
+    /// D-142). Recorded either way, because a failed unlock is somebody trying the
+    /// administrator's passphrase.
+    pub const SIGNING_UNLOCK: &str = "audit.signing_unlock";
 }
 
 /// A head is handed to the host once this many entries have been written since the
@@ -136,6 +142,11 @@ pub struct SegmentHead {
     pub seq: u64,
     /// The head line's hash, as the line stores it.
     pub hash: String,
+    /// The audit-signing key's signature over the four fields above (GAP-208), when the
+    /// host had the key unlocked. Not part of what a segment is compared against: a file
+    /// reaches a head or it does not, signed or not, and [`signing::signing_report`] says
+    /// separately which heads were signed.
+    pub signature: Option<signing::AnchorSignature>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -481,6 +492,8 @@ impl FileAuditLog {
             entries: self.segment_entries,
             seq: self.next_seq.saturating_sub(1),
             hash: self.head.clone(),
+            // Signed by the host, which holds the key; this crate takes the head.
+            signature: None,
         })
     }
 

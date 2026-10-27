@@ -111,6 +111,43 @@ file (D-39). On Windows the file inherits its directory's permissions; the comma
 Point the baseline at the file with `security.authentication.local_accounts.accounts_path`
 and sign in on PN-20. The roles are `operator`, `supervisor`, `analyst`, `sensor-manager`,
 `administrator`, `commander`, `planner`, `security-officer` and `intelligence-analyst`.
+## Signing the desktop's audit anchors
+
+A desktop's audit log is a hash chain with its head kept in the event journal. On a
+disconnected laptop the operator's own keystore unlocks that journal, so the head alone
+cannot show that the operator did not rewrite the log. Two things close that (GAP-208,
+D-142).
+
+**A signing key the operator does not hold.** An administrator provisions it once, on the
+desktop, into its data directory. The passphrase is the administrator's, read from
+standard input:
+
+```bash
+printf '%s' 'the administrator passphrase' | gungnir-app audit-key provision ./gungnir-journal
+```
+
+It prints a public key. Put it in the baseline:
+
+```json
+{ "security": { "audit_signing": { "public_key_pem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n" } } }
+```
+
+When the desktop starts, its status alerts say anchors are unsigned. An administrator types
+the passphrase into PN-20's "Unlock audit signing" field. From then on every head is signed,
+and PN-20 says which heads were signed and which were not. Every unlock attempt is on the
+audit record, the refused ones included. A desktop nobody unlocks still runs, and says so.
+
+**The node holds the heads.** A desktop linked to a node forwards each head as it is taken,
+and its whole inventory at start. The node judges each signature against the same public
+key, so the node's baseline needs `security.audit_signing` too. On every reconnect the
+desktop checks its file against the heads the node holds and reports what it found to the
+node. A log cut or rewritten after its head reached the node is found there, whatever the
+desktop's own journal says.
+
+The passphrase protects the key file at rest. Once unlocked, the key is in the running
+desktop's memory, so the node's copy of the heads is the check that does not depend on the
+desktop.
+
 ## Time on a site with no NTP or GNSS
 
 Mission time is the host's clock unless the baseline says otherwise. A laptop with no NTP

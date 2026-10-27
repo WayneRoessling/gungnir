@@ -1069,6 +1069,14 @@ IE-algorithm-baseline-id,uafId,IE-algorithm-baseline-id
 IE-algorithm-baseline-id,uafKind,InformationElement
 IE-algorithm-baseline-id,registry.code,gungnir_model::AlgorithmBaselineId
 IE-algorithm-baseline-id,registry.domain,"Core identifiers, frames & quality"
+IE-anchor-signature,uafId,IE-anchor-signature
+IE-anchor-signature,uafKind,InformationElement
+IE-anchor-signature,registry.code,gungnir_model::AnchorSignature
+IE-anchor-signature,registry.domain,Events & the record
+IE-anchor-verdict,uafId,IE-anchor-verdict
+IE-anchor-verdict,uafKind,InformationElement
+IE-anchor-verdict,registry.code,gungnir_model::AnchorVerdict
+IE-anchor-verdict,registry.domain,Events & the record
 IE-anomaly-settings,uafId,IE-anomaly-settings
 IE-anomaly-settings,uafKind,InformationElement
 IE-anomaly-settings,registry.code,gungnir_model::AnomalySettings

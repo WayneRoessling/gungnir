@@ -4314,6 +4314,10 @@ fn the_audit_panel_names_a_cut_segment_and_shows_an_earlier_run() {
                 sound: true,
             }),
             retention: "Audit segments are never purged: the baseline declares no retention.",
+            // GAP-208: the key is configured and locked, so the unlock field is drawn.
+            signing: "Audit anchors are UNSIGNED: no administrator has unlocked the \
+                      audit-signing key this run.",
+            signing_locked: true,
         },
         // GAP-179, D-116: the node's record beside this desktop's own.
         node: Some(crate::panels::audit::NodeAuditRecordView {
@@ -4356,6 +4360,10 @@ fn the_audit_panel_names_a_cut_segment_and_shows_an_earlier_run() {
         "Each read is recorded on the node's own audit record.",
         "audit-000004.jsonl on the node (read only)",
         "read the audit record's verification and segment list",
+        // GAP-208.
+        "Audit anchors are UNSIGNED",
+        "Administrator's audit-signing passphrase:",
+        "Unlock audit signing",
     ] {
         assert!(
             frame.says(said),

@@ -192,6 +192,12 @@ pub fn apply(state: &mut AppState, draft: &mut SignInDraft, action: SessionActio
         SessionAction::ShowNodeAuditSegment(index) => crate::node_audit::show(state, index),
         SessionAction::PageNodeAuditSegment { older } => crate::node_audit::page(state, older),
         SessionAction::HideNodeAuditSegment => crate::node_audit::hide(state),
+        // GAP-208, D-142: the administrator's passphrase, taken out of the draft whatever
+        // happens, so it never outlives the attempt.
+        SessionAction::UnlockAuditSigning => {
+            let passphrase = std::mem::take(&mut draft.audit_signing_passphrase);
+            crate::audit_record::unlock_signing(state, &passphrase);
+        }
         SessionAction::SignOut => {
             let was = state.attributed_operator();
             state.sign_out();

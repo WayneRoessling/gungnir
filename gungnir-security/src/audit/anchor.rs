@@ -138,6 +138,12 @@ impl AnchorLedger {
         self.expected.get(segment)
     }
 
+    /// Every head the journal holds, by segment name (GAP-208, for
+    /// [`super::signing::signing_report`]).
+    pub fn heads(&self) -> impl Iterator<Item = &SegmentHead> {
+        self.expected.values()
+    }
+
     /// Whether the journal held any head at all.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -403,6 +409,9 @@ fn compare(
             entries: scan.entries,
             seq,
             hash,
+            // The file's own head, taken by this verification: the host signs an
+            // inventory before it journals one.
+            signature: None,
         })
     } else {
         None
@@ -609,6 +618,7 @@ mod tests {
             entries,
             seq: entries,
             hash: "x".into(),
+            signature: None,
         };
         let mut asked = 0;
         let sessions = vec![
