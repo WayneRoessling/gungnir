@@ -145,7 +145,7 @@ pub use rhythm::{
     absence_is_planned, MaintenanceState, MaintenanceWindow, ProductKind, Schedule,
     ScheduledProduct,
 };
-pub use time::MissionTime;
+pub use time::{ClockDisciplineState, ClockStamps, MissionTime};
 pub use uas_identification::{
     OperationalRisk, UasAltitudeReference, UasCertificationCategory, UasIdentificationReport,
     EGM2008_MAX_ABS_SEPARATION_M, UNKNOWN_UAS_HEIGHT_BOUND_M,

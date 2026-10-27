@@ -47,6 +47,16 @@ pub struct ClockSyncLine {
     pub sources_observed: u32,
     pub sources_out_of_sync: u32,
     pub max_skew_s: f32,
+    /// Which sensor disciplines this host's clock and what it is doing (GAP-205), or
+    /// `None` when the clock is the host's as it stands.
+    pub discipline: Option<DisciplineLine>,
+}
+
+/// The clock's discipline, for PN-09 (GAP-205).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DisciplineLine {
+    pub sensor: u32,
+    pub state: gungnir_model::ClockDisciplineState,
 }
 
 /// What the tracker's late-data policy did (GAP-114): the policy in force, and every
@@ -676,12 +686,70 @@ fn render_detectors(ui: &mut egui::Ui, palette: &theme::Palette, detectors: &[De
     }
 }
 
+/// Which source disciplines this host's clock (GAP-205), drawn above the skew line
+/// because the skew figures are measured against this clock.
+///
+/// **Says the undisciplined case too**, because a host clock nobody corrects is the
+/// assumption every skew figure below rests on, and a site with no NTP or GNSS should know
+/// it is making it.
+pub fn discipline_sentence(discipline: Option<DisciplineLine>) -> String {
+    use gungnir_model::ClockDisciplineState as S;
+    let Some(DisciplineLine { sensor, state }) = discipline else {
+        return "Clock: this host's own, not disciplined from any sensor".to_owned();
+    };
+    match state {
+        S::Waiting => format!(
+            "Clock disciplined by sensor {sensor}: waiting for its first report; mission \
+             time is this host's clock until then"
+        ),
+        S::Locked {
+            offset_s, samples, ..
+        } => format!(
+            "Clock disciplined by sensor {sensor}: locked; host {} by {:.3} s over {samples} \
+             report(s)",
+            if offset_s >= 0.0 { "ahead" } else { "behind" },
+            offset_s.abs()
+        ),
+        S::Holdover {
+            offset_s,
+            last_sample,
+        } => format!(
+            "Clock disciplined by sensor {sensor}: holding over since T+{:.0} s at {offset_s:+.3} s",
+            last_sample.0
+        ),
+        S::Refused { offset_s } => format!(
+            "Clock discipline refused: sensor {sensor} reads {:.0} s from this host; set the \
+             host clock by hand",
+            offset_s.abs()
+        ),
+    }
+}
+
+fn render_discipline(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    discipline: Option<DisciplineLine>,
+) {
+    use gungnir_model::ClockDisciplineState as S;
+    let color = match discipline.map(|d| d.state) {
+        None | Some(S::Locked { .. }) => palette.muted_text_color(),
+        Some(S::Waiting | S::Holdover { .. }) => palette.warning_color,
+        Some(S::Refused { .. }) => palette.alert_color,
+    };
+    ui.label(
+        RichText::new(discipline_sentence(discipline))
+            .color(color)
+            .size(palette.small_font_size),
+    );
+}
+
 /// Clock skew across sources, judged against the late-data policy (GAP-008, MOP-09).
 ///
 /// **Says how many sources the figure covers**, because "no skew" across nothing is the
 /// statement this element used to make.
 fn render_clocks(ui: &mut egui::Ui, palette: &theme::Palette, clocks: ClockSyncLine) {
     ui.separator();
+    render_discipline(ui, palette, clocks.discipline);
     if clocks.sources_observed == 0 {
         ui.label(
             RichText::new("Clock sync: no source heard from yet")

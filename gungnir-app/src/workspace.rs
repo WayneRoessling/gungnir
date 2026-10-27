@@ -834,6 +834,13 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
                 sources_observed: sync.sources_observed,
                 sources_out_of_sync: sync.sources_out_of_sync,
                 max_skew_s: sync.max_clock_skew_s,
+                // GAP-205: which sensor disciplines this clock and what it is doing.
+                discipline: state.clock_discipline.as_ref().map(|h| {
+                    gungnir_ui::panels::sensor_health::DisciplineLine {
+                        sensor: h.sensor(),
+                        state: h.state(),
+                    }
+                }),
             },
             late_data,
             detectors: &detectors,

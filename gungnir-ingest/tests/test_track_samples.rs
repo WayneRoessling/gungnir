@@ -98,7 +98,7 @@ fn every_sample_set_replays_without_quarantine() {
             for event in gateway.tick(MissionTime(now), &mut sink) {
                 match event {
                     IngestEvent::Accepted(_) => accepted += 1,
-                    IngestEvent::Quarantined { sensor, reason } => {
+                    IngestEvent::Quarantined { sensor, reason, .. } => {
                         quarantined.push(format!("sensor {} at t={now}: {reason}", sensor.0));
                     }
                     // The spy always accepts, so this cannot happen here. Named rather

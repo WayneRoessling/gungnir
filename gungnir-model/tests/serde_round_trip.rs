@@ -469,6 +469,16 @@ fn ingest_events() -> Vec<IngestEvent> {
     out.push(IngestEvent::Quarantined {
         sensor: SensorId(3),
         reason: "timestamp 0.1 s in the future".into(),
+        stamps: None,
+    });
+    // GAP-205: a clock-rule quarantine carries the report's stamps.
+    out.push(IngestEvent::Quarantined {
+        sensor: SensorId(3),
+        reason: "source time is ahead of receipt time".into(),
+        stamps: Some(gungnir_model::ClockStamps {
+            source_time: T2,
+            receipt_time: T1,
+        }),
     });
     out.push(IngestEvent::NotAccepted {
         sensor: SensorId(4),
@@ -850,12 +860,43 @@ fn verdicts() -> Vec<VerdictSummary> {
 }
 
 fn health_events() -> Vec<HealthEvent> {
-    vec![HealthEvent::Changed {
-        tracking_healthy: true,
-        intercept_healthy: false,
-        ingest_healthy: true,
-        at: T1,
-    }]
+    use gungnir_model::ClockDisciplineState as S;
+    vec![
+        HealthEvent::Changed {
+            tracking_healthy: true,
+            intercept_healthy: false,
+            ingest_healthy: true,
+            at: T1,
+        },
+        // GAP-205: each discipline state, so every tag round-trips.
+        HealthEvent::ClockDiscipline {
+            sensor: SensorId(7),
+            state: S::Waiting,
+            at: T0,
+        },
+        HealthEvent::ClockDiscipline {
+            sensor: SensorId(7),
+            state: S::Locked {
+                offset_s: -39.98,
+                samples: 12,
+                last_sample: T1,
+            },
+            at: T1,
+        },
+        HealthEvent::ClockDiscipline {
+            sensor: SensorId(7),
+            state: S::Holdover {
+                offset_s: -39.98,
+                last_sample: T1,
+            },
+            at: T2,
+        },
+        HealthEvent::ClockDiscipline {
+            sensor: SensorId(7),
+            state: S::Refused { offset_s: 7200.5 },
+            at: T2,
+        },
+    ]
 }
 
 fn warning_events() -> Vec<WarningEvent> {
@@ -1311,6 +1352,7 @@ impl Variant for HealthEvent {
     fn variant(&self) -> &'static str {
         match self {
             Self::Changed { .. } => "Changed",
+            Self::ClockDiscipline { .. } => "ClockDiscipline",
         }
     }
 }

@@ -70,7 +70,7 @@ fn a_set_generated_from_rust_replays_without_quarantine_under_its_own_allow_list
         for event in gateway.tick(MissionTime(now), &mut sink) {
             match event {
                 IngestEvent::Accepted(_) => accepted += 1,
-                IngestEvent::Quarantined { sensor, reason } => {
+                IngestEvent::Quarantined { sensor, reason, .. } => {
                     quarantined.push(format!("sensor {}: {reason}", sensor.0));
                 }
                 IngestEvent::NotAccepted { .. } => {}

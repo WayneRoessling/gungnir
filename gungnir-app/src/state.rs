@@ -29,7 +29,7 @@ use gungnir_model::{
 use gungnir_security::{FileAuditLog, Role};
 use gungnir_sensor_management::InMemorySensorRegistry;
 use gungnir_store::{DurabilityPolicy, EventJournal, FileEventJournal, SessionId, StoreError};
-use gungnir_time::{TimeAuthority, WallClockAuthority};
+use gungnir_time::TimeAuthority;
 use gungnir_tracking_service::{LiveTrackingService, TrackingService};
 use gungnir_viewport3d::ViewportState;
 use gungnir_workflow::WorkspaceLayout;
@@ -454,6 +454,10 @@ pub struct AppState {
     /// Sources already alerted as out of sync (GAP-008, MOP-09): the flag is raised once
     /// per source, and PN-09 carries the live figure from then on.
     pub skew_alerted: std::collections::HashSet<u32>,
+    /// The handle of the clock's discipline, when the baseline names a sensor (GAP-205):
+    /// fed from that sensor's reports by `update::tick`, polled for state changes, and read
+    /// by PN-09. `None` on the host clock, and in a test that replaces `clock`.
+    pub clock_discipline: Option<gungnir_time::DisciplineHandle>,
     /// Resources the last planning call declined to propose (DN-04 §5, GAP-030).
     ///
     /// Copied out of the planner each tick because `intercept` is a trait object and
@@ -689,7 +693,11 @@ impl AppState {
         // GAP-114: the clock judges skew against the policy the pipeline drops by, so the
         // health panel calls a source out of sync at the lag its detections start being
         // dropped, not at a second figure of its own.
-        let clock = WallClockAuthority::new(config.time.late_data);
+        // GAP-205: disciplined from the sensor the baseline names, the host clock otherwise.
+        let (clock, clock_discipline) = gungnir_time::clock_for(
+            config.time.late_data,
+            config.time.discipline.map(|d| d.sensor),
+        );
         // GAP-111, D-87: the audit log is durable and hash-chained, beside the journal, in
         // the format the node keeps. Opened as the journal is: a desktop that could not
         // record who did what does not start, because the record C-04 asks for would be
@@ -824,7 +832,8 @@ impl AppState {
             palette,
             events: Box::new(events),
             health_monitor: gungnir_observability::SnapshotHealthMonitor::new(),
-            clock: Box::new(clock),
+            clock,
+            clock_discipline,
             backend,
             ingest,
             rhythm: crate::rhythm::RhythmState::default(),

@@ -82,6 +82,9 @@ pub enum LinkFreshness {
 pub enum ClockSource {
     Wall,
     Replay,
+    /// The host clock corrected by a named sensor's time stamps (GAP-205); PN-09 says
+    /// which sensor and whether it is locked.
+    Disciplined,
 }
 
 impl ClockSource {
@@ -90,6 +93,7 @@ impl ClockSource {
         match self {
             ClockSource::Wall => "wall",
             ClockSource::Replay => "replay",
+            ClockSource::Disciplined => "sensor-disciplined",
         }
     }
 }

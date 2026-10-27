@@ -293,6 +293,7 @@ impl IngestGateway {
                         events.push(IngestEvent::Quarantined {
                             sensor: detection.sensor,
                             reason: err.to_string(),
+                            stamps: None,
                         });
                         continue;
                     }
@@ -334,9 +335,20 @@ impl IngestGateway {
                     Err(err) => {
                         self.stats.quarantined += 1;
                         tracing::warn!(adapter = adapter.name(), sensor = detection.sensor.0, %err, "detection quarantined");
+                        // GAP-205: an authenticated report the clock rules alone refused
+                        // carries its stamps, for a clock disciplined from its sensor. An
+                        // `Unauthenticated` error never does: the stamps are only taken
+                        // after the source was admitted.
+                        let stamps = match err {
+                            IngestError::Quarantined { .. } => {
+                                gateway::clock_rule_stamps(&detection, now)
+                            }
+                            _ => None,
+                        };
                         events.push(IngestEvent::Quarantined {
                             sensor: detection.sensor,
                             reason: err.to_string(),
+                            stamps,
                         });
                     }
                 }

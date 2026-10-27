@@ -653,6 +653,7 @@ mod tests {
             Event::Ingest(IngestEvent::Quarantined {
                 sensor: SensorId(9),
                 reason: "position not finite".into(),
+                stamps: None,
             }),
             Event::Tracking(TrackingEvent::TrackInitiated(marked_track(
                 7,

@@ -103,7 +103,7 @@ fn a_live_gateway_rejects_and_counts_a_rehearsals_detection() {
     let reason = events
         .iter()
         .find_map(|e| match e {
-            IngestEvent::Quarantined { sensor, reason } if *sensor == SensorId(2) => {
+            IngestEvent::Quarantined { sensor, reason, .. } if *sensor == SensorId(2) => {
                 Some(reason.clone())
             }
             _ => None,
