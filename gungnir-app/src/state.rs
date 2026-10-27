@@ -2050,9 +2050,12 @@ fn configured_tracker(
         );
     }
     let staleness = config.policy.staleness.clone();
+    // GAP-206: each track is marked by the sources that fed it, so what the baseline
+    // releases can cross a peer link or an exchange agreement at all.
     let service = service
         .with_staleness(staleness)
-        .with_sensor_positions(sensor_positions(config));
+        .with_sensor_positions(sensor_positions(config))
+        .with_source_markings(config.source_markings());
     match applied_baseline(
         gungnir_modelops::InMemoryModelRegistry::from_baseline(config)
             .ok()

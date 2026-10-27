@@ -136,7 +136,7 @@ pub use policy_settings::{
 pub use profiles::{AlgorithmBaselineId, MissionProfile};
 pub use provenance::{Provenance, RehearsalOrigin, SourceAuthentication};
 pub use quality::Quality;
-pub use releasability::{filter_for, permits_single, Filtered, Releasability};
+pub use releasability::{filter_for, permits_single, Filtered, Releasability, SourceMarkings};
 pub use requirements::{
     lapse_overdue, CollectionRequirement, Concurrence, RequirementId, RequirementState,
 };

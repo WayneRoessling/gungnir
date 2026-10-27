@@ -200,7 +200,7 @@ history, and an entry is never edited once it has merged.
 | GAP-203 | Weapons control status cannot be changed while the desktop runs | Technical | CAP-3.6, CAP-5.9 | 5 | 10 | M | 50 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-204 | The desktop cannot provision its own accounts | Technical | CAP-6.1, CAP-7.3 | 3 | 10 | S | 30 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-205 | A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second | Technical | CAP-1.5 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
-| GAP-206 | No production track is releasable, so track exchange has no producer | Technical | CAP-6.6, CAP-7.4, CAP-1.6 | 5 | 5 | M | 25 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-206 | No production track is releasable, so track exchange has no producer | Technical | CAP-6.6, CAP-7.4, CAP-1.6 | 5 | 5 | M | 25 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-207 | An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop | Technical | CAP-4.4, CAP-4.6 | 4 | 5 | L | 20 | I3 | Services engineer | Open |
 | GAP-208 | The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks | Technical | CAP-6.3 | 4 | 9 | M | 36 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-209 | Reconciliation arbitration ranks a role string the desktop's own journal asserts | Technical | CAP-5.4, CAP-4.2 | 4 | 6 | M | 24 | I3 | Security engineer (human-owned crate) | Open |
@@ -2938,11 +2938,12 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.6 Releasability; CAP-7.4 Peer and coalition exchange; CAP-1.6 Peer early warning.
 - History:
   - 2026-10-26, Open: Filed by plan 12. GAP-062 built the marking and GAP-065 the gate; nothing in a production path ever sets a track to anything but `Internal`.
+  - 2026-10-27, Closed: Built. The pipeline records every source that fed each track, and both binaries mark a track by the most restrictive of those sources' markings, from a `releasability` section in the baseline: a deployment default and per-sensor rows. A peer's tracks stay `Internal` until GAP-218. A two-node test sends one track over mutual TLS and holds the other. Peers are fixed `Internal` by the owner's choice; DN-17 §9 records the shape. See `../../record/2026-10-27/gap-206-tracks-releasable-from-configuration.md`.
 - Evidence: `gungnir-tracking-service/src/lib.rs:355` and `gungnir-node/src/entities.rs:252` (`Releasability::default()`); `gungnir-model/src/lib.rs:454-465` (`DetectionView` carries no marking); no `releasab` in `gungnir-config/src/lib.rs`; `gungnir-remote/tests/wire_conformance.rs:120,370` (tracks built as `AllPeers`).
 - Severity: 5. Reach: 5 threads. Effort: M. Priority: 25.
 - Impact: Both projections stamp `Releasability::Internal`, no configuration field sets anything else, and the exchange gate withholds `Internal`. A track never crosses a peer link or an exchange agreement outside the tests that build it as `AllPeers`; the two-node picture the architecture describes has no producer. The same default is what today prevents the re-ingest loop GAP-218 names.
 - Closing action: A `default_releasability` per deployment and per sensor and peer in the baseline, as DN-17 §5 and §6 specified, carried on `Provenance` into `project_track` and the node's projection and combined on fusion to the most restrictive input; a two-node test that one tracker-produced track crosses the wire and one `Internal` track does not.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: DN-17 §5, §6; GAP-062; GAP-065; `../../review/2026-10-26-comprehensive-review.md` §4 finding 1.
 
 **GAP-207 An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop**

@@ -35,8 +35,9 @@ pub enum SectionKind {
     EngagementChain,
     /// Accounts and authentication, keys, TLS, escrow, machine identities, retention.
     Security,
-    /// The deployment's shape: backend, node, peers, exchange agreements, endpoints and
-    /// the rest of what a whole-baseline apply covers.
+    /// The deployment's shape: backend, node, peers, exchange agreements and the marking
+    /// that releases tracks under them (GAP-206), endpoints, and the rest of what a
+    /// whole-baseline apply covers.
     Deployment,
 }
 
@@ -76,6 +77,7 @@ pub fn changed_sections(
         sapient_node_id,
         peers,
         exchange,
+        releasability,
         machine_identities,
         resources,
         laydowns,
@@ -144,6 +146,13 @@ pub fn changed_sections(
         ),
         (peers != &was.peers, "peers", Deployment),
         (exchange != &was.exchange, "exchange", Deployment),
+        // GAP-206: the marking is the second gate of the release the exchange agreements
+        // above are the first of (DN-18 §5), so it is applied with them.
+        (
+            releasability != &was.releasability,
+            "releasability",
+            Deployment,
+        ),
         (
             machine_identities != &was.machine_identities,
             "machine_identities",

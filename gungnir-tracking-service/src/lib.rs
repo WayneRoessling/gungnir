@@ -338,10 +338,17 @@ pub fn is_stale(
 /// *asked* -- a track the pipeline had gone quiet on kept reading as freshly updated for
 /// as long as anyone kept polling. `estimate_time` is `gungnir_fusion_async::TimedTrack`'s
 /// own per-track time, so it changes only when the pipeline actually moves the track.
+///
+/// **`releasability` is the caller's to compute, from the track's own sources** (GAP-206,
+/// DN-17 §5): [`LiveTrackingService::apply_snapshot`] combines the configured marking of
+/// every source on `TimedTrack::sources`. Until GAP-206 this stamped
+/// `Releasability::default()` on every track, so no production track could ever cross a
+/// peer link or an exchange agreement.
 pub fn project_track(
     track: &Track,
     estimate_time: MissionTime,
     provenance: &Provenance,
+    releasability: gungnir_model::Releasability,
 ) -> TrackView {
     TrackView {
         id: track.id,
@@ -352,7 +359,7 @@ pub fn project_track(
         provenance: provenance.clone(),
         quality: gungnir_model::Quality::default(),
         mission_time: estimate_time,
-        releasability: gungnir_model::Releasability::default(),
+        releasability,
     }
 }
 
@@ -530,7 +537,13 @@ pub struct LiveTrackingService {
     engine: Engine,
     /// Where each sensor measures from, so an angular report can be placed at all.
     sensor_positions: SensorPositions,
+    /// What each source's contribution may be released as (GAP-206, DN-17 §6). The
+    /// default marks every source `Internal`, which is what a host that never calls
+    /// [`LiveTrackingService::with_source_markings`] has configured.
+    source_markings: gungnir_model::SourceMarkings,
     pipeline_alive: bool,
+    /// The provenance every track shares: the algorithm baseline. Each track's own
+    /// sources are added to it at projection.
     provenance: Provenance,
     /// The staleness policy in force (GAP-012). `Default` is a zero limit, which
     /// [`is_stale`] treats as "no rule configured" rather than "everything is stale".
@@ -615,6 +628,7 @@ impl LiveTrackingService {
             },
             staleness: gungnir_model::StalenessSettings::default(),
             sensor_positions: SensorPositions::default(),
+            source_markings: gungnir_model::SourceMarkings::default(),
             last_reported: std::collections::HashMap::new(),
         }
     }
@@ -656,6 +670,18 @@ impl LiveTrackingService {
     #[must_use]
     pub fn with_sensor_positions(mut self, positions: SensorPositions) -> Self {
         self.sensor_positions = positions;
+        self
+    }
+
+    /// Supply what each source's contribution may be released as (GAP-206, DN-17 §5
+    /// and §6), so each track is marked by the sources that fed it.
+    ///
+    /// Passed in as data for the reason the sensor positions are: this crate may not
+    /// depend on `gungnir-config`, and both binaries build the map from the baseline
+    /// (`ConfigBaseline::source_markings`). Without it every track is `Internal`.
+    #[must_use]
+    pub fn with_source_markings(mut self, markings: gungnir_model::SourceMarkings) -> Self {
+        self.source_markings = markings;
         self
     }
 
@@ -796,10 +822,15 @@ impl LiveTrackingService {
         self.tracks = snapshot
             .iter()
             .map(|timed| {
+                // GAP-206: the track's own sources, which are both its provenance and
+                // what its marking is combined from.
+                let mut provenance = self.provenance.clone();
+                provenance.source_sensor_ids.clone_from(&timed.sources);
                 let mut view = project_track(
                     &timed.track,
                     MissionTime(timed.estimate_time_s),
-                    &self.provenance,
+                    &provenance,
+                    self.source_markings.mark(&timed.sources),
                 );
                 let last = self
                     .last_reported
@@ -1003,6 +1034,7 @@ mod tests {
         gungnir_fusion_async::TimedTrack {
             track: track(id),
             estimate_time_s,
+            sources: Vec::new(),
         }
     }
 
@@ -1040,6 +1072,48 @@ mod tests {
         svc.apply_snapshot(&[timed(1, 17.0)], MissionTime(17.0));
         assert!(!svc.tracks()[0].quality.is_stale);
         drop(svc);
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+    }
+
+    /// GAP-206: each track is marked by the sources that fed it, and carries them on its
+    /// provenance. A track one `Internal` source touched stays in; a service given no
+    /// markings releases nothing.
+    #[test]
+    fn each_track_is_marked_by_its_own_sources() {
+        use gungnir_model::{Releasability, SourceMarkings};
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let fed_by = |id: u64, sources: Vec<u32>| gungnir_fusion_async::TimedTrack {
+            sources,
+            ..timed(id, 10.0)
+        };
+        let snapshot = [fed_by(1, vec![1]), fed_by(2, vec![1, 2])];
+
+        let mut svc = LiveTrackingService::new(runtime.handle()).with_source_markings(
+            SourceMarkings::new(Releasability::AllPeers).with_source(2, Releasability::Internal),
+        );
+        svc.apply_snapshot(&snapshot, MissionTime(10.0));
+        let tracks = svc.tracks();
+        assert_eq!(tracks[0].releasability, Releasability::AllPeers);
+        assert_eq!(tracks[0].provenance.source_sensor_ids, vec![1]);
+        assert_eq!(
+            tracks[1].releasability,
+            Releasability::Internal,
+            "one restricted source restricts the track"
+        );
+        assert_eq!(tracks[1].provenance.source_sensor_ids, vec![1, 2]);
+
+        let mut unconfigured = LiveTrackingService::new(runtime.handle());
+        unconfigured.apply_snapshot(&snapshot, MissionTime(10.0));
+        assert!(unconfigured
+            .tracks()
+            .iter()
+            .all(|t| t.releasability == Releasability::Internal));
+        drop(svc);
+        drop(unconfigured);
         runtime.shutdown_timeout(std::time::Duration::from_secs(1));
     }
 

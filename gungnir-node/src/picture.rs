@@ -114,6 +114,9 @@ pub fn sensor_positions(config: &ConfigBaseline) -> SensorPositions {
 /// and the tracker stays ungoverned, rather than running a different filter under the
 /// promoted one's identity.
 ///
+/// **And it marks every track by the sources that fed it** (GAP-206, DN-17 §5), in every
+/// case: releasability is a distribution rule, not part of an algorithm baseline.
+///
 /// **And it applies the deployment's late-data policy in every case** (GAP-114, D-98):
 /// `config.time.late_data` is time discipline, not part of an algorithm baseline, so it
 /// governs the pipeline whether a baseline is promoted, applied, refused or absent.
@@ -169,6 +172,7 @@ pub fn tracking_service(
             LiveTrackingService::with_pipeline_settings(handle, with_late_data(settings))
                 .with_staleness(config.policy.staleness.clone())
                 .with_sensor_positions(sensor_positions(config))
+                .with_source_markings(config.source_markings())
                 .with_algorithm_baseline(&baseline.id)
         }
         Some((baseline, Err(err))) => {
@@ -179,13 +183,15 @@ pub fn tracking_service(
             )
             .with_staleness(config.policy.staleness.clone())
             .with_sensor_positions(sensor_positions(config))
+            .with_source_markings(config.source_markings())
         }
         None => LiveTrackingService::with_pipeline_settings(
             handle,
             with_late_data(gungnir_tracking_service::PipelineSettings::default()),
         )
         .with_staleness(config.policy.staleness.clone())
-        .with_sensor_positions(sensor_positions(config)),
+        .with_sensor_positions(sensor_positions(config))
+        .with_source_markings(config.source_markings()),
     }
 }
 

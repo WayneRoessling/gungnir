@@ -404,6 +404,7 @@
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_A0710526_3BE1_0600_DFFD_02B59591DBD2" name="SessionId" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_3B65BBA1_4DF5_C840_FCC4_D60078323438" name="SideOutcome" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_EA0F0886_FEB1_43A4_15DA_3FBFABF9553C" name="SourceAuthentication" visibility="public"/>
+        <packagedElement xmi:type="uml:Class" xmi:id="EAID_68A859A0_A565_0E01_8266_4D14CCD2A316" name="SourceMarkings" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_FB71954D_B507_7E64_A2A9_73BBE2003E71" name="StalenessSettings" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_3B4863DA_F269_BFF7_2861_F863C19674AB" name="Term" visibility="public"/>
         <packagedElement xmi:type="uml:Class" xmi:id="EAID_540E2BBA_C836_BE66_F684_1BCCA70EE29C" name="TestTrackNumber" visibility="public"/>
@@ -10359,6 +10360,23 @@
         <extendedProperties tagged="0"/>
         <links>
           <Dependency xmi:id="EAID_01FC6C81_4AA8_2E6D_5F1A_54CFDCA9C593" start="EAID_25333D8F_10A3_4B65_5CC4_54C60CBBD915" end="EAID_EA0F0886_FEB1_43A4_15DA_3FBFABF9553C"/>
+        </links>
+      </element>
+      <element xmi:idref="EAID_68A859A0_A565_0E01_8266_4D14CCD2A316" xmi:type="uml:Class" name="SourceMarkings" scope="public">
+        <model package="EAPK_C28BC5E6_431E_003B_2A45_085E49D96456" tpos="0" ea_eleType="element"/>
+        <properties isSpecification="false" sType="Class" nType="0" scope="public" stereotype="InformationElement" documentation="What each source's contribution may be released as, and so what a product built from some of them is marked (DN-17 §5 and §6; GAP-206)."/>
+        <project author="gungnir" version="1.0" phase="1.0" created="2026-09-04 00:00:00" modified="2026-09-04 00:00:00" complexity="1" status="Proposed"/>
+        <style appearance="BackColor=-1;BorderColor=-1;BorderWidth=-1;FontColor=-1;VSwimLanes=1;HSwimLanes=1;BorderStyle=0;"/>
+        <alias alias="IE-source-markings"/>
+        <tags>
+          <tag xmi:id="EAID_E75A8C56_16C9_213B_2E1C_86D73CD459E7" name="uafKind" value="InformationElement" modelElement="EAID_68A859A0_A565_0E01_8266_4D14CCD2A316"/>
+          <tag xmi:id="EAID_FAB50487_D0B6_F374_2E70_4CE5F16F1B98" name="uafId" value="IE-source-markings" modelElement="EAID_68A859A0_A565_0E01_8266_4D14CCD2A316"/>
+          <tag xmi:id="EAID_9F7B08EF_7219_7485_80AA_D36704919A65" name="registry.code" value="gungnir_model::SourceMarkings" modelElement="EAID_68A859A0_A565_0E01_8266_4D14CCD2A316"/>
+          <tag xmi:id="EAID_83030FB9_7672_D44A_B79E_D8A6ABDF51AD" name="registry.domain" value="Assets, exchange &amp; releasability" modelElement="EAID_68A859A0_A565_0E01_8266_4D14CCD2A316"/>
+        </tags>
+        <xrefs/>
+        <extendedProperties tagged="0"/>
+        <links>
         </links>
       </element>
       <element xmi:idref="EAID_FB71954D_B507_7E64_A2A9_73BBE2003E71" xmi:type="uml:Class" name="StalenessSettings" scope="public">
@@ -34234,24 +34252,25 @@
           <element geometry="Left=2555;Top=840;Right=2715;Bottom=900;" subject="EAID_A0710526_3BE1_0600_DFFD_02B59591DBD2" seqno="154" style="HideIcon=0;DUID=8E155B99;"/>
           <element geometry="Left=20;Top=922;Right=180;Bottom=982;" subject="EAID_3B65BBA1_4DF5_C840_FCC4_D60078323438" seqno="155" style="HideIcon=0;DUID=C3895C95;"/>
           <element geometry="Left=215;Top=922;Right=375;Bottom=982;" subject="EAID_EA0F0886_FEB1_43A4_15DA_3FBFABF9553C" seqno="156" style="HideIcon=0;DUID=AEC1D6D5;"/>
-          <element geometry="Left=410;Top=922;Right=570;Bottom=982;" subject="EAID_FB71954D_B507_7E64_A2A9_73BBE2003E71" seqno="157" style="HideIcon=0;DUID=8148377F;"/>
-          <element geometry="Left=605;Top=922;Right=765;Bottom=982;" subject="EAID_3B4863DA_F269_BFF7_2861_F863C19674AB" seqno="158" style="HideIcon=0;DUID=BB45D5F1;"/>
-          <element geometry="Left=800;Top=922;Right=960;Bottom=982;" subject="EAID_540E2BBA_C836_BE66_F684_1BCCA70EE29C" seqno="159" style="HideIcon=0;DUID=AA9DAFFC;"/>
-          <element geometry="Left=995;Top=922;Right=1155;Bottom=982;" subject="EAID_9ECAF522_B44D_5A22_EADA_A68D7A217D45" seqno="160" style="HideIcon=0;DUID=FBF1BB15;"/>
-          <element geometry="Left=1190;Top=922;Right=1350;Bottom=982;" subject="EAID_C2D5D0D2_7357_077F_8032_30D417D869F6" seqno="161" style="HideIcon=0;DUID=F77AEB7A;"/>
-          <element geometry="Left=1385;Top=922;Right=1545;Bottom=982;" subject="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB" seqno="162" style="HideIcon=0;DUID=FDD2ECB5;"/>
-          <element geometry="Left=1580;Top=922;Right=1740;Bottom=982;" subject="EAID_89D82F8B_94AF_54D6_518F_BBF65D82E225" seqno="163" style="HideIcon=0;DUID=C07CFF22;"/>
-          <element geometry="Left=1775;Top=922;Right=1935;Bottom=982;" subject="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD" seqno="164" style="HideIcon=0;DUID=6B2C906F;"/>
-          <element geometry="Left=1970;Top=922;Right=2130;Bottom=982;" subject="EAID_1EF66555_FDB6_6DCE_6C44_1334186ABE36" seqno="165" style="HideIcon=0;DUID=A6435D89;"/>
-          <element geometry="Left=2165;Top=922;Right=2325;Bottom=982;" subject="EAID_BF1F7D40_C9DD_F92C_8E60_17CEF52E08F7" seqno="166" style="HideIcon=0;DUID=C834402B;"/>
-          <element geometry="Left=2360;Top=922;Right=2520;Bottom=982;" subject="EAID_64E82625_6707_3EF5_CC78_928A0767AA8B" seqno="167" style="HideIcon=0;DUID=4C28A95E;"/>
-          <element geometry="Left=2555;Top=922;Right=2715;Bottom=982;" subject="EAID_E0B422A8_7DAD_1334_BAB4_9F655D25B9C2" seqno="168" style="HideIcon=0;DUID=B47F7BE9;"/>
-          <element geometry="Left=20;Top=1004;Right=180;Bottom=1064;" subject="EAID_A9BA8C22_51CB_3A62_04BC_DCD652002896" seqno="169" style="HideIcon=0;DUID=B8BAA3DE;"/>
-          <element geometry="Left=215;Top=1004;Right=375;Bottom=1064;" subject="EAID_DC5D9917_CB8F_0AD1_0A1D_BF75D5DE151F" seqno="170" style="HideIcon=0;DUID=CFFF2B44;"/>
-          <element geometry="Left=410;Top=1004;Right=570;Bottom=1064;" subject="EAID_903C5F2D_0BED_87CD_5938_C807DBEE6E6D" seqno="171" style="HideIcon=0;DUID=23E2DA67;"/>
-          <element geometry="Left=605;Top=1004;Right=765;Bottom=1064;" subject="EAID_1FCF627C_5285_9076_6F80_DBB01040A1CA" seqno="172" style="HideIcon=0;DUID=203366A8;"/>
-          <element geometry="Left=800;Top=1004;Right=960;Bottom=1064;" subject="EAID_DAA0F716_E446_E11A_B4EC_0D423AAC1CE6" seqno="173" style="HideIcon=0;DUID=3D02E1F0;"/>
-          <element geometry="Left=10;Top=10;Right=2735;Bottom=1084;" subject="EAID_C28BC5E6_431E_003B_2A45_085E49D96456" seqno="174" style="DUID=DA0844B0;"/>
+          <element geometry="Left=410;Top=922;Right=570;Bottom=982;" subject="EAID_68A859A0_A565_0E01_8266_4D14CCD2A316" seqno="157" style="HideIcon=0;DUID=756016BE;"/>
+          <element geometry="Left=605;Top=922;Right=765;Bottom=982;" subject="EAID_FB71954D_B507_7E64_A2A9_73BBE2003E71" seqno="158" style="HideIcon=0;DUID=8148377F;"/>
+          <element geometry="Left=800;Top=922;Right=960;Bottom=982;" subject="EAID_3B4863DA_F269_BFF7_2861_F863C19674AB" seqno="159" style="HideIcon=0;DUID=BB45D5F1;"/>
+          <element geometry="Left=995;Top=922;Right=1155;Bottom=982;" subject="EAID_540E2BBA_C836_BE66_F684_1BCCA70EE29C" seqno="160" style="HideIcon=0;DUID=AA9DAFFC;"/>
+          <element geometry="Left=1190;Top=922;Right=1350;Bottom=982;" subject="EAID_9ECAF522_B44D_5A22_EADA_A68D7A217D45" seqno="161" style="HideIcon=0;DUID=FBF1BB15;"/>
+          <element geometry="Left=1385;Top=922;Right=1545;Bottom=982;" subject="EAID_C2D5D0D2_7357_077F_8032_30D417D869F6" seqno="162" style="HideIcon=0;DUID=F77AEB7A;"/>
+          <element geometry="Left=1580;Top=922;Right=1740;Bottom=982;" subject="EAID_4F5969A8_5A70_3DBB_16B7_90CD007497DB" seqno="163" style="HideIcon=0;DUID=FDD2ECB5;"/>
+          <element geometry="Left=1775;Top=922;Right=1935;Bottom=982;" subject="EAID_89D82F8B_94AF_54D6_518F_BBF65D82E225" seqno="164" style="HideIcon=0;DUID=C07CFF22;"/>
+          <element geometry="Left=1970;Top=922;Right=2130;Bottom=982;" subject="EAID_F1D867E3_1D6F_0002_95BA_73453B918FAD" seqno="165" style="HideIcon=0;DUID=6B2C906F;"/>
+          <element geometry="Left=2165;Top=922;Right=2325;Bottom=982;" subject="EAID_1EF66555_FDB6_6DCE_6C44_1334186ABE36" seqno="166" style="HideIcon=0;DUID=A6435D89;"/>
+          <element geometry="Left=2360;Top=922;Right=2520;Bottom=982;" subject="EAID_BF1F7D40_C9DD_F92C_8E60_17CEF52E08F7" seqno="167" style="HideIcon=0;DUID=C834402B;"/>
+          <element geometry="Left=2555;Top=922;Right=2715;Bottom=982;" subject="EAID_64E82625_6707_3EF5_CC78_928A0767AA8B" seqno="168" style="HideIcon=0;DUID=4C28A95E;"/>
+          <element geometry="Left=20;Top=1004;Right=180;Bottom=1064;" subject="EAID_E0B422A8_7DAD_1334_BAB4_9F655D25B9C2" seqno="169" style="HideIcon=0;DUID=B47F7BE9;"/>
+          <element geometry="Left=215;Top=1004;Right=375;Bottom=1064;" subject="EAID_A9BA8C22_51CB_3A62_04BC_DCD652002896" seqno="170" style="HideIcon=0;DUID=B8BAA3DE;"/>
+          <element geometry="Left=410;Top=1004;Right=570;Bottom=1064;" subject="EAID_DC5D9917_CB8F_0AD1_0A1D_BF75D5DE151F" seqno="171" style="HideIcon=0;DUID=CFFF2B44;"/>
+          <element geometry="Left=605;Top=1004;Right=765;Bottom=1064;" subject="EAID_903C5F2D_0BED_87CD_5938_C807DBEE6E6D" seqno="172" style="HideIcon=0;DUID=23E2DA67;"/>
+          <element geometry="Left=800;Top=1004;Right=960;Bottom=1064;" subject="EAID_1FCF627C_5285_9076_6F80_DBB01040A1CA" seqno="173" style="HideIcon=0;DUID=203366A8;"/>
+          <element geometry="Left=995;Top=1004;Right=1155;Bottom=1064;" subject="EAID_DAA0F716_E446_E11A_B4EC_0D423AAC1CE6" seqno="174" style="HideIcon=0;DUID=3D02E1F0;"/>
+          <element geometry="Left=10;Top=10;Right=2735;Bottom=1084;" subject="EAID_C28BC5E6_431E_003B_2A45_085E49D96456" seqno="175" style="DUID=DA0844B0;"/>
         </elements>
       </diagram>
       <diagram xmi:id="EAID_2D96ADBD_6E7F_803D_0705_C944F5EF0961">
@@ -34281,6 +34300,7 @@
           <element geometry="Left=479;Top=124;Right=717;Bottom=237;" subject="EAID_770E3464_F7BF_17D8_046B_1A51560058E7" seqno="13" style="HideIcon=0;DUID=37D558E6;"/>
           <element geometry="Left=7;Top=148;Right=308;Bottom=213;" subject="EAID_CFC1426D_E3D7_AD18_B2ED_F872EB62D8FB" seqno="14" style="HideIcon=0;DUID=83F51AB9;"/>
           <element geometry="Left=985;Top=345;Right=1263;Bottom=442;" subject="EAID_326F31D7_21BC_F607_40BC_502B9BA82956" seqno="15" style="HideIcon=0;DUID=6756DC95;"/>
+          <element geometry="Left=76;Top=74;Right=238;Bottom=114;" subject="EAID_68A859A0_A565_0E01_8266_4D14CCD2A316" seqno="16" style="HideIcon=0;DUID=8BC9A766;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_2EB03045_0030_F595_F73B_FCE4942AF799" style="Mode=3;EOID=71AB6D5A;SOID=13CD1CB5;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_0132A4E5_E439_7B24_A783_D5593F0AF032" style="Mode=3;EOID=697BBA38;SOID=13CD1CB5;Color=-1;LWidth=0;Hidden=0;"/>
           <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;$LLB=;LLT=;LMT=;LMB=;LRT=;LRB=;IRHS=;ILHS=;Path=;" subject="EAID_6B61A006_DAA4_CD18_65EC_D8A9C5730F82" style="Mode=3;EOID=7A6326E8;SOID=13CD1CB5;Color=-1;LWidth=0;Hidden=0;"/>
@@ -37586,6 +37606,7 @@
     <UAF:InformationElement base_Class="EAID_A0710526_3BE1_0600_DFFD_02B59591DBD2"/>
     <UAF:InformationElement base_Class="EAID_3B65BBA1_4DF5_C840_FCC4_D60078323438"/>
     <UAF:InformationElement base_Class="EAID_EA0F0886_FEB1_43A4_15DA_3FBFABF9553C"/>
+    <UAF:InformationElement base_Class="EAID_68A859A0_A565_0E01_8266_4D14CCD2A316"/>
     <UAF:InformationElement base_Class="EAID_FB71954D_B507_7E64_A2A9_73BBE2003E71"/>
     <UAF:InformationElement base_Class="EAID_3B4863DA_F269_BFF7_2861_F863C19674AB"/>
     <UAF:InformationElement base_Class="EAID_540E2BBA_C836_BE66_F684_1BCCA70EE29C"/>
