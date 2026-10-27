@@ -1820,6 +1820,13 @@ async fn run(
     if let Some(reason) = control_status.unreadable() {
         tracing::warn!(%reason, "the control status was folded from an incomplete journal");
     }
+    // GAP-208, D-142: the heads linked desktops have forwarded of their own audit logs,
+    // held from the journal, and the baseline's key their signatures are judged against.
+    let mut desktop_anchors = gungnir_node::desktop_anchors::DesktopAnchors::recover(&journal);
+    for reason in desktop_anchors.unreadable() {
+        tracing::warn!(%reason, "a journal session could not be read, so desktop audit heads in it are not held");
+    }
+    let audit_key = gungnir_node::desktop_anchors::verifying_key(&config);
 
     // GAP-114: the same late-data policy the tracker below applies, so the two agree.
     // GAP-205: disciplined from the sensor the baseline names, the host clock otherwise,
@@ -2031,6 +2038,7 @@ async fn run(
     // GAP-137). A library function, because it is a claim about this node and
     // `gungnir-node/tests/approval_queue.rs` asserts it rather than a copy of it.
     approval::claim_exchange_items(&api)?;
+    api.publish_held_anchors(desktop_anchors.latest());
     let api_rx = bus.subscribe();
     // Registered after the transport is built, so a submitted detection has somewhere to
     // arrive from. The gateway counts it as an adapter, so a node with the API enabled
@@ -2227,6 +2235,15 @@ async fn run(
         // status these changes put in force. Each change is journaled, audited and its
         // withdrawals published through the desk, so all of it is on disk in this tick's
         // append.
+        // GAP-208: the audit heads desktops forwarded, judged and journaled in this tick's
+        // append, and held for them to read back.
+        desktop_anchors.tick(
+            api.take_forwarded_anchors(),
+            &api,
+            &bus,
+            audit_key.as_ref(),
+            now,
+        )?;
         gungnir_node::control_status::tick(
             &mut control_status,
             &mut approval_desk,

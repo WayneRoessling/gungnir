@@ -43,6 +43,10 @@ pub enum KeyPurpose {
     JournalAtRest,
     /// Signing configuration baselines.
     BaselineSigning,
+    /// Signing the desktop's audit anchors (GAP-208, D-142): held in its own sealed file
+    /// under a passphrase the administrator holds, never the operator's keystore, so the
+    /// operator who can rewrite the audit file cannot sign a head for the rewrite.
+    AuditSigning,
 }
 
 /// Identifies one key version.

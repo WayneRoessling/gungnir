@@ -515,6 +515,14 @@ pub struct NodeApi {
     /// the reason `acceptances` has one: a different fact, under a different action,
     /// which only the loop can apply because only the loop holds the settings in force.
     control_status: Mutex<Vec<PendingControlStatus>>,
+    /// Audit heads linked desktops forwarded, waiting for the node loop to judge and
+    /// journal them (GAP-208, D-142).
+    forwarded_anchors: Mutex<Vec<PendingAnchors>>,
+    /// The heads the loop holds for each desktop, by the name its certificate was
+    /// verified under, as it last published them (GAP-208): what `GET /v3/audit/anchors`
+    /// answers. Published by the loop after it journals, so nothing is served here that
+    /// is not on the node's disk.
+    held_anchors: RwLock<BTreeMap<String, Vec<gungnir_model::events::AuditHead>>>,
     /// Decision requests the routes refused, waiting for the loop to audit them
     /// (GAP-132, DN-31 §9 row 4). The caller has already been answered; what is owed is
     /// the entry in the record.
@@ -761,6 +769,18 @@ impl std::fmt::Debug for PendingAcceptance {
     }
 }
 
+/// Audit heads a desktop forwarded, waiting for the node loop (GAP-208, D-142).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingAnchors {
+    /// The desktop, by the name its certificate was verified under: whose heads these are.
+    pub party: String,
+    /// Who was signed in on the link that forwarded them.
+    pub operator: OperatorId,
+    pub heads: Vec<gungnir_model::events::AuditHead>,
+    /// What the desktop found checking its file against this node's heads, when it did.
+    pub findings: Option<Vec<String>>,
+}
+
 /// A live control-status change the route let through and the node loop has not yet
 /// applied (GAP-203; DN-09 §10; D-140).
 ///
@@ -957,6 +977,8 @@ impl NodeApi {
             decisions: Mutex::new(Vec::new()),
             acceptances: Mutex::new(Vec::new()),
             control_status: Mutex::new(Vec::new()),
+            forwarded_anchors: Mutex::new(Vec::new()),
+            held_anchors: RwLock::new(BTreeMap::new()),
             refusals: Mutex::new(Vec::new()),
             forwarded: Mutex::new(Vec::new()),
             reports: Mutex::new(Vec::new()),
@@ -1081,6 +1103,38 @@ impl NodeApi {
         self.control_status
             .lock()
             .map(|mut queue| std::mem::take(&mut *queue))
+            .unwrap_or_default()
+    }
+
+    /// Take the audit heads desktops forwarded since the last call, in arrival order
+    /// (GAP-208). The loop judges each against its baseline's audit-signing key, journals
+    /// it, and publishes what it then holds through [`NodeApi::publish_held_anchors`].
+    #[must_use]
+    pub fn take_forwarded_anchors(&self) -> Vec<PendingAnchors> {
+        self.forwarded_anchors
+            .lock()
+            .map(|mut queue| std::mem::take(&mut *queue))
+            .unwrap_or_default()
+    }
+
+    /// Replace the heads held for every desktop (GAP-208). Called by the loop after the
+    /// heads are journaled, and at start from the journal.
+    pub fn publish_held_anchors(
+        &self,
+        held: BTreeMap<String, Vec<gungnir_model::events::AuditHead>>,
+    ) {
+        if let Ok(mut slot) = self.held_anchors.write() {
+            *slot = held;
+        }
+    }
+
+    /// The heads held for `party`, empty for a desktop this node has heard none from.
+    #[must_use]
+    pub fn held_anchors_for(&self, party: &str) -> Vec<gungnir_model::events::AuditHead> {
+        self.held_anchors
+            .read()
+            .ok()
+            .and_then(|held| held.get(party).cloned())
             .unwrap_or_default()
     }
 
@@ -1729,6 +1783,13 @@ pub fn router(api: Arc<NodeApi>) -> Router {
         .route(
             &crate::path(routes::POLICY_CONTROL_STATUS),
             post(set_control_status),
+        )
+        // GAP-208, D-142: a linked desktop's own audit heads, held here where its
+        // operator cannot reach, and read back on reconnect. New in `/v3`; not in
+        // `RETIRED`.
+        .route(
+            &crate::path(routes::AUDIT_ANCHORS),
+            post(forward_anchors).get(held_anchors),
         );
     RETIRED
         .iter()
@@ -3634,6 +3695,91 @@ async fn set_control_status(
              force, or retry under the same request key",
         ),
     }
+}
+
+/// `POST /v3/audit/anchors` (GAP-208, D-142): heads of the calling desktop's own audit
+/// log, for the node to hold where that desktop's operator cannot reach them.
+///
+/// **Whose heads they are is the certificate's, not the body's.** They are held under the
+/// party the handshake verified, so a desktop cannot forward heads for another, and a
+/// caller with no verified machine name is refused: a head held for nobody in particular
+/// checks nothing. Any signed-in role may forward, because the record is the desktop's and
+/// not the person's. Taken `202`: the loop judges each signature and journals each head,
+/// and nothing a desktop sends here is ever applied to anything else. Not an audit entry:
+/// a forwarded head is a statement about the desktop's record, and it goes on the node's
+/// journal as `AuditEvent::Forwarded`, where the node's own heads already are.
+async fn forward_anchors(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+    body: Result<Json<v3::AuditAnchorsForwarded>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let session = match operator_caller(&api, &headers, &peer, "forwarding audit heads") {
+        Ok(session) => session,
+        Err(response) => return response,
+    };
+    let Some(party) = peer.party.clone() else {
+        return problem(
+            StatusCode::FORBIDDEN,
+            "audit heads are held per desktop, and this connection has no verified machine \
+             name to hold them under",
+        );
+    };
+    let Json(body) = match body {
+        Ok(body) => body,
+        Err(rejection) => {
+            return problem(
+                StatusCode::BAD_REQUEST,
+                &format!("the forwarded heads do not read: {rejection}"),
+            )
+        }
+    };
+    if body.heads.len() > v3::MAX_FORWARDED_ANCHORS {
+        return problem(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            &format!(
+                "{} heads in one post; a desktop forwards at most {}",
+                body.heads.len(),
+                v3::MAX_FORWARDED_ANCHORS
+            ),
+        );
+    }
+    let Ok(mut queue) = api.forwarded_anchors.lock() else {
+        return problem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the forwarded-anchor queue lock was poisoned",
+        );
+    };
+    queue.push(PendingAnchors {
+        party,
+        operator: session.operator,
+        heads: body.heads,
+        findings: body.findings,
+    });
+    StatusCode::ACCEPTED.into_response()
+}
+
+/// `GET /v3/audit/anchors` (GAP-208): the heads this node holds for the calling desktop,
+/// one per segment, for it to check its own file against on reconnect. Another desktop's
+/// are never served: the party is the certificate's.
+async fn held_anchors(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    if let Err(response) = operator_caller(&api, &headers, &peer, "the held audit heads") {
+        return response;
+    }
+    let Some(party) = peer.party.as_deref() else {
+        return problem(
+            StatusCode::FORBIDDEN,
+            "audit heads are held per desktop, and this connection has no verified machine \
+             name",
+        );
+    };
+    lossless_json(&v3::AuditAnchorsHeld {
+        heads: api.held_anchors_for(party),
+    })
 }
 
 /// Check 3 of [`set_control_status`]: the body decodes, which validates its request key,

@@ -65,6 +65,10 @@ pub fn to_model(head: SegmentHead) -> AuditHead {
         entries: head.entries,
         seq: head.seq,
         hash: head.hash,
+        // GAP-208: carried as hex on the journal.
+        signature: head
+            .signature
+            .map(|s| gungnir_model::events::AnchorSignature::from_der(s.key_version, &s.der)),
     }
 }
 
@@ -76,6 +80,13 @@ pub fn from_model(head: &AuditHead) -> SegmentHead {
         entries: head.entries,
         seq: head.seq,
         hash: head.hash.clone(),
+        // GAP-208: hex that is not a signature reads as one that does not verify.
+        signature: head.signature.as_ref().map(|s| {
+            gungnir_security::audit::signing::AnchorSignature {
+                key_version: s.key_version,
+                der: s.der().unwrap_or_default(),
+            }
+        }),
     }
 }
 

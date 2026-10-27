@@ -232,6 +232,9 @@ pub fn tick(state: &mut AppState) {
     // 4c. The audit log's head, when one is due (GAP-163, D-104), before the drain so it
     //     is journaled in this frame.
     crate::audit_record::tick(state);
+    // GAP-208: the heads taken, to the node when one is linked, after the file has been
+    // checked against what the node holds whenever the link has just read it.
+    crate::audit_record::forward(state);
     // 4d. A read of the node's audit record PN-20 asked for, when its answer has landed
     //     (GAP-179, D-116). Never a read of its own: each is an entry on the node's record.
     crate::node_audit::poll(state);

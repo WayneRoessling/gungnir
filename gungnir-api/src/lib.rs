@@ -92,6 +92,11 @@ pub mod routes {
     /// commander (GAP-203; DN-09 §10; D-140). New in `/v3`, so it has no retired `/v2`
     /// form.
     pub const POLICY_CONTROL_STATUS: &str = "/policy/control-status";
+    /// A linked desktop's own audit heads: forwarded to the node, which holds them where
+    /// the desktop's operator cannot reach (`POST`), and read back on reconnect to check
+    /// the desktop's file against (`GET`) (GAP-208, D-142). New in `/v3`, so it has no
+    /// retired `/v2` form.
+    pub const AUDIT_ANCHORS: &str = "/audit/anchors";
     /// Retired. Served under `/v2` alone, answering `410 Gone` and naming
     /// [`QUEUE_DECISION`] as its successor; `/v3` never served it (GAP-132).
     pub const PLAN_DECISION: &str = "/plans/{plan_id}/decision";

@@ -143,6 +143,14 @@ pub struct Projection {
     /// Retried under the same request key until the node answers, as a decision is.
     pub control_status_outbox: std::collections::VecDeque<crate::policy::OutboundControlStatus>,
     pub control_status_outcomes: Vec<crate::policy::ControlStatusOutcome>,
+    /// This desktop's audit heads on their way to `POST /v3/audit/anchors`, oldest first
+    /// (GAP-208, D-142). Kept until the node takes them, so heads taken while cut off
+    /// reach it on reconnect.
+    pub audit_anchor_outbox: std::collections::VecDeque<gungnir_api::v3::AuditAnchorsForwarded>,
+    /// The heads the node holds for this desktop, read once per connection
+    /// (`GET /v3/audit/anchors`), for the desktop to check its file against. Taken by
+    /// [`NodeLink::take_node_audit_heads`]; `None` until a connection has read them.
+    pub node_audit_heads: Option<Vec<gungnir_model::events::AuditHead>>,
     /// When this link's task started asking (GAP-142).
     ///
     /// **So a node that has never answered can be judged silent.** `last_heard` is `None`
@@ -807,6 +815,32 @@ impl NodeLink {
             .unwrap_or_default()
     }
 
+    /// Hand this desktop's audit heads to the link, for `POST /v3/audit/anchors`
+    /// (GAP-208, D-142). An empty batch is not queued.
+    pub fn queue_audit_anchors(
+        &self,
+        heads: Vec<gungnir_model::events::AuditHead>,
+        findings: Option<Vec<String>>,
+    ) {
+        if heads.is_empty() && findings.is_none() {
+            return;
+        }
+        if let Ok(mut p) = self.projection.lock() {
+            p.audit_anchor_outbox
+                .push_back(gungnir_api::v3::AuditAnchorsForwarded { heads, findings });
+        }
+    }
+
+    /// The heads the node holds for this desktop, once each time a connection has read
+    /// them (GAP-208); `None` otherwise.
+    #[must_use]
+    pub fn take_node_audit_heads(&self) -> Option<Vec<gungnir_model::events::AuditHead>> {
+        self.projection
+            .lock()
+            .ok()
+            .and_then(|mut p| p.node_audit_heads.take())
+    }
+
     /// Hand an outage's decisions to the link, for `POST /v3/decisions/forwarded`
     /// (GAP-134, DN-31 §6.8).
     ///
@@ -973,6 +1007,8 @@ struct Urls {
     coverage_acceptances: String,
     /// Where a live control-status change is posted (GAP-203).
     policy_control_status: String,
+    /// `POST` and `GET /v3/audit/anchors` (GAP-208).
+    audit_anchors: String,
     /// True for an `https` endpoint: the stream is `wss` over our own TLS stream.
     tls: bool,
     host: String,
@@ -1039,6 +1075,7 @@ fn urls(endpoint: &RemoteEndpoint) -> Result<Urls, RemoteError> {
         coverage: format!("{base}{}", path(routes::COVERAGE)),
         coverage_acceptances: format!("{base}{}", path(routes::COVERAGE_ACCEPTANCES)),
         policy_control_status: format!("{base}{}", path(routes::POLICY_CONTROL_STATUS)),
+        audit_anchors: format!("{base}{}", path(routes::AUDIT_ANCHORS)),
         events: format!("{scheme}://{rest}{}", path(routes::EVENTS)),
         tls,
         host,
@@ -1371,6 +1408,9 @@ async fn run_link(
         .map(|mut p| p.coverage.mark_stale())
         .unwrap_or_default();
     refresh_coverage(&client, urls, &session.token, projection).await;
+    // GAP-208: the heads the node holds for this desktop, once per connection, for the
+    // desktop to check its audit file against before it forwards anything new.
+    fetch_audit_heads(&client, urls, &session.token, projection).await;
 
     // Anything at all resets the clock: an envelope, or the server's heartbeat ping,
     // which `tokio-tungstenite` answers for us. Silence past the timeout means the link
@@ -1399,6 +1439,8 @@ async fn run_link(
                 refresh_coverage(&client, urls, token, projection).await;
                 // GAP-203: the status changes this desktop made, under the same rule.
                 flush_control_status(&client, urls, token, projection).await;
+                // GAP-208: this desktop's audit heads, for the node to hold.
+                flush_audit_anchors(&client, urls, token, projection).await;
                 // A picture the stream asked for and a failed fetch left owing. The
                 // stream's own branch below takes it as soon as the event arrives; this
                 // is what bounds the retry at one forward interval rather than at the
@@ -2092,6 +2134,79 @@ async fn flush_control_status(
                     answer,
                 });
         }
+    }
+}
+
+/// Post this desktop's audit heads, oldest batch first (GAP-208): a `202` takes the
+/// batch, a retryable answer or no answer keeps it for the next tick, and any other
+/// answer drops it with an error logged -- a body the node refuses whole is not one it
+/// will take on a retry.
+async fn flush_audit_anchors(
+    client: &reqwest::Client,
+    urls: &Urls,
+    token: &str,
+    projection: &Arc<Mutex<Projection>>,
+) {
+    for _ in 0..16 {
+        let Some(batch) = projection
+            .lock()
+            .ok()
+            .and_then(|p| p.audit_anchor_outbox.front().cloned())
+        else {
+            return;
+        };
+        let response = match with_token(client.post(&urls.audit_anchors), token)
+            .json(&batch)
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                tracing::warn!(%err, "the node could not be reached with this desktop's audit heads");
+                return;
+            }
+        };
+        let status = response.status();
+        if note_refused_token(projection, status) || crate::policy::retry(status.as_u16()) {
+            return;
+        }
+        if status != reqwest::StatusCode::ACCEPTED {
+            let body = response.text().await.unwrap_or_default();
+            tracing::error!(%status, body = %body.trim(), "the node refused this desktop's audit heads; the batch is dropped");
+        }
+        if let Ok(mut p) = projection.lock() {
+            p.audit_anchor_outbox.pop_front();
+        }
+    }
+}
+
+/// Read the heads the node holds for this desktop (GAP-208). A node that does not serve
+/// the route, or refuses it, leaves `node_audit_heads` as it was: the desktop then has
+/// nothing from the node to check against, which is what it had before.
+async fn fetch_audit_heads(
+    client: &reqwest::Client,
+    urls: &Urls,
+    token: &str,
+    projection: &Arc<Mutex<Projection>>,
+) {
+    let Ok(response) = with_token(client.get(&urls.audit_anchors), token)
+        .send()
+        .await
+    else {
+        return;
+    };
+    if !response.status().is_success() {
+        tracing::warn!(status = %response.status(), "the node did not serve this desktop's held audit heads");
+        return;
+    }
+    let body = response.text().await.unwrap_or_default();
+    match nonfinite::from_line::<gungnir_api::v3::AuditAnchorsHeld>(&body) {
+        Ok(held) => {
+            if let Ok(mut p) = projection.lock() {
+                p.node_audit_heads = Some(held.heads);
+            }
+        }
+        Err(err) => tracing::warn!(%err, "the node's held audit heads did not read"),
     }
 }
 

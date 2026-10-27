@@ -45,6 +45,7 @@ fn desktop_with_escrow(
             authentication: gungnir_config::AuthenticationConfig::default(),
             tls: gungnir_config::TlsClientConfig::default(),
             escrow,
+            audit_signing: None,
         },
         ..ConfigBaseline::default()
     };

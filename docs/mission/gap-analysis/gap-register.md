@@ -202,7 +202,7 @@ history, and an entry is never edited once it has merged.
 | GAP-205 | A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second | Technical | CAP-1.5 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
 | GAP-206 | No production track is releasable, so track exchange has no producer | Technical | CAP-6.6, CAP-7.4, CAP-1.6 | 5 | 5 | M | 25 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-207 | An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop | Technical | CAP-4.4, CAP-4.6 | 4 | 5 | L | 20 | I3 | Services engineer | Closed |
-| GAP-208 | The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks | Technical | CAP-6.3 | 4 | 9 | M | 36 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-208 | The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks | Technical | CAP-6.3 | 4 | 9 | M | 36 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-209 | Reconciliation arbitration ranks a role string the desktop's own journal asserts | Technical | CAP-5.4, CAP-4.2 | 4 | 6 | M | 24 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-210 | Configuration baselines are not signed | Technical | CAP-5.6, CAP-6.4 | 4 | 2 | M | 8 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-211 | Issued identities never expire and nothing revokes them | Technical | CAP-6.1, CAP-6.4 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Open |
@@ -2969,11 +2969,12 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-10-26, Open: Filed by plan 12. GAP-163 put the head outside the file; the file it chose is one the same account can rewrite.
   - 2026-10-26, Open: D-142 taken 2026-10-26: a deployment `AuditSigning` purpose provisioned with the baseline; anchors forwarded to the node when linked. The action stands.
+  - 2026-10-27, Closed: Built. The desktop signs every audit head with an `AuditSigning` key sealed under the administrator's passphrase, unlocked on PN-20; verification says which heads were signed. Heads go to the node, which judges each signature and finds a rewrite or a cut from the heads alone, and the desktop checks its file against the node's heads on reconnect. DN-23 §16 records the owner's four choices. See `../../record/2026-10-27/gap-208-audit-anchors-signed-and-held-by.md`.
 - Evidence: `gungnir-security/src/audit/anchor.rs:12-16` (the chain is unkeyed and the head is in the journal); `audit.rs:42-46`; `audit.rs:667-682` (`line_hash` is plain SHA-256); `keystore.rs:191-199`; `os_keystore.rs:161-169`.
 - Severity: 4. Reach: 9 threads. Effort: M. Priority: 36.
 - Impact: On a disconnected desktop the operator who can edit the audit file can also reseal the journal with a rewritten head, because the journal's sealing key is unlocked from that operator's own keystore. The chain finds a torn or edited line; it cannot find a rewrite by its own writer.
 - Closing action: Sign each anchor and segment close under a purpose the operator session cannot unlock (D-142 names it); push anchors to the node when linked so the node holds a head the desktop cannot reach; verification reports which anchors were signed and by what.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: GAP-163; GAP-179; DN-23 §14; `../../review/2026-10-26-comprehensive-review.md` §5 finding 1.
 - Depends on: D-142.
 

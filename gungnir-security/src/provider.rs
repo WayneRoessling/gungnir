@@ -79,6 +79,7 @@ fn purpose_code(purpose: KeyPurpose) -> u8 {
         KeyPurpose::TransportIdentity => 1,
         KeyPurpose::JournalAtRest => 2,
         KeyPurpose::BaselineSigning => 3,
+        KeyPurpose::AuditSigning => 4,
     }
 }
 
@@ -87,6 +88,7 @@ fn purpose_from_code(code: u8) -> Option<KeyPurpose> {
         1 => Some(KeyPurpose::TransportIdentity),
         2 => Some(KeyPurpose::JournalAtRest),
         3 => Some(KeyPurpose::BaselineSigning),
+        4 => Some(KeyPurpose::AuditSigning),
         _ => None,
     }
 }

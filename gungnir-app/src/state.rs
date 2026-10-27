@@ -142,6 +142,13 @@ pub struct AppState {
     /// Every bound SAPIENT feed's `TaskAck` sink, drained each frame (GAP-004): the
     /// inbound half of the outbound-tasking round trip `sapient_task.rs` issues.
     pub sapient_task_acks: Vec<gungnir_ingest::adapters::sapient::TaskAckSink>,
+    /// The audit-signing key, once an administrator has unlocked it this run (GAP-208,
+    /// D-142); `None` until then, and anchors are journaled unsigned.
+    pub audit_signer: Option<gungnir_security::audit::signing::AuditSigner>,
+    /// The baseline's audit-signing public key, when it names one.
+    pub audit_key: Option<gungnir_security::audit::signing::AuditVerifyingKey>,
+    /// Heads taken and not yet handed to the node link (GAP-208).
+    pub audit_forward: Vec<gungnir_model::events::AuditHead>,
     /// Every SAPIENT effector a handoff can be sent to, by endpoint (GAP-207): the one
     /// return path for an effector's outcome on a desktop with no node.
     pub sapient_effectors: gungnir_ingest::adapters::sapient_effector::SapientEffectors,
@@ -743,6 +750,7 @@ impl AppState {
 
         let (ingest, feeds, ais, adsb, misb, sapient, endpoint_client, peers, machine_identity) =
             build_ingest(&config, runtime.handle(), &mut alerts);
+        let audit_key = crate::audit_record::verifying_key(&config, &mut alerts);
         let sapient_effectors = crate::sapient::bind_effectors(&config, &mut alerts);
         let identification_settings = config.policy.identification.clone();
 
@@ -794,6 +802,9 @@ impl AppState {
             misb_stats: misb.stats,
             sapient_stats: sapient.stats,
             sapient_task_acks: sapient.task_acks,
+            audit_signer: None,
+            audit_key,
+            audit_forward: Vec::new(),
             sapient_effectors,
             last_bearing_rays: Vec::new(),
             dense_group_reported: None,

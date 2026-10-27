@@ -31,6 +31,8 @@ pub mod approval;
 pub mod audit_record;
 pub mod clock_discipline;
 pub mod control_status;
+// GAP-208: the heads of linked desktops' audit logs, held where their operators cannot reach.
+pub mod desktop_anchors;
 // GAP-207: the SAPIENT effectors a handoff is sent to and heard from.
 pub mod effectors;
 pub mod gap_acceptance;

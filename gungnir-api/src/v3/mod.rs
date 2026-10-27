@@ -446,6 +446,30 @@ impl GapAcceptanceRefused {
     }
 }
 
+/// What `POST /v3/audit/anchors` takes (GAP-208, D-142): heads of the desktop's own audit
+/// log, which the node judges against its baseline's audit-signing key and holds.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AuditAnchorsForwarded {
+    /// Heads of the desktop's own audit log, oldest first, each with its signature when
+    /// the desktop's audit-signing key was unlocked.
+    pub heads: Vec<gungnir_model::events::AuditHead>,
+    /// What the desktop found checking its file against the heads this node holds for
+    /// it, when it has just done so; absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub findings: Option<Vec<String>>,
+}
+
+/// The heads a node holds for the desktop asking (GAP-208): for each segment, the one
+/// with the most entries.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AuditAnchorsHeld {
+    pub heads: Vec<gungnir_model::events::AuditHead>,
+}
+
+/// The most heads one `POST /v3/audit/anchors` may carry (GAP-208): a desktop forwards
+/// its inventory, one head per segment, and a body past this is not one.
+pub const MAX_FORWARDED_ANCHORS: usize = 4_096;
+
 /// What `POST /v3/policy/control-status` takes (GAP-203; DN-09 §10; D-140): a signed-in
 /// supervisor or commander puts one layer at a status, live, and says why.
 ///

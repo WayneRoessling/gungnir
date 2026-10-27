@@ -536,6 +536,61 @@ pub fn run(binary: &str, args: &[String]) -> Result<String, AccountError> {
     }
 }
 
+/// The usage text for `audit-key` (GAP-208).
+#[must_use]
+pub fn audit_key_usage(binary: &str) -> String {
+    format!(
+        "\
+usage: {binary} audit-key provision <data-dir>
+
+Makes the key the desktop signs its audit anchors with, sealed in
+<data-dir>/audit-signing/ under a passphrase the administrator holds and the operator
+does not. The passphrase is read from standard input, never from an argument:
+
+  printf '%s' 'the administrator passphrase' | {binary} audit-key provision ./gungnir-journal
+
+It prints the public half; put it in the baseline as security.audit_signing.public_key_pem.
+An existing key is never replaced."
+    )
+}
+
+/// `audit-key provision <data-dir>` (GAP-208, D-142): make the audit-signing key and
+/// print its public half for the baseline.
+///
+/// **Not written to the audit log.** The key does nothing until its public half is in a
+/// baseline, and applying a baseline is itself audited (`config.apply`); a key provisioned
+/// and never configured verifies nothing and signs nothing anybody checks.
+///
+/// # Errors
+///
+/// [`AccountError::Usage`] for anything but `provision <data-dir>`; an empty passphrase;
+/// and [`AccountError::StoreUnavailable`] for a short passphrase, a key already there, or
+/// a directory that cannot be written.
+pub fn run_audit_key(binary: &str, args: &[String]) -> Result<String, AccountError> {
+    let usage_err = |what: &str| AccountError::Usage {
+        what: what.to_owned(),
+        usage: audit_key_usage(binary),
+    };
+    match args.first().map(String::as_str) {
+        Some("provision") => {
+            let dir = args
+                .get(1)
+                .ok_or_else(|| usage_err("audit-key provision needs a data directory"))?;
+            let passphrase = passphrase_from_stdin(binary)?;
+            let pem = crate::audit::signing::AuditSigner::provision(Path::new(dir), &passphrase)
+                .map_err(|e| AccountError::StoreUnavailable(e.to_string()))?;
+            Ok(format!(
+                "audit-signing key provisioned in {dir}/{}. Put this public key in the \
+                 baseline as security.audit_signing.public_key_pem, and keep the passphrase \
+                 with the administrator; the desktop asks for it at start.\n{pem}",
+                crate::audit::signing::AUDIT_SIGNING_DIR
+            ))
+        }
+        Some(other) => Err(usage_err(&format!("no such audit-key command: {other}"))),
+        None => Err(usage_err("audit-key needs a command")),
+    }
+}
+
 /// The inverse of [`role_from_str`], over every [`Role`] variant with no wildcard arm:
 /// a tenth role added to the enum without a line here fails to compile rather than
 /// silently leaving this CLI unable to provision it, which is exactly the defect found

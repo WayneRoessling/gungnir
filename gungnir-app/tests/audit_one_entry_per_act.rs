@@ -540,6 +540,13 @@ fn every_audit_site_is_an_act_this_file_or_another_performs() {
             "tests/failover.rs: a conflict resolved",
         ),
         (
+            "gungnir-app/src/audit_record.rs",
+            "crate::audit::record(",
+            2,
+            "tests/audit_signing.rs: the audit-signing key unlocked, and an unlock refused \
+             (GAP-208)",
+        ),
+        (
             "gungnir-app/src/gap_acceptance.rs",
             "crate::audit::record(",
             1,

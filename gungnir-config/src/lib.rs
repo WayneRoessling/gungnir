@@ -1457,6 +1457,20 @@ pub struct SecurityConfig {
     /// key without repeating it. Absent means no escrow, which PN-09 reports.
     #[serde(default)]
     pub escrow: Option<EscrowConfig>,
+    /// The key the desktop's audit anchors are signed with (GAP-208, D-142): **the public
+    /// half, inline as PEM**, which the node and the desktop verify anchors against. The
+    /// private half is sealed on the desktop under the administrator's passphrase
+    /// (`audit-key provision`) and never appears here. Absent means anchors are not
+    /// signed, which PN-20 and the node's record say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_signing: Option<AuditSigningConfig>,
+}
+
+/// The audit-signing public key (GAP-208).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuditSigningConfig {
+    pub public_key_pem: String,
 }
 
 /// The escrow holder and key (DN-22 §11).
@@ -2702,6 +2716,28 @@ fn validate_escrow(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     if e.holder == 0 {
         return Err(ConfigError::Invalid(
             "security.escrow.holder names nobody".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// GAP-208: the audit-signing key is the public half, and only that. Whether it is a P-256
+/// key is checked where it is read (`gungnir_security::audit::signing::AuditVerifyingKey`),
+/// which this crate may not name; both binaries say so at start when it is not.
+fn validate_audit_signing(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    let Some(a) = &baseline.security.audit_signing else {
+        return Ok(());
+    };
+    if a.public_key_pem.contains("PRIVATE KEY") {
+        return Err(ConfigError::Invalid(
+            "security.audit_signing.public_key_pem holds a private key; the baseline may \
+             carry only the public half"
+                .into(),
+        ));
+    }
+    if !a.public_key_pem.contains("-----BEGIN PUBLIC KEY-----") {
+        return Err(ConfigError::Invalid(
+            "security.audit_signing.public_key_pem is not a PEM public key".into(),
         ));
     }
     Ok(())
@@ -4581,6 +4617,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     }
     validate_trust_roots(baseline)?;
     validate_escrow(baseline)?;
+    validate_audit_signing(baseline)?;
     validate_peers(baseline)?;
     validate_sensor_control(baseline)?;
     validate_time(baseline)?;
@@ -4861,6 +4898,7 @@ mod tests {
                 authentication: AuthenticationConfig::default(),
                 tls: TlsClientConfig::default(),
                 escrow: None,
+                audit_signing: None,
             },
             ..ConfigBaseline::default()
         };
@@ -4892,6 +4930,7 @@ MFkw
 -----END PUBLIC KEY-----"
                         .into(),
                 }),
+                audit_signing: None,
             },
             ..ConfigBaseline::default()
         }
@@ -4976,6 +5015,7 @@ MFkw
                 authentication: AuthenticationConfig::default(),
                 tls: TlsClientConfig::default(),
                 escrow: None,
+                audit_signing: None,
             },
             ..ConfigBaseline::default()
         };
@@ -5005,6 +5045,7 @@ MFkw
                 authentication: AuthenticationConfig::default(),
                 tls: TlsClientConfig::default(),
                 escrow: None,
+                audit_signing: None,
             },
             ..ConfigBaseline::default()
         };
@@ -5022,6 +5063,7 @@ MFkw
                 authentication: AuthenticationConfig::default(),
                 tls: TlsClientConfig::default(),
                 escrow: None,
+                audit_signing: None,
             },
             ..ConfigBaseline::default()
         };
@@ -5045,6 +5087,7 @@ MFkw
                 },
                 tls: TlsClientConfig::default(),
                 escrow: None,
+                audit_signing: None,
             },
             ..ConfigBaseline::default()
         };
@@ -5065,6 +5108,7 @@ MFkw
                 },
                 tls: TlsClientConfig::default(),
                 escrow: None,
+                audit_signing: None,
             },
             ..ConfigBaseline::default()
         };
@@ -5087,6 +5131,7 @@ MFkw
                 },
                 tls: TlsClientConfig::default(),
                 escrow: None,
+                audit_signing: None,
             },
             ..ConfigBaseline::default()
         };
