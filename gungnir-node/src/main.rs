@@ -44,7 +44,7 @@ use gungnir_node::{approval, picture};
 use gungnir_api::transport::NodeApi;
 use gungnir_api::v3::{CoverageResponse, SnapshotResponse};
 use gungnir_api::API_VERSION;
-use gungnir_config::{validate, ConfigBaseline, ConfigStore, FileConfigStore, NodeConfig};
+use gungnir_config::{ConfigBaseline, NodeConfig};
 use gungnir_eventing::{Event, EventBus, InProcessBus};
 use gungnir_ingest::adapters::peer::{LaunchWarningOutcome, LaunchWarningSink};
 use gungnir_ingest::{IngestGateway, MachineIdentityAuthenticator};
@@ -100,6 +100,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // GAP-210: `baseline-key provision` makes the deployment's baseline-signing key, and
+    // `baseline sign` signs a file with it. Like `account`, neither starts the node.
+    if args.first().map(String::as_str) == Some("baseline-key") {
+        match gungnir_security::provisioning::run_baseline_key("gungnir-node", &args[1..]) {
+            Ok(said) => {
+                println!("{said}");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        }
+    }
+    if args.first().map(String::as_str) == Some("baseline") {
+        match gungnir_node::baseline::sign("gungnir-node", &args[1..]) {
+            Ok(said) => {
+                println!("{said}");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        }
+    }
+
     let config = load_config(args.into_iter().next())?;
     let node_cfg = config.node.clone().unwrap_or_default();
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -115,18 +142,15 @@ fn load_config(path: Option<String>) -> Result<ConfigBaseline, gungnir_config::C
         return Ok(ConfigBaseline::default());
     };
     // GAP-052 / DN-08 §6 rule 3: the canonical action and role names come from
-    // `gungnir-security`, which `gungnir-config` may not depend on, so this binary hands
-    // them over. Without it a rule naming a misspelled action passes every other check,
-    // matches no request, and reads in the file exactly like a grant.
-    let known = gungnir_config::KnownVocabulary::new(
-        gungnir_security::actions::ALL.iter().copied(),
-        gungnir_security::Role::ALL.iter().map(|r| format!("{r:?}")),
-    );
-    let store = FileConfigStore::new(&p, known.clone());
-    let baseline = store.load()?;
-    validate(&baseline)?;
-    gungnir_config::validate_authority_names(&baseline, &known)?;
-    tracing::info!(path = %p, "loaded config baseline");
+    // `gungnir-security`, which `gungnir-config` may not depend on, so the node hands them
+    // over (`gungnir_node::baseline::known_vocabulary`). Without them a rule naming a
+    // misspelled action passes every other check, matches no request, and reads in the
+    // file exactly like a grant.
+    //
+    // GAP-210: and with a baseline-signing key pinned, a baseline it did not sign stops
+    // the node here, before a journal is opened or a port bound.
+    let key = gungnir_security::baseline_signing::BaselineVerifyingKey::pinned();
+    let (baseline, _trust) = gungnir_node::baseline::load(&p, &key)?;
     Ok(baseline)
 }
 

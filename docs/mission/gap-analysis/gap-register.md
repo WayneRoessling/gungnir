@@ -204,7 +204,7 @@ history, and an entry is never edited once it has merged.
 | GAP-207 | An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop | Technical | CAP-4.4, CAP-4.6 | 4 | 5 | L | 20 | I3 | Services engineer | Closed |
 | GAP-208 | The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks | Technical | CAP-6.3 | 4 | 9 | M | 36 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-209 | Reconciliation arbitration ranks a role string the desktop's own journal asserts | Technical | CAP-5.4, CAP-4.2 | 4 | 6 | M | 24 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-210 | Configuration baselines are not signed | Technical | CAP-5.6, CAP-6.4 | 4 | 2 | M | 8 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-210 | Configuration baselines are not signed | Technical | CAP-5.6, CAP-6.4 | 4 | 2 | M | 8 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-211 | Issued identities never expire and nothing revokes them | Technical | CAP-6.1, CAP-6.4 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-212 | Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends | Technical | CAP-6.1, CAP-6.2 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-213 | Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll | Technical | CAP-6.7, CAP-1.2 | 3 | 9 | M | 27 | I3 | Services engineer | Open |
@@ -2998,11 +2998,12 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.6 Baselines and plans; CAP-6.4 Data protection.
 - History:
   - 2026-10-26, Open: Filed by plan 12. The key purpose has existed since DN-22; nothing produces or checks a signature with it.
+  - 2026-10-27, Closed: Built. A baseline is signed over its parsed content, in a `.sig` beside it, with a key made and used by `baseline-key provision` and `baseline sign` in both binaries. Each host checks it against a key pinned outside the baseline. A node, or a desktop on the Remote backend, refuses an unsigned or mis-signed baseline at start and on PN-14's apply. A desktop on its own runs and says so, and `config.apply` names the signer. A node has no apply path, so its check is the one at start. DN-22 §15 records the owner's four choices. See `../../record/2026-10-27/gap-210-configuration-baselines-signed.md`.
 - Evidence: `gungnir-security/src/keys.rs:44-46` (`BaselineSigning` declared); the only other references are the purpose-code tables (`provider.rs:81,89`, `asymmetric.rs:49,546`); no signature in `gungnir-config/src/lib.rs`.
 - Severity: 4. Reach: 2 threads. Effort: M. Priority: 8.
 - Impact: A baseline carries the authority rules, the sensor allow-list, the exchange agreements and the escrow public key. Unsigned, it is the highest-value tamper target on a disconnected host, and `../../../ARCHITECTURE.md` §8.5 lists signed baselines as a node need.
 - Closing action: Sign a baseline with a deployment key under `BaselineSigning`; verify on load and on apply in both binaries; refuse an unsigned or mis-signed baseline in the connected profiles and warn on the disconnected desktop until the deployment key exists; audit the signer on `config.apply`.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: DN-22; GAP-084; GAP-162; `../../review/2026-10-26-comprehensive-review.md` §5 finding 3.
 
 **GAP-211 Issued identities never expire and nothing revokes them**

@@ -21,6 +21,7 @@ pub mod adsb;
 pub mod anomaly;
 pub mod audit;
 pub mod audit_record;
+pub mod baseline;
 pub mod bearings;
 pub mod clock_discipline;
 pub mod control_status;

@@ -1,6 +1,6 @@
 # DN-22 Key custody, rotation, and escrow
 
-Closes GAP-084, filed by plan 11 finding F-3. Status: **amendment 1 (§9)**, after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11)**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12)**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. A first-run race was found in the secret-generation helper; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over. A real defect in the code behind it was found and closed: Azure Key Vault's raw ECDSA signature format, handed through unconverted, would have broken every TLS handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127).
+Closes GAP-084, filed by plan 11 finding F-3. Status: **amendment 1 (§9)**, after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11)**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12)**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. A first-run race was found in the secret-generation helper; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over. A real defect in the code behind it was found and closed: Azure Key Vault's raw ECDSA signature format, handed through unconverted, would have broken every TLS handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127). **Amendment 6 (§15), 2026-10-27**: configuration baselines signed under `BaselineSigning`, a purpose §3 declared and nothing used, verified against a key pinned outside the baseline, and refused unsigned in the connected profiles (GAP-210).
 **Human-owned**: `gungnir-security` is a low-trust crate and this note decides
 who can read what. What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
@@ -662,6 +662,76 @@ different shape -- (a)'s choice between a call per envelope and envelope encrypt
 defect was found and fixed: Azure Key Vault's `sign` returns a raw ECDSA signature this
 crate's `KeyProvider::sign` contract never expected, which would have broken every TLS
 handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127).
+
+## 15. Amendment 6 (2026-10-27): baselines signed under `BaselineSigning`
+
+**§3 declared the purpose, and nothing used it.** A baseline carries the authority rules,
+the sensor allow-list, the exchange agreements and §11's escrow key, so an unsigned one is
+the most valuable thing on a host to tamper with, and `ARCHITECTURE.md` §8.5 lists signed
+baselines as a node need (GAP-210, the comprehensive review's §5 finding 3). The owner's
+four choices of 2026-10-27, each the recommended default:
+
+| Question | Chosen |
+|---|---|
+| What is signed | A detached signature over the parsed baseline, in `<baseline>.sig` beside it |
+| Where the verifying key comes from | A PEM file outside the baseline, named by `GUNGNIR_BASELINE_KEY` |
+| What is refused | With a key pinned, a connected profile refuses an unsigned or mis-signed baseline; with none, every host runs and warns; a disconnected desktop always runs and warns |
+| How baselines are signed, and what the record says | A CLI in both binaries; `config.apply` names the signer by fingerprint |
+
+**What is signed.** `ConfigBaseline::signing_bytes`: the label `gungnir-baseline/1` and a
+newline, then the baseline's compact JSON serialization. It is the parsed baseline, not the
+file, because PN-14's apply writes the file back pretty-printed, and a signature over the
+bytes on disk would break on every apply of a signed file. No baseline type holds a hash
+map, so the serialization is deterministic. Any change of content, a field the file
+omitted and the parser defaulted included, changes the bytes.
+
+**The key.** A P-256 key under `BaselineSigning`, in its own sealed file under
+`<keystore dir>/baseline-signing/` (amendment 3's format), its passphrase at least twelve
+characters. `baseline-key provision <dir>` makes it and prints the public half, and never
+replaces one already there, because every baseline signed under it would stop verifying.
+`baseline sign <baseline.json> <dir>` validates the file as the binary would load it, signs
+it, and writes the `.sig`: the key's version, its fingerprint (the first sixteen hex digits
+of the SHA-256 of its public half), the scheme and the DER signature. Both commands read
+the passphrase from standard input, in either binary, through
+`gungnir_security::provisioning`. The signing key is needed only where baselines are
+authored.
+
+**The verifying key is never in the baseline**, or whoever rewrote the baseline would
+rewrite the key with it. `GUNGNIR_BASELINE_KEY` names a PEM file, the way `GUNGNIR_TLS_CERT`
+names a node's identity. A pin that does not read is not the same thing as no pin, and is
+refused where an unsigned baseline is.
+
+**The rule** (`BaselineTrust::admit`). Connected is a node, or a desktop whose baseline
+declares the Remote backend: a node's console, whose baseline the deployment controls.
+
+| | Connected | A desktop on its own |
+|---|---|---|
+| Signed by the pinned key | Runs | Runs |
+| Unsigned, or a signature that does not verify or was made by another key | **Refused** | Runs, and says so |
+| A pinned key that does not read | **Refused** | Runs, and says so |
+| No key pinned | Runs, and says baselines are unverified | Runs, and says so |
+| The built-in default, read from no file | Runs | Runs |
+
+A `.sig` that does not parse is a signature that does not verify, never an absent one.
+
+**Where it is applied.** At start in both binaries: a node refuses before it opens a
+journal or binds a port. On PN-14's apply, the candidate is judged by the signature beside
+its file before anything is written, so a console cannot apply what it would refuse to start
+on. The `config.apply` entry says what the applied baseline was: signed by which key and
+version, unsigned, or unverified. A node has no apply path, so its check is the one at
+start.
+
+**What it does not claim.** Whoever holds the signing key and its passphrase can sign any
+baseline, so the key belongs with the people who author baselines and not on the hosts that
+run them. A desktop on its own runs whatever it is given, as GAP-210 asked; the alert and the
+audit entry are what it offers. Nothing here signs the binaries. The release governance
+question about signed baselines is answered for running hosts, not for what a release
+ships.
+
+**Human-owned.** The rule and the key are `gungnir-security/src/baseline_signing.rs` and
+`provisioning.rs`'s `baseline-key` and `baseline sign` halves; the signature file is
+`gungnir_config::BaselineSignature`; each binary's glue is `gungnir-node/src/baseline.rs` and
+`gungnir-app/src/baseline.rs`. Their standing is in `../signatures.md`.
 
 ## Traceability
 
