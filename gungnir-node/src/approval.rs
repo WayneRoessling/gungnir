@@ -41,6 +41,7 @@ use gungnir_command::{
 };
 use gungnir_config::ConfigBaseline;
 use gungnir_eventing::{Event, EventBus, InProcessBus};
+use gungnir_ingest::adapters::sapient_effector::SapientEffectors;
 use gungnir_model::events::LinkEvent;
 use gungnir_model::{MissionTime, PlanView, ResourceView, TrackView};
 use gungnir_remote::endpoint::{DeliveryOutcome, EndpointClient, PendingDelivery};
@@ -213,6 +214,11 @@ pub struct NodeHost<'a> {
     now: MissionTime,
     endpoints: &'a [gungnir_config::EndpointConfig],
     endpoint_client: Option<&'a EndpointClient>,
+    /// The baseline, for what a SAPIENT task is built from (GAP-207).
+    config: &'a ConfigBaseline,
+    /// The SAPIENT effectors a handoff can be sent to (GAP-207), `None` for a harness
+    /// that binds none.
+    effectors: Option<&'a SapientEffectors>,
 }
 
 impl ApprovalHost for NodeHost<'_> {
@@ -292,10 +298,25 @@ impl ApprovalHost for NodeHost<'_> {
 
 impl HandoffTransport for NodeHost<'_> {
     fn address_for(&self, endpoint: &str) -> Result<String, String> {
+        // GAP-207: a SAPIENT effector before the HTTP table, which would refuse the kind.
+        if let Some(address) = self.effectors.and_then(|e| e.address_for(endpoint)) {
+            return Ok(address);
+        }
         gungnir_approval::http_address_in(self.endpoints, self.endpoint_client.is_some(), endpoint)
     }
 
+    fn payload_for(
+        &self,
+        endpoint: &str,
+        handoff: &gungnir_model::handoff::Handoff,
+    ) -> Result<serde_json::Value, String> {
+        crate::effectors::payload(self.config, self.effectors, endpoint, handoff)
+    }
+
     fn post(&self, address: &str, payload: serde_json::Value) -> Option<Box<dyn HandoffInFlight>> {
+        if let Some(sent) = self.effectors.and_then(|e| e.post(address, &payload)) {
+            return Some(Box::new(crate::effectors::Sent(sent)));
+        }
         self.endpoint_client
             .map(|client| Box::new(Posted(client.post_json(address, payload))) as Box<_>)
     }
@@ -330,6 +351,9 @@ pub struct Frame<'a> {
     pub geofences: &'a dyn gungnir_policy::GeoService,
     pub bus: &'a InProcessBus,
     pub endpoint_client: Option<&'a EndpointClient>,
+    /// The SAPIENT effectors a handoff can be sent to and heard from (GAP-207); `None` for
+    /// a harness that binds none.
+    pub effectors: Option<&'a SapientEffectors>,
     /// The transport the loop serves on: the queues these steps drain, and since GAP-137
     /// the exchange register this node publishes its own handoffs to. One reference,
     /// because the decision a step takes and the set a partner is then served from are
@@ -402,6 +426,8 @@ pub(crate) fn with_desk<T>(
         now: frame.now,
         endpoints: &frame.config.endpoints,
         endpoint_client: frame.endpoint_client,
+        config: frame.config,
+        effectors: frame.effectors,
     };
     f(desk, &cx, &policy, &mut host)
 }
@@ -432,7 +458,15 @@ pub fn propose(approval: &mut NodeApproval, frame: &Frame<'_>, plan: PlanView) -
 /// Every tick. Nothing ends silently: an expiry leaves a `DecisionRecord` that is not
 /// actionable and names no operator, escalation adds the next role without removing the
 /// first, and both reach the bus.
+///
+/// **And what the SAPIENT effectors said** (GAP-207): read before the handoff sweep, so a
+/// task they acknowledged reads as delivered in it, and applied after it, so a report never
+/// lands on a handoff still showing undelivered.
 pub fn sweep(approval: &mut NodeApproval, frame: &Frame<'_>) {
+    let reports = frame
+        .effectors
+        .map(|e| e.pump(frame.now))
+        .unwrap_or_default();
     with_desk(
         approval,
         frame,
@@ -443,6 +477,9 @@ pub fn sweep(approval: &mut NodeApproval, frame: &Frame<'_>) {
             desk.sweep(cx, host);
             desk.sweep_engagements(cx, host);
             desk.sweep_handoffs(host, cx.now);
+            for (decision, endpoint, report) in reports {
+                desk.apply_report(host, decision, &endpoint, &report, cx.now);
+            }
         },
     );
 }

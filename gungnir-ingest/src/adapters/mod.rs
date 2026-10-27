@@ -23,4 +23,6 @@ pub mod recorded;
 /// sensor half; `docs/design/external-standards.md` §7 and
 /// `docs/design/DN-27-bearing-only-detections.md`).
 pub mod sapient;
+// GAP-207: a SAPIENT effector as a handoff endpoint, and its acknowledgements.
+pub mod sapient_effector;
 pub mod simulated;

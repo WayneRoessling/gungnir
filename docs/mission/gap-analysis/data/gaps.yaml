@@ -12075,6 +12075,15 @@
     note: >-
       D-144 taken 2026-10-26: fixed site, SAPIENT sensors, one effector; the adapter is
       built against the SAPIENT task path until a partner names its interface.
+  - date: 2026-10-27
+    status: Closed
+    note: >-
+      Built. A resource's handoff endpoint can be a SAPIENT effector: both binaries send it
+      a request to engage at the intercept point, and its TaskAcks come back on the same
+      connection, so a desktop with no node learns the outcome. Completion with no stated
+      effect is a new Finished report, which leaves the engagement open. DN-07 §10 records
+      the owner's four choices. See
+      `../../record/2026-10-27/gap-207-a-sapient-effector-and-its-outcome.md`.
 
 - id: GAP-208
   name: The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks

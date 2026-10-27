@@ -201,7 +201,7 @@ history, and an entry is never edited once it has merged.
 | GAP-204 | The desktop cannot provision its own accounts | Technical | CAP-6.1, CAP-7.3 | 3 | 10 | S | 30 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-205 | A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second | Technical | CAP-1.5 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
 | GAP-206 | No production track is releasable, so track exchange has no producer | Technical | CAP-6.6, CAP-7.4, CAP-1.6 | 5 | 5 | M | 25 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-207 | An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop | Technical | CAP-4.4, CAP-4.6 | 4 | 5 | L | 20 | I3 | Services engineer | Open |
+| GAP-207 | An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop | Technical | CAP-4.4, CAP-4.6 | 4 | 5 | L | 20 | I3 | Services engineer | Closed |
 | GAP-208 | The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks | Technical | CAP-6.3 | 4 | 9 | M | 36 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-209 | Reconciliation arbitration ranks a role string the desktop's own journal asserts | Technical | CAP-5.4, CAP-4.2 | 4 | 6 | M | 24 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-210 | Configuration baselines are not signed | Technical | CAP-5.6, CAP-6.4 | 4 | 2 | M | 8 | I3 | Security engineer (human-owned crate) | Open |
@@ -2953,11 +2953,12 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-10-26, Open: Filed by plan 12. Which effector is the trial's is D-144; the adapter and the return path are the work.
   - 2026-10-26, Open: D-144 taken 2026-10-26: fixed site, SAPIENT sensors, one effector; the adapter is built against the SAPIENT task path until a partner names its interface.
+  - 2026-10-27, Closed: Built. A resource's handoff endpoint can be a SAPIENT effector: both binaries send it a request to engage at the intercept point, and its TaskAcks come back on the same connection, so a desktop with no node learns the outcome. Completion with no stated effect is a new Finished report, which leaves the engagement open. DN-07 §10 records the owner's four choices. See `../../record/2026-10-27/gap-207-a-sapient-effector-and-its-outcome.md`.
 - Evidence: `gungnir-app/src/handoff.rs:79-94` (`Manual` or a generic JSON endpoint); no `TcpListener::bind` in `gungnir-app/src`; GAP-040's history.
 - Severity: 4. Reach: 5 threads. Effort: L. Priority: 20.
 - Impact: No adapter speaks to a jammer or an interceptor. The `EffectorReport` route lives on the node only and the desktop binds no listener, so in the disconnected profile no effector outcome ever comes back by data: PN-05 reminds the operator to make a radio call and never learns what happened.
 - Closing action: One effector adapter against the trial's effector interface behind the existing delivery trait, and an outcome path for the embedded profile (a loopback report route, or an adapter-side poll) so PN-05 shows the report where a linked desktop already does.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: DN-07; GAP-040; GAP-043; `../../review/2026-10-26-comprehensive-review.md` §6 finding 2.
 - Depends on: D-144.
 

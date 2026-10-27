@@ -164,9 +164,55 @@ The builder and its delivery are the decision path, which is human-owned (D-65);
 tracks whose quality is NaN, `+inf` and `-inf` to a real endpoint and reads the three
 objects back, and checks an all-finite handoff is the bytes `to_value` gave.
 
+## 10. Amendment 2: one effector adapter, and the outcome without a node (2026-10-27, GAP-207)
+
+**§5's generic endpoint reached no real effector, and §5's inbound reports reached no
+desktop without a node.** The report route is the node's, and a desktop binds no
+listener, so in the disconnected profile an effector's outcome never came back by data.
+D-144 named the trial's interface as SAPIENT until a partner names its own, and the owner's
+four choices of 2026-10-27, each the recommended default, settle the rest:
+
+| Question | Chosen |
+|---|---|
+| A handoff as a SAPIENT `Task` | `command.request = "engage"`, one `REGION_TYPE_AREA_OF_INTEREST` per target at its solved intercept point; no point solved means the handoff is refused by name, not sent |
+| `TaskAck` `COMPLETED`, which says nothing about effect | A new `EffectorReport::Finished`: the engagement stays open and closes on the track's evidence |
+| How a resource names the effector | An endpoint of kind `sapient` (the middleware's `host:port`) and one `sapient_effectors` row naming the effector's node id and node type |
+| Which binaries | Both: the desktop's embedded profile, and the node, which has handed off since GAP-132 |
+
+**A fourth delivery mechanism beside §5's three.** A `sapient` endpoint is sent the task
+`gungnir_sensor_management::sapient_task::engage_payload` builds, over a connection the
+host opened to the middleware, and the effector's `TaskAck`s come back **on that same
+connection**: the outcome path needs no listener on either binary. `HandoffTransport`
+gains a defaulted `payload_for`, so the desk asks the host what an endpoint is sent rather
+than assuming the handoff's JSON; every HTTP endpoint is sent exactly what it was.
+
+**Delivered means the effector said so.** A task is delivered on its first `TaskAck` of any
+status, unreachable when the write failed or ten seconds pass without one, and then posted
+again by §5 case 3's schedule with the same task id. What the effector then did is its
+reports:
+
+| `TaskStatus` | `EffectorReport` | Effect on the engagement |
+|---|---|---|
+| `ACCEPTED` | `Acknowledged` | None |
+| `REJECTED` | `Refused`, with its reasons | Delivery state refused (§5 case 2) |
+| `COMPLETED` | `Finished` | None: SAPIENT states no effect |
+| `FAILED` | `Completed`, ineffective | Closed ineffective, corroborated |
+
+**Only the effector speaks for the effector** (§5's authentication rule, at the strength a
+SAPIENT middleware gives): a `TaskAck` is taken only from the configured node id, for a
+task this host sent, and not from a node that registered as another type. The vocabulary
+`engage` is ours: BSI Flex 335 v2.0 has effector node types and no engage command
+(`external-standards.md` §7.4).
+
+The delivery path is human-owned (D-65); see [`../signatures.md`](../signatures.md).
+Verification row (§8) unchanged in criterion; `gungnir-app/tests/sapient_effector.rs` runs
+a desktop with no node against an effector on the loopback: delivered on the effector's
+acknowledgement, `Acknowledged` and `Finished` on the record, the engagement still open, a
+rejection recorded with its reason, and a plan with no intercept point never sent.
+
 ## Traceability
 
-GAP-040, GAP-176; CAP-4.4; D-08 for endpoints, D-02 for the effector's identity, D-115 for
+GAP-040, GAP-176, GAP-207; CAP-4.4; D-08 for endpoints, D-02 for the effector's identity, D-115 for
 the body; depends on DN-06
 for engagement state, DN-05 for the fires variant, DN-17 for the marking;
 `../gungnir-api-v1.md`; `../ux/wireframes/WF-05-recommendation.puml`; contracts C-01,

@@ -523,6 +523,60 @@ pub enum SapientNodeType {
     PassiveRf,
 }
 
+/// The endpoint kind a SAPIENT effector is reached through (GAP-207). Its `address` is
+/// the middleware's `host:port`, and a [`SapientEffectorConfig`] row names the effector
+/// behind it.
+pub const SAPIENT_ENDPOINT_KIND: &str = "sapient";
+
+/// One SAPIENT effector a handoff can be sent to (GAP-207; D-144).
+///
+/// A resource names an endpoint of kind [`SAPIENT_ENDPOINT_KIND`] as its
+/// `handoff_endpoint`, and this row says who is behind that endpoint: the effector's own
+/// SAPIENT identity, which a `Task` is addressed to and its `TaskAck`s must come from,
+/// and the node type it registers as. Sending needs [`ConfigBaseline::sapient_node_id`]
+/// too, as tasking a sensor does: a task has to say where it came from.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SapientEffectorConfig {
+    /// The endpoint, of kind `sapient`, that this effector is behind.
+    pub endpoint: String,
+    /// The effector's SAPIENT node id (`Task.destinationId`).
+    pub destination_id: String,
+    pub node_type: SapientEffectorType,
+}
+
+/// The effector node types BSI Flex 335 v2.0 registers (`registration.proto`'s
+/// `NodeType`, values 13 to 17). An effector that registers as another type is refused
+/// when it answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SapientEffectorType {
+    /// A physical effector, such as a missile or a collision-based system.
+    Kinetic,
+    /// A radio-frequency transmitter that disrupts other systems.
+    Jammer,
+    /// One that uses network or communication protocols to effect other systems.
+    Cyber,
+    /// A laser directed-energy weapon.
+    Ldew,
+    /// A radio-frequency directed-energy weapon.
+    Rfdew,
+}
+
+impl SapientEffectorType {
+    /// The `NodeType` name the effector registers with.
+    #[must_use]
+    pub fn node_type(self) -> &'static str {
+        match self {
+            Self::Kinetic => "NODE_TYPE_KINETIC",
+            Self::Jammer => "NODE_TYPE_JAMMER",
+            Self::Cyber => "NODE_TYPE_CYBER",
+            Self::Ldew => "NODE_TYPE_LDEW",
+            Self::Rfdew => "NODE_TYPE_RFDEW",
+        }
+    }
+}
+
 /// Where a SAPIENT feed's protobuf-JSON lines come from. Same shape as [`AisSource`]
 /// and [`AdsbSource`]; kept as its own type for the same reason.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -1648,6 +1702,10 @@ pub struct ConfigBaseline {
     /// validation enforces this.
     #[serde(default)]
     pub sapient_node_id: Option<String>,
+    /// SAPIENT effectors a handoff can be sent to (GAP-207). Empty means none: every
+    /// handoff goes to an HTTP endpoint or is made by voice, as before.
+    #[serde(default)]
+    pub sapient_effectors: Vec<SapientEffectorConfig>,
     /// Peer nodes consumed as sources (DN-16 §6, GAP-009).
     #[serde(default)]
     pub peers: Vec<PeerConfig>,
@@ -1909,6 +1967,7 @@ impl Default for ConfigBaseline {
             misb_feeds: Vec::new(),
             sapient_feeds: Vec::new(),
             sapient_node_id: None,
+            sapient_effectors: Vec::new(),
             peers: Vec::new(),
             exchange: Vec::new(),
             releasability: ReleasabilityConfig::default(),
@@ -3328,6 +3387,67 @@ fn validate_point_cloud_file(file: &PointCloudFileConfig, field: &str) -> Result
     }
 }
 
+/// GAP-207: every `sapient` endpoint has exactly one effector row behind it and an
+/// address a connection can be opened to; every row names such an endpoint and an
+/// effector id; and there is a `sapient_node_id` for a task to come from.
+fn validate_sapient_effectors(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
+    for e in baseline
+        .endpoints
+        .iter()
+        .filter(|e| e.kind == SAPIENT_ENDPOINT_KIND)
+    {
+        if e.address.parse::<std::net::SocketAddr>().is_err() {
+            return Err(ConfigError::Invalid(format!(
+                "SAPIENT endpoint {:?}: {:?} is not an ip:port",
+                e.name, e.address
+            )));
+        }
+        let rows = baseline
+            .sapient_effectors
+            .iter()
+            .filter(|r| r.endpoint == e.name)
+            .count();
+        if rows != 1 {
+            return Err(ConfigError::Invalid(format!(
+                "SAPIENT endpoint {:?} has {rows} sapient_effectors rows; it needs exactly \
+                 one, naming the effector behind it",
+                e.name
+            )));
+        }
+    }
+    for row in &baseline.sapient_effectors {
+        if !baseline
+            .endpoints
+            .iter()
+            .any(|e| e.name == row.endpoint && e.kind == SAPIENT_ENDPOINT_KIND)
+        {
+            return Err(ConfigError::Invalid(format!(
+                "sapient_effectors names endpoint {:?}, which is not an endpoint of kind \
+                 \"sapient\"",
+                row.endpoint
+            )));
+        }
+        if row.destination_id.trim().is_empty() {
+            return Err(ConfigError::Invalid(format!(
+                "the SAPIENT effector behind {:?} has an empty destination_id",
+                row.endpoint
+            )));
+        }
+        if baseline
+            .sapient_node_id
+            .as_deref()
+            .is_none_or(|id| id.trim().is_empty())
+        {
+            return Err(ConfigError::Invalid(format!(
+                "the SAPIENT effector behind {:?} needs sapient_node_id: a task has to say \
+                 where it came from",
+                row.endpoint
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// DN-07 §6: a resource's handoff endpoint names an entry in the endpoint table.
 fn validate_handoff_endpoints(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     for r in &baseline.resources {
@@ -4421,6 +4541,7 @@ pub fn validate(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     validate_hazards(baseline)?;
     validate_geofences(baseline)?;
     validate_handoff_endpoints(baseline)?;
+    validate_sapient_effectors(baseline)?;
     validate_terrain(baseline)?;
     validate_point_cloud(baseline)?;
     validate_geoid_grid_dir(baseline)?;
@@ -7329,6 +7450,56 @@ MFkw
                 .is_err(),
             "a misspelt key is refused, never read as internal"
         );
+    }
+
+    /// GAP-207: a `sapient` endpoint parses as an address and has one effector behind it,
+    /// each row names such an endpoint and an effector, and a task has a node id to come
+    /// from.
+    #[test]
+    fn a_sapient_effector_is_an_endpoint_with_one_effector_behind_it() {
+        let b: ConfigBaseline = serde_json::from_str(
+            r#"{"version": 1,
+                "sapient_node_id": "a1b2c3d4-0000-0000-0000-000000000000",
+                "endpoints": [{"name": "jammer", "kind": "sapient", "address": "127.0.0.1:7600"}],
+                "sapient_effectors": [{"endpoint": "jammer",
+                    "destination_id": "7c0e6a2b-1d3f-4e5a-9b8c-0d1e2f3a4b5c",
+                    "node_type": "jammer"}]}"#,
+        )
+        .expect("parses");
+        assert!(validate(&b).is_ok(), "{:?}", validate(&b));
+        assert_eq!(
+            b.sapient_effectors[0].node_type.node_type(),
+            "NODE_TYPE_JAMMER"
+        );
+        let refused = |edit: &dyn Fn(&mut ConfigBaseline), says: &str| {
+            let mut c = b.clone();
+            edit(&mut c);
+            match validate(&c) {
+                Err(ConfigError::Invalid(m)) => assert!(m.contains(says), "{m}"),
+                other => panic!("accepted, expected {says:?}: {other:?}"),
+            }
+        };
+        refused(
+            &|c| c.endpoints[0].address = "jammer.local".into(),
+            "not an ip:port",
+        );
+        refused(&|c| c.sapient_effectors.clear(), "0 sapient_effectors rows");
+        refused(
+            &|c| c.sapient_effectors[0].endpoint = "nowhere".into(),
+            "has 0 sapient_effectors rows",
+        );
+        refused(
+            &|c| c.sapient_effectors[0].destination_id = " ".into(),
+            "empty destination_id",
+        );
+        refused(&|c| c.sapient_node_id = None, "needs sapient_node_id");
+        let mut http = b.clone();
+        http.endpoints[0].kind = "http".into();
+        http.endpoints[0].address = "http://jammer.local/".into();
+        match validate(&http) {
+            Err(ConfigError::Invalid(m)) => assert!(m.contains("not an endpoint of kind"), "{m}"),
+            other => panic!("a row behind an http endpoint was accepted: {other:?}"),
+        }
     }
 
     /// GAP-114: a baseline that says nothing about late data reads as the one-second

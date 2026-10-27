@@ -75,6 +75,7 @@ pub fn changed_sections(
         misb_feeds,
         sapient_feeds,
         sapient_node_id,
+        sapient_effectors,
         peers,
         exchange,
         releasability,
@@ -143,6 +144,13 @@ pub fn changed_sections(
             sapient_node_id != &was.sapient_node_id,
             "sapient_node_id",
             Sensing,
+        ),
+        // GAP-207: who is behind a `sapient` endpoint, which is the endpoint table's
+        // business and applied with it.
+        (
+            sapient_effectors != &was.sapient_effectors,
+            "sapient_effectors",
+            Deployment,
         ),
         (peers != &was.peers, "peers", Deployment),
         (exchange != &was.exchange, "exchange", Deployment),

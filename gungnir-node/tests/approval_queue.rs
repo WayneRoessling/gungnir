@@ -332,6 +332,7 @@ impl Node {
                             geofences: &*geo,
                             bus: &bus,
                             endpoint_client: None,
+                            effectors: None,
                             api: &api,
                         };
                         // The order `main.rs` runs them in: the sweep on the node's clock,
@@ -413,6 +414,7 @@ impl Node {
             geofences: &*self.geo,
             bus: &self.bus,
             endpoint_client: None,
+            effectors: None,
             api: &self.api,
         };
         approval::propose(&mut state.approval, &frame, plan);
