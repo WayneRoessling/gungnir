@@ -1125,6 +1125,14 @@ IE-calibration-event,uafId,IE-calibration-event
 IE-calibration-event,uafKind,InformationElement
 IE-calibration-event,registry.code,gungnir_model::CalibrationEvent
 IE-calibration-event,registry.domain,Events & the record
+IE-clock-discipline-state,uafId,IE-clock-discipline-state
+IE-clock-discipline-state,uafKind,InformationElement
+IE-clock-discipline-state,registry.code,gungnir_model::ClockDisciplineState
+IE-clock-discipline-state,registry.domain,"Core identifiers, frames & quality"
+IE-clock-stamps,uafId,IE-clock-stamps
+IE-clock-stamps,uafKind,InformationElement
+IE-clock-stamps,registry.code,gungnir_model::ClockStamps
+IE-clock-stamps,registry.domain,"Core identifiers, frames & quality"
 IE-collection-requirement,uafId,IE-collection-requirement
 IE-collection-requirement,uafKind,InformationElement
 IE-collection-requirement,registry.code,gungnir_model::CollectionRequirement

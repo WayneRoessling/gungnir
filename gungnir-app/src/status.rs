@@ -322,6 +322,7 @@ pub fn status_strip_view<'a>(
         clock_source: match state.clock.source() {
             TimeClockSource::Wall => ClockSource::Wall,
             TimeClockSource::Replay => ClockSource::Replay,
+            TimeClockSource::Disciplined => ClockSource::Disciplined,
         },
         health: state.health(),
         control_status: &data.control_status,

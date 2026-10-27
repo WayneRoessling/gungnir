@@ -22,9 +22,16 @@ use gungnir_store::EventJournal;
 
 pub fn tick(state: &mut AppState) {
     let now = state.clock.now();
+    // GAP-205: the offset this tick's receipts are stamped under, read beside the `now`
+    // that stamps them, so the discipline forms its estimate in host time.
+    let applied = state
+        .clock_discipline
+        .as_ref()
+        .map_or(0.0, gungnir_time::DisciplineHandle::applied_offset);
 
     // 1. Ingest: adapters -> validation/quarantine -> tracking service.
     for ingest_event in state.ingest.tick(now, state.tracking.as_mut()) {
+        crate::clock_discipline::observe(state, &ingest_event, applied);
         // GAP-008: every accepted detection is a clock-skew sample. Read here, off the
         // event, so the gateway is not asked to do anything it does not already do.
         if let gungnir_model::events::IngestEvent::Accepted(d) = &ingest_event {
@@ -38,9 +45,12 @@ pub fn tick(state: &mut AppState) {
                 && state.skew_alerted.insert(d.sensor.0)
             {
                 let skew = state.clock_skew.skew_s(d.sensor.0).unwrap_or(0.0);
+                // GAP-205: the two remedies, named where the operator reads the fault.
                 state.alerts.push(format!(
                     "sensor {} clock is out of sync: {skew:+.3} s against the late-data \
-                     policy; its detections are being mis-timed",
+                     policy; its detections are being mis-timed. Discipline this host's \
+                     clock from a sensor (time.discipline), or widen \
+                     time.late_data.max_lateness_s (5 s for a host with no NTP or GNSS)",
                     d.sensor.0
                 ));
             }
@@ -49,6 +59,9 @@ pub fn tick(state: &mut AppState) {
         crate::anomaly::observe_ingest(&mut state.anomaly, &ingest_event, now);
         publish(state, now, Event::Ingest(ingest_event));
     }
+    // 1b. GAP-205: a change in the clock's discipline goes on the record and is said, after
+    //     the reports that caused it.
+    crate::clock_discipline::poll(state, now);
 
     // 1c. The node link (GAP-050): silent past the heartbeat timeout, fall back to
     //     embedded services and say so; answering again, mark the reconciliation due.

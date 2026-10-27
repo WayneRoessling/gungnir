@@ -298,6 +298,8 @@ IE-authority-settings,Information Elements,InformationElement,AuthoritySettings,
 IE-azimuth-sector,Information Elements,InformationElement,AzimuthSector,"The horizontal bearings a sensor can see: a sector centred on its boresight (GAP-118, D-84, docs/design/DN-12-coverage-and-gaps.md amendment 1).",Class
 IE-bearing-ray-view,Information Elements,InformationElement,BearingRayView,"A bearing that matched no track, projected for a caller to draw (docs/design/DN-27-bearing-only-detections.md \u00a75 rule 3, \u00a77; GAP-096).",Class
 IE-calibration-event,Information Elements,InformationElement,CalibrationEvent,A sensor's report of an object whose true position is already known (../../docs/mission/gap-analysis/gap-register.md GAP-014).,Class
+IE-clock-discipline-state,Information Elements,InformationElement,ClockDisciplineState,What a clock disciplined from a named sensor is doing (GAP-205; plan 12 tranche A).,Class
+IE-clock-stamps,Information Elements,InformationElement,ClockStamps,"A detection's two time stamps, carried on a quarantine the gateway made under one of its clock rules (GAP-205): a report whose source time is too far ahead of its receipt, or whose receipt is in the future.",Class
 IE-collection-requirement,Information Elements,InformationElement,CollectionRequirement,"A collection requirement, owned by the intelligence analyst (MT-08).",Class
 IE-concurrence,Information Elements,InformationElement,Concurrence,"Who concurred with tasking a requirement, or declined it.",Class
 IE-confirming-operator,Information Elements,InformationElement,ConfirmingOperator,The second person who confirmed a two-person act (D-140).,Class

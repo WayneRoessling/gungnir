@@ -111,6 +111,39 @@ file (D-39). On Windows the file inherits its directory's permissions; the comma
 Point the baseline at the file with `security.authentication.local_accounts.accounts_path`
 and sign in on PN-20. The roles are `operator`, `supervisor`, `analyst`, `sensor-manager`,
 `administrator`, `commander`, `planner`, `security-officer` and `intelligence-analyst`.
+## Time on a site with no NTP or GNSS
+
+Mission time is the host's clock unless the baseline says otherwise. A laptop with no NTP
+and no GNSS time drifts against a GPS-disciplined radar, and once the drift passes the
+late-data buffer (one second by default) the tracker drops that radar's reports as late
+and PN-09 calls its clock out of sync. Two remedies, in order of preference (GAP-205):
+
+**Discipline the clock from a sensor.** Name a configured sensor whose reports carry its
+own clock's time, a radar's GNSS-disciplined time of day for instance:
+
+```json
+{ "version": 1, "time": { "discipline": { "sensor": 4 } } }
+```
+
+Mission time then follows that sensor's time stamps, to within its least transit delay.
+Until the sensor is first heard, mission time is the host clock and PN-09 says
+`waiting`; it locks on the first report, even one the gateway refused because the host
+is behind; it goes into `holdover` after 30 s of silence and keeps the last offset; and it
+refuses an offset larger than an hour, because a mission clock stepped by hours would move
+every deadline with it. **Set the host clock to within an hour before starting.** Each
+change of state is on the journal as `HealthEvent::ClockDiscipline` and in the alerts. Both
+the desktop and the node honour the setting; the sensor must be one the baseline
+configures.
+
+**Or widen the late-data buffer.** A host with no time source and no discipline should run
+
+```json
+{ "version": 1, "time": { "late_data": { "kind": "buffer-and-reorder", "max_lateness_s": 5.0 } } }
+```
+
+which tolerates five seconds of drift before reports are dropped, at the cost of holding
+every report up to five seconds for reordering. The default stays one second (D-98, D-99);
+a site with a time source should leave it there.
 ## Machine identities
 
 Every node and desktop presents its own certificate, named from a fingerprint of its own

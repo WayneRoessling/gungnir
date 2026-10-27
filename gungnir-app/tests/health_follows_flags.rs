@@ -150,7 +150,10 @@ fn the_desktops_health_follows_each_flag_true_false_true() {
                 intercept_healthy,
                 ingest_healthy,
                 ..
-            } = recorded[0];
+            } = recorded[0]
+            else {
+                panic!("{step}: a backend transition, not a clock one: {recorded:?}");
+            };
             assert_eq!(
                 SystemHealth {
                     tracking_healthy,

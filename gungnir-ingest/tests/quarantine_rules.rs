@@ -344,7 +344,7 @@ fn every_refusal_rule_quarantines_its_payload_under_its_own_reason_and_none_reac
     }
     for (event, (payload, refusal)) in quarantined.iter().zip(&refused) {
         match event {
-            IngestEvent::Quarantined { sensor, reason } => {
+            IngestEvent::Quarantined { sensor, reason, .. } => {
                 assert_eq!(*sensor, payload.sensor);
                 assert_eq!(
                     *reason,

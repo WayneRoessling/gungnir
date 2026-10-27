@@ -199,7 +199,7 @@ history, and an entry is never edited once it has merged.
 | GAP-201 | A linked desktop could miss a queued item until the queue moved again | Technical | CAP-5.9, CAP-4.3 | 3 | 10 | S | 30 | I3 | Services engineer | Closed |
 | GAP-203 | Weapons control status cannot be changed while the desktop runs | Technical | CAP-3.6, CAP-5.9 | 5 | 10 | M | 50 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-204 | The desktop cannot provision its own accounts | Technical | CAP-6.1, CAP-7.3 | 3 | 10 | S | 30 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-205 | A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second | Technical | CAP-1.5 | 3 | 7 | M | 21 | I3 | Services engineer | Open |
+| GAP-205 | A GNSS-denied site has no clock discipline, and a drifting source is dropped after one second | Technical | CAP-1.5 | 3 | 7 | M | 21 | I3 | Services engineer | Closed |
 | GAP-206 | No production track is releasable, so track exchange has no producer | Technical | CAP-6.6, CAP-7.4, CAP-1.6 | 5 | 5 | M | 25 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-207 | An effector handoff is a generic POST or a radio call, and no outcome returns to a disconnected desktop | Technical | CAP-4.4, CAP-4.6 | 4 | 5 | L | 20 | I3 | Services engineer | Open |
 | GAP-208 | The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks | Technical | CAP-6.3 | 4 | 9 | M | 36 | I3 | Security engineer (human-owned crate) | Open |
@@ -2924,11 +2924,12 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.5 Time discipline.
 - History:
   - 2026-10-26, Open: Filed by plan 12. GAP-008 detects skew; nothing corrects it, and the default buffer assumes a disciplined host.
+  - 2026-10-26, Closed: Built. `time.discipline` names a configured sensor; both binaries run a clock that follows its time stamps (waiting, locked, holdover, refused beyond an hour), journal each change as `HealthEvent::ClockDiscipline`, and the desktop draws it on PN-09. The gateway now carries a clock-rule quarantine's stamps, so a host behind its radar can hear it. The 5 s buffer for an undisciplined host is documented; the default stands. See `../../record/2026-10-26/gap-205-the-clock-follows-a-named-sensor.md`.
 - Evidence: `gungnir-time/src/lib.rs:221-226` (`SystemTime::now`), `:87-130` (skew per source), `:138-158` and `:204-213` (out-of-sync drop); no NTP, PPS or GNSS reference in any `.rs` file.
 - Severity: 3. Reach: 7 threads. Effort: M. Priority: 21.
 - Impact: `WallClockAuthority` is the host's `SystemTime`. A free-running laptop clock against a GPS-disciplined radar drifts past the one-second late-data default within hours, and the pipeline then drops that source as out of sync. There is no own-position concept for a unit on the move: the frame origin and every sensor position are static baseline entries.
 - Closing action: A `ClockSource` authority that can be disciplined from a named sensor's time stamps, a documented wider `late_data` for undisciplined hosts, PN-09 saying which source disciplines the clock; a deployment note for the trial. A mobile frame origin is a separate gap once a mobile unit is in scope.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: GAP-008; GAP-140; `../../review/2026-10-26-comprehensive-review.md` §6 finding 3.
 
 **GAP-206 No production track is releasable, so track exchange has no producer**

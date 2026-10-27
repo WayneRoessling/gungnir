@@ -54,7 +54,6 @@ use gungnir_model::{SensorId, SystemHealth};
 use gungnir_observability::WatchdogConfig;
 use gungnir_sensor_management::{InMemorySensorRegistry, SensorRegistry};
 use gungnir_store::{EventJournal, FileEventJournal};
-use gungnir_time::{TimeAuthority, WallClockAuthority};
 use gungnir_tracking_service::TrackingService;
 use std::time::{Duration, Instant};
 
@@ -1823,7 +1822,12 @@ async fn run(
     }
 
     // GAP-114: the same late-data policy the tracker below applies, so the two agree.
-    let clock = WallClockAuthority::new(config.time.late_data);
+    // GAP-205: disciplined from the sensor the baseline names, the host clock otherwise,
+    // the same as the desktop, so a node with a GNSS radar runs on the radar's time.
+    let (clock, clock_discipline) = gungnir_time::clock_for(
+        config.time.late_data,
+        config.time.discipline.map(|d| d.sensor),
+    );
     // GAP-051: created through the lifecycle rather than minted from the wall clock, so
     // there is a record on disk saying which baseline this session ran under and how it
     // ended. A node killed without closing leaves that record marked live, and the next
@@ -2131,9 +2135,16 @@ async fn run(
         }
 
         observe_services(&service_sinks, &mut sensors, now);
+        // GAP-205: the offset this tick's receipts are stamped under, read beside `now`.
+        let applied = clock_discipline
+            .as_ref()
+            .map_or(0.0, gungnir_time::DisciplineHandle::applied_offset);
         for event in gateway.tick(now, &mut tracking) {
+            gungnir_node::clock_discipline::observe(clock_discipline.as_ref(), &event, applied);
             bus.publish(now, Event::Ingest(event))?;
         }
+        // GAP-205: a change in the clock's discipline goes on this node's record.
+        gungnir_node::clock_discipline::poll(clock_discipline.as_ref(), &bus, now)?;
         // GAP-101: after the gateway tick, which is what fills the sink.
         discard_uas_reports(&feed_reports.uas);
         issue_api_tasks(&api, &mut sensors, &bus, now)?;

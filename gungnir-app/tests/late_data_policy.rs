@@ -66,7 +66,10 @@ fn config(name: &str, late_data: LateDataPolicy) -> (ConfigBaseline, std::path::
     (
         ConfigBaseline {
             data_dir: dir.to_string_lossy().into_owned(),
-            time: TimeConfig { late_data },
+            time: TimeConfig {
+                late_data,
+                discipline: None,
+            },
             ..ConfigBaseline::default()
         },
         dir,

@@ -20,7 +20,7 @@ enum "InterceptEvent" as InterceptEvent <<InformationElement>> {
 }
 enum "IngestEvent" as IngestEvent <<InformationElement>> {
   Accepted(DetectionView)
-  Quarantined { sensor: SensorId, reason: String, }
+  Quarantined { sensor: SensorId, reason: String, stamps: Option<crate::ClockStamps>, }
   NotAccepted { sensor: SensorId, reason: String, }
 }
 enum "SensorEvent" as SensorEvent <<InformationElement>> {
@@ -101,6 +101,7 @@ enum "VerdictSummary" as VerdictSummary <<InformationElement>> {
 }
 enum "HealthEvent" as HealthEvent <<InformationElement>> {
   Changed { tracking_healthy: bool, intercept_healthy: bool, ingest_healthy: bool, at: MissionTime, }
+  ClockDiscipline { sensor: SensorId, state: crate::ClockDisciplineState, at: MissionTime, }
 }
 enum "WarningEvent" as WarningEvent <<InformationElement>> {
   Raised { asset: crate::AssetId, track: crate::TrackId, due_by: MissionTime, at: MissionTime, }
@@ -164,6 +165,10 @@ class "AlgorithmBaselineId\n(see If-Sr-core-identifiers-frames-quality)" as Algo
 enum "ArbitrationGround\n(see If-Sr-policy-authority-settings)" as ArbitrationGround <<External>> #line.dashed {
 }
 class "AssetId\n(see If-Sr-assets-exchange-releasability)" as AssetId <<External>> #line.dashed {
+}
+enum "ClockDisciplineState\n(see If-Sr-core-identifiers-frames-quality)" as ClockDisciplineState <<External>> #line.dashed {
+}
+class "ClockStamps\n(see If-Sr-core-identifiers-frames-quality)" as ClockStamps <<External>> #line.dashed {
 }
 class "CollectionRequirement\n(see If-Sr-battle-rhythm-mission-records)" as CollectionRequirement <<External>> #line.dashed {
 }
@@ -234,6 +239,7 @@ InterceptEvent --> PlanId : PlanEvaluated
 InterceptEvent --> PlanStandingView : PlanStanding
 InterceptEvent --> PlanView : PlanProposed, PlanApproved, PlanSuperseded
 InterceptEvent --> VerdictSummary : PlanEvaluated
+IngestEvent --> ClockStamps : Quarantined
 IngestEvent --> DetectionView : Accepted
 IngestEvent --> SensorId : Quarantined, NotAccepted
 SensorEvent --> MissionTime : ModeChanged
@@ -274,7 +280,9 @@ HandoffEvent --> EffectorReport : Reported
 HandoffEvent --> MissionTime : Issued, Manual, Undelivered, Delivered, Refused, Reported
 ReviewEvent --> MissionTime : Opened, FindingRecorded, FindingPromoted, Concluded, Closed
 ReviewEvent --> SessionId : Opened, FindingRecorded, FindingPromoted, Concluded, Closed
-HealthEvent --> MissionTime : Changed
+HealthEvent --> ClockDisciplineState : ClockDiscipline
+HealthEvent --> MissionTime : Changed, ClockDiscipline
+HealthEvent --> SensorId : ClockDiscipline
 WarningEvent --> AssetId : Raised, Sent, Acknowledged, Failed, Late, Waived, Closed
 WarningEvent --> MissionTime : Raised, Sent, Acknowledged, Failed, Late, Waived, Closed
 LaunchWarningEvent --> LaunchWarningReport : Issued

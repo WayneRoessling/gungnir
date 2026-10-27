@@ -1182,8 +1182,30 @@ pub struct TimeConfig {
     ///
     /// `{"kind": "buffer-and-reorder", "max_lateness_s": 1.0}` or `{"kind": "reject"}`.
     /// `accept-as-is` is refused ([`validate`]): it is for replay and testing only.
+    ///
+    /// **A host with no NTP, no GNSS time and no `discipline` below should widen this to
+    /// 5 s** (GAP-205, the owner's choice of 2026-10-26 to document rather than change the
+    /// default): a free-running clock against a GNSS-disciplined sensor drifts past one
+    /// second within hours, and from then on the pipeline drops that sensor's reports as
+    /// late. The default stays the one second D-98 and D-99 decided.
     #[serde(default)]
     pub late_data: gungnir_model::LateDataPolicy,
+    /// The sensor whose own time stamps discipline this host's clock (GAP-205), for a site
+    /// with no NTP or GNSS time of its own. Absent means the host clock as it stands.
+    /// Validated: the sensor must be one this baseline configures.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discipline: Option<ClockDisciplineConfig>,
+}
+
+/// Which sensor disciplines the clock (GAP-205).
+///
+/// Any configured sensor whose reports carry a source time from its own clock (a radar's
+/// GNSS-disciplined time of day is the case this is for). A sensor whose adapter stamps
+/// source time from the receiving host's clock would discipline the clock to itself, and
+/// PN-09's locked offset of zero would say so.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ClockDisciplineConfig {
+    pub sensor: u32,
 }
 
 /// The `time` section's rules (GAP-114, D-99).
@@ -1209,6 +1231,17 @@ fn validate_time(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
                  deployment chooses \"buffer-and-reorder\" or \"reject\""
                     .into(),
             ));
+        }
+    }
+    // GAP-205: a clock disciplined from a sensor nobody configured would wait for ever and
+    // say only that it was waiting; a misspelt id is refused here instead.
+    if let Some(d) = baseline.time.discipline {
+        if !baseline.sensors.iter().any(|s| s.id == d.sensor) {
+            return Err(ConfigError::Invalid(format!(
+                "time.discipline.sensor is {}, which this baseline does not configure; name \
+                 one of its sensors, or leave time.discipline out to run on the host clock",
+                d.sensor
+            )));
         }
     }
     Ok(())
@@ -6990,6 +7023,37 @@ MFkw
         }
     }
 
+    /// GAP-205: a discipline names a configured sensor, parses as documented, and is
+    /// absent by default.
+    #[test]
+    fn a_clock_discipline_must_name_a_configured_sensor() {
+        let absent: ConfigBaseline = serde_json::from_str(r#"{"version": 1}"#).expect("parses");
+        assert_eq!(absent.time.discipline, None);
+        let mut named: ConfigBaseline =
+            serde_json::from_str(r#"{"version": 1, "time": {"discipline": {"sensor": 4}}}"#)
+                .expect("parses");
+        assert_eq!(
+            named.time.discipline,
+            Some(ClockDisciplineConfig { sensor: 4 })
+        );
+        assert!(
+            matches!(validate(&named), Err(ConfigError::Invalid(ref m)) if m.contains("time.discipline.sensor is 4")),
+            "a sensor nobody configured is refused"
+        );
+        named.sensors.push(SensorConfig {
+            id: 4,
+            modality: "radar".into(),
+            position: [0.9, 0.2, 10.0],
+            max_range_m: 20_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+            detection_model: None,
+            azimuth_sector: None,
+            elevation_band: None,
+        });
+        assert!(validate(&named).is_ok(), "{:?}", validate(&named));
+    }
+
     /// GAP-114: a baseline that says nothing about late data reads as the one-second
     /// buffer every deployment ran before it could, and the section parses in the shape
     /// the documentation gives.
@@ -7028,7 +7092,10 @@ MFkw
     #[test]
     fn a_late_data_policy_a_deployment_should_not_run_is_refused() {
         let with = |late_data| ConfigBaseline {
-            time: TimeConfig { late_data },
+            time: TimeConfig {
+                late_data,
+                discipline: None,
+            },
             ..ConfigBaseline::default()
         };
         match validate(&with(gungnir_model::LateDataPolicy::AcceptAsIs)) {
@@ -7067,6 +7134,7 @@ MFkw
         let candidate = ConfigBaseline {
             time: TimeConfig {
                 late_data: gungnir_model::LateDataPolicy::Reject,
+                discipline: None,
             },
             ..in_force.clone()
         };

@@ -78,6 +78,11 @@ pub enum IngestEvent {
     Quarantined {
         sensor: SensorId,
         reason: String,
+        /// The report's two time stamps when a clock rule refused it (GAP-205), so a
+        /// clock disciplined from this sensor can hear it while the host is behind; absent
+        /// on every other quarantine and on every journal written before the field.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stamps: Option<crate::ClockStamps>,
     },
     /// The detection was valid and the tracking pipeline would not take it (GAP-066).
     ///
@@ -774,6 +779,15 @@ pub enum HealthEvent {
         ingest_healthy: bool,
         at: MissionTime,
     },
+    /// The clock disciplined from a sensor changed state (GAP-205): it locked, went into
+    /// holdover, re-locked, or refused an offset beyond the bound. Published on the
+    /// change, so the record says from when mission time was the sensor's and from when it
+    /// was the host's. Added under the compatibility rule `PlanStanding` cites.
+    ClockDiscipline {
+        sensor: SensorId,
+        state: crate::ClockDisciplineState,
+        at: MissionTime,
+    },
 }
 
 impl HealthEvent {
@@ -787,6 +801,9 @@ impl HealthEvent {
                 ingest_healthy,
                 ..
             } => !(*tracking_healthy && *intercept_healthy && *ingest_healthy),
+            // A clock state is not a backend's health; a decision taken under a holdover is
+            // read off the record by its own event, not counted as degraded here.
+            HealthEvent::ClockDiscipline { .. } => false,
         }
     }
 }

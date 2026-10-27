@@ -139,6 +139,7 @@ fn quarantines_are_counted_per_sensor_from_the_bus() {
             &IngestEvent::Quarantined {
                 sensor: SensorId(1),
                 reason: "out of range".into(),
+                stamps: None,
             },
             MissionTime(1.0),
         );

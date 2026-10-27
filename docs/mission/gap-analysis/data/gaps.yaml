@@ -11983,6 +11983,15 @@
     note: >-
       Filed by plan 12. GAP-008 detects skew; nothing corrects it, and the default
       buffer assumes a disciplined host.
+  - date: 2026-10-26
+    status: Closed
+    note: >-
+      Built. `time.discipline` names a configured sensor; both binaries run a clock that
+      follows its time stamps (waiting, locked, holdover, refused beyond an hour), journal
+      each change as `HealthEvent::ClockDiscipline`, and the desktop draws it on PN-09. The
+      gateway now carries a clock-rule quarantine's stamps, so a host behind its radar can
+      hear it. The 5 s buffer for an undisciplined host is documented; the default stands.
+      See `../../record/2026-10-26/gap-205-the-clock-follows-a-named-sensor.md`.
 
 - id: GAP-206
   name: No production track is releasable, so track exchange has no producer

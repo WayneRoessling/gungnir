@@ -1802,6 +1802,79 @@ const NO_GEOID_GRID: &[crate::panels::sensor_health::GeoidLine<'static>] =
 /// PN-09 has to keep them apart: collapsing them into a health dot is how a scheduled
 /// outage becomes an unnoticed hole, and how a real failure gets shrugged off as "that's
 /// the maintenance window" (DN-21 §5, GAP-054).
+/// GAP-205: PN-09 says which sensor disciplines the clock and what it is doing, in every
+/// state, and says when nothing does.
+#[test]
+fn the_health_panel_says_which_sensor_disciplines_the_clock() {
+    use crate::panels::sensor_health::{
+        render_sensor_health, ClockSyncLine, DisciplineLine, SensorHealthView,
+    };
+    use crate::panels::status_strip::EncryptionState;
+    use gungnir_model::{ClockDisciplineState as S, MissionTime};
+
+    let health = gungnir_model::SystemHealth::default();
+    let probe = RenderProbe::new();
+    let draw = |discipline: Option<DisciplineLine>| {
+        let (_, frame) = probe.draw(|ui| {
+            render_sensor_health(
+                ui,
+                &theme::Palette::day(),
+                &SensorHealthView {
+                    health: &health,
+                    encryption: EncryptionState::Active,
+                    sensors: &[],
+                    clocks: ClockSyncLine {
+                        sources_observed: 0,
+                        sources_out_of_sync: 0,
+                        max_skew_s: 0.0,
+                        discipline,
+                    },
+                    late_data: crate::panels::sensor_health::LateDataLine::default(),
+                    detectors: &[],
+                    terrain: crate::panels::sensor_health::TerrainLine {
+                        masking: false,
+                        detail: "no terrain configured",
+                    },
+                    geoid: NO_GEOID_GRID,
+                    point_cloud_registration:
+                        crate::panels::sensor_health::PointCloudRegistrationLine::NotConfigured,
+                    feeds: &[],
+                    cooperative_feeds: &[],
+                    peers: &[],
+                    bearing_feeds: &[],
+                    bearing_pipeline: crate::panels::sensor_health::BearingPipelineLine::default(),
+                    exchange: None,
+                },
+            );
+        });
+        frame.joined()
+    };
+    let on = |state| Some(DisciplineLine { sensor: 4, state });
+
+    let text = draw(None);
+    assert!(text.contains("not disciplined from any sensor"), "{text}");
+    let text = draw(on(S::Waiting));
+    assert!(text.contains("disciplined by sensor 4: waiting"), "{text}");
+    let text = draw(on(S::Locked {
+        offset_s: -39.98,
+        samples: 12,
+        last_sample: MissionTime(100.0),
+    }));
+    assert!(
+        text.contains("locked; host behind by 39.980 s over 12 report(s)"),
+        "{text}"
+    );
+    let text = draw(on(S::Holdover {
+        offset_s: -39.98,
+        last_sample: MissionTime(100.0),
+    }));
+    assert!(text.contains("holding over since T+100 s"), "{text}");
+    let text = draw(on(S::Refused { offset_s: 7200.0 }));
+    assert!(
+        text.contains("discipline refused: sensor 4 reads 7200 s"),
+        "{text}"
+    );
+}
 #[test]
 #[allow(clippy::too_many_lines)]
 fn the_health_panel_tells_planned_downtime_from_failure() {
@@ -1818,6 +1891,7 @@ fn the_health_panel_tells_planned_downtime_from_failure() {
         sources_observed: 0,
         sources_out_of_sync: 0,
         max_skew_s: 0.0,
+        discipline: None,
     };
 
     // GAP-021: an unconfigured detector is listed as off, and one that is configured but
@@ -2027,6 +2101,7 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                     sources_observed: 0,
                     sources_out_of_sync: 0,
                     max_skew_s: 0.0,
+                    discipline: None,
                 },
                 late_data: crate::panels::sensor_health::LateDataLine::default(),
                 detectors: &[],
@@ -2066,6 +2141,7 @@ fn the_health_panel_draws_the_bearing_feed_line_and_the_pipeline_counters() {
                     sources_observed: 0,
                     sources_out_of_sync: 0,
                     max_skew_s: 0.0,
+                    discipline: None,
                 },
                 late_data: crate::panels::sensor_health::LateDataLine::default(),
                 detectors: &[],
@@ -2147,6 +2223,7 @@ fn the_health_panel_draws_the_late_data_policy_and_its_counters() {
                     sources_observed: 0,
                     sources_out_of_sync: 0,
                     max_skew_s: 0.0,
+                    discipline: None,
                 },
                 late_data: buffered,
                 detectors: &[],
@@ -2231,6 +2308,7 @@ fn the_point_cloud_registration_line_names_the_backend_and_why() {
                         sources_observed: 0,
                         sources_out_of_sync: 0,
                         max_skew_s: 0.0,
+                        discipline: None,
                     },
                     late_data: crate::panels::sensor_health::LateDataLine::default(),
                     detectors: &[],
@@ -2317,6 +2395,7 @@ fn the_health_panel_says_once_that_this_console_may_not_publish() {
                         sources_observed: 0,
                         sources_out_of_sync: 0,
                         max_skew_s: 0.0,
+                        discipline: None,
                     },
                     late_data: crate::panels::sensor_health::LateDataLine::default(),
                     detectors: &[],

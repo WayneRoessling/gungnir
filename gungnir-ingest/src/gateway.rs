@@ -21,8 +21,40 @@ pub const MAX_SOURCE_AHEAD_OF_RECEIPT_S: f64 = 1.0;
 /// plausible local-frame observation.
 pub const MAX_MEASUREMENT_MAGNITUDE_M: f64 = 1.0e7;
 
-/// The schema and sanity rules every observation must pass.
+/// The schema and sanity rules every observation must pass: [`validate_payload`], then
+/// [`validate_clock`], in that order. Split in two under GAP-205 with no change to what
+/// either refuses or the order they refuse in, so the gateway can tell a report refused
+/// for its time stamps alone from one refused for what it carries.
 pub fn validate_detection(d: &DetectionView, now: MissionTime) -> Result<(), IngestError> {
+    validate_payload(d)?;
+    validate_clock(d, now)
+}
+
+/// The rules about the time stamps alone (GAP-205): finite, the source not too far
+/// ahead of receipt, the receipt not in the future. A report this alone refuses came from
+/// its authenticated source with a sound payload, so its stamps are honest evidence of how
+/// far that source's clock is from this one, and the gateway carries them on the
+/// quarantine for a clock disciplined from that source.
+pub fn validate_clock(d: &DetectionView, now: MissionTime) -> Result<(), IngestError> {
+    let quarantine = |reason: String| IngestError::Quarantined {
+        sensor: d.sensor,
+        reason,
+    };
+    if !(d.source_time.0.is_finite() && d.receipt_time.0.is_finite()) {
+        return Err(quarantine("non-finite timestamp".into()));
+    }
+    if d.source_time.0 > d.receipt_time.0 + MAX_SOURCE_AHEAD_OF_RECEIPT_S {
+        return Err(quarantine("source time is ahead of receipt time".into()));
+    }
+    if d.receipt_time.0 > now.0 + MAX_FUTURE_RECEIPT_S {
+        return Err(quarantine("receipt time is in the future".into()));
+    }
+    Ok(())
+}
+
+/// The rules about what the report carries: a finite measurement of a plausible size and
+/// a stated error.
+pub fn validate_payload(d: &DetectionView) -> Result<(), IngestError> {
     let quarantine = |reason: String| IngestError::Quarantined {
         sensor: d.sensor,
         reason,
@@ -90,16 +122,24 @@ pub fn validate_detection(d: &DetectionView, now: MissionTime) -> Result<(), Ing
             }
         }
     }
-    if !(d.source_time.0.is_finite() && d.receipt_time.0.is_finite()) {
-        return Err(quarantine("non-finite timestamp".into()));
-    }
-    if d.source_time.0 > d.receipt_time.0 + MAX_SOURCE_AHEAD_OF_RECEIPT_S {
-        return Err(quarantine("source time is ahead of receipt time".into()));
-    }
-    if d.receipt_time.0 > now.0 + MAX_FUTURE_RECEIPT_S {
-        return Err(quarantine("receipt time is in the future".into()));
-    }
     Ok(())
+}
+
+/// The stamps a clock-rule quarantine carries (GAP-205): `Some` exactly when the payload
+/// passed and the clock rules alone refused, with finite stamps, so nothing else's
+/// stamps ever reach a disciplined clock.
+#[must_use]
+pub fn clock_rule_stamps(
+    d: &DetectionView,
+    now: MissionTime,
+) -> Option<gungnir_model::ClockStamps> {
+    let finite = d.source_time.0.is_finite() && d.receipt_time.0.is_finite();
+    (finite && validate_payload(d).is_ok() && validate_clock(d, now).is_err()).then_some(
+        gungnir_model::ClockStamps {
+            source_time: d.source_time,
+            receipt_time: d.receipt_time,
+        },
+    )
 }
 
 /// Parse one JSON-encoded `DetectionView` (the recorded-feed line format).

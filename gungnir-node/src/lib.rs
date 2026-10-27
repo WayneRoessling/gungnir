@@ -29,6 +29,7 @@
 
 pub mod approval;
 pub mod audit_record;
+pub mod clock_discipline;
 pub mod control_status;
 pub mod gap_acceptance;
 pub mod picture;

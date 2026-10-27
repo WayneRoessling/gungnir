@@ -213,6 +213,7 @@ mod tests {
                     );
                     assert_eq!(at, MissionTime(t));
                 }
+                Some(other) => panic!("the monitor reports backend health only: {other:?}"),
                 None => assert!(!expect_event, "the change to {h:?} left no record"),
             }
         };

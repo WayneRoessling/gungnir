@@ -63,6 +63,16 @@ class "Quality" as Quality <<InformationElement>> {
 class "MissionTime" as MissionTime <<InformationElement>> {
   pub f64
 }
+class "ClockStamps" as ClockStamps <<InformationElement>> {
+  source_time: MissionTime
+  receipt_time: MissionTime
+}
+enum "ClockDisciplineState" as ClockDisciplineState <<InformationElement>> {
+  Waiting
+  Locked { offset_s: f64, samples: u32, last_sample: MissionTime, }
+  Holdover { offset_s: f64, last_sample: MissionTime }
+  Refused { offset_s: f64 }
+}
 class "LaydownId\n(see If-Sr-battle-rhythm-mission-records)" as LaydownId <<External>> #line.dashed {
 }
 class "PeerOrigin\n(see If-Sr-assets-exchange-releasability)" as PeerOrigin <<External>> #line.dashed {
@@ -75,4 +85,6 @@ Provenance --> RehearsalOrigin : rehearsal
 Provenance --> SourceAuthentication : authentication
 RehearsalOrigin --> LaydownId : laydown
 RehearsalOrigin --> TestTrackNumber : scenario
+ClockStamps --> MissionTime : source_time, receipt_time
+ClockDisciplineState --> MissionTime : Locked, Holdover
 @enduml
