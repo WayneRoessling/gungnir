@@ -70,7 +70,7 @@ class "ClockStamps" as ClockStamps <<InformationElement>> {
 enum "ClockDisciplineState" as ClockDisciplineState <<InformationElement>> {
   Waiting
   Locked { offset_s: f64, samples: u32, last_sample: MissionTime, }
-  Holdover { offset_s: f64, last_sample: MissionTime }
+  Holdover { offset_s: f64, last_sample: MissionTime, }
   Refused { offset_s: f64 }
 }
 class "LaydownId\n(see If-Sr-battle-rhythm-mission-records)" as LaydownId <<External>> #line.dashed {
