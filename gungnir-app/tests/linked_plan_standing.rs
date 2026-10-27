@@ -309,6 +309,7 @@ impl Node {
             geofences: &self.geo,
             bus: &self.bus,
             endpoint_client: None,
+            effectors: None,
             api: &self.api,
         };
         if let Some(plan) = self

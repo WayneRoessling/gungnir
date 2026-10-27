@@ -325,6 +325,8 @@ fn answer_one(
         geofences: t.geofences,
         bus: t.bus,
         endpoint_client: t.endpoint_client,
+        // A status change hands nothing off, so it reads no effector.
+        effectors: None,
         api: t.api,
     };
     let withdrawn = approval::with_desk(

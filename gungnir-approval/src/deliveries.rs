@@ -94,6 +94,27 @@ pub trait HandoffTransport {
     /// table, one of a kind no transport carries, or a transport that could not be built.
     fn address_for(&self, endpoint: &str) -> Result<String, String>;
 
+    /// What `endpoint` is sent for `handoff`: by default the handoff itself as JSON
+    /// ([`crate::handoffs::endpoint_payload`]), which is what an HTTP effector reads.
+    ///
+    /// A host overrides it for an endpoint that speaks something else -- a SAPIENT
+    /// effector is sent a `Task` (GAP-207) -- and the same payload is posted again on
+    /// every retry, so whatever it builds has to mean the same thing the second time.
+    ///
+    /// # Errors
+    ///
+    /// Why the handoff cannot be put in this endpoint's terms. Final for the handoff:
+    /// the desk records it undelivered with the reason, and the operator is told to reach
+    /// the effector another way (DN-07 §5 case 3).
+    fn payload_for(
+        &self,
+        endpoint: &str,
+        handoff: &gungnir_model::handoff::Handoff,
+    ) -> Result<serde_json::Value, String> {
+        let _ = endpoint;
+        crate::handoffs::endpoint_payload(handoff)
+    }
+
     /// Post the payload. `None` when the host has no transport at all, which leaves the
     /// handoff owed and due again rather than lost.
     fn post(&self, address: &str, payload: serde_json::Value) -> Option<Box<dyn HandoffInFlight>>;

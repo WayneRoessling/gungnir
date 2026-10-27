@@ -171,6 +171,20 @@ pub fn report_sentence(report: &EffectorReport) -> String {
         EffectorReport::Refused { at, reason } => {
             format!("Refused at T+{:.0} s: {reason}", at.0)
         }
+        // GAP-207: the task is over and the effect is not stated, so the sentence says
+        // so rather than leaving a reader to infer success from "finished".
+        EffectorReport::Finished { at, detail } => {
+            let detail = if detail.is_empty() {
+                String::new()
+            } else {
+                format!(" ({detail})")
+            };
+            format!(
+                "Finished at T+{:.0} s{detail}; the effector does not say whether it was \
+                 effective.",
+                at.0
+            )
+        }
     }
 }
 
@@ -372,5 +386,14 @@ mod tests {
             reason: "no rounds".into()
         })
         .contains("no rounds"));
+        // GAP-207: a finished task never reads as a success.
+        let finished = report_sentence(&EffectorReport::Finished {
+            at: MissionTime(5.0),
+            detail: String::new(),
+        });
+        assert!(
+            finished.contains("does not say whether it was effective"),
+            "{finished}"
+        );
     }
 }

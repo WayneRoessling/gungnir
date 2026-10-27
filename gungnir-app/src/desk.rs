@@ -27,6 +27,7 @@ use gungnir_approval::{
     HandoffTransport, PolicyInputs, SignedIn,
 };
 use gungnir_eventing::{Event, EventBus};
+use gungnir_ingest::adapters::sapient_effector::SapientEffectors;
 use gungnir_model::{ExchangeItem, MissionTime};
 use gungnir_remote::endpoint::{DeliveryOutcome, EndpointClient, PendingDelivery};
 use gungnir_remote::link::{ExchangeProductRecord, NodeLink};
@@ -48,6 +49,10 @@ pub(crate) struct DesktopHost<'a> {
     endpoint_client: Option<&'a EndpointClient>,
     /// The node link, while one is up: where the exchange set is republished to.
     link: Option<&'a NodeLink>,
+    /// The baseline, for what a SAPIENT task is built from (GAP-207).
+    config: &'a gungnir_config::ConfigBaseline,
+    /// The SAPIENT effectors a handoff can be sent to (GAP-207).
+    effectors: &'a SapientEffectors,
 }
 
 impl ApprovalHost for DesktopHost<'_> {
@@ -100,10 +105,25 @@ impl ApprovalHost for DesktopHost<'_> {
 
 impl HandoffTransport for DesktopHost<'_> {
     fn address_for(&self, endpoint: &str) -> Result<String, String> {
+        // GAP-207: a SAPIENT effector before the HTTP table, which would refuse the kind.
+        if let Some(address) = self.effectors.address_for(endpoint) {
+            return Ok(address);
+        }
         crate::deliveries::http_address_in(self.endpoints, self.endpoint_client.is_some(), endpoint)
     }
 
+    fn payload_for(
+        &self,
+        endpoint: &str,
+        handoff: &gungnir_model::handoff::Handoff,
+    ) -> Result<serde_json::Value, String> {
+        crate::sapient::effector_payload(self.config, self.effectors, endpoint, handoff)
+    }
+
     fn post(&self, address: &str, payload: serde_json::Value) -> Option<Box<dyn HandoffInFlight>> {
+        if let Some(sent) = self.effectors.post(address, &payload) {
+            return Some(Box::new(crate::sapient::Sent(sent)));
+        }
         self.endpoint_client
             .map(|client| Box::new(Posted(client.post_json(address, payload))) as Box<_>)
     }
@@ -152,6 +172,7 @@ pub(crate) fn with_desk<T>(
         audit,
         endpoint_client,
         link,
+        sapient_effectors,
         ..
     } = state;
     let config: &gungnir_config::ConfigBaseline = config;
@@ -174,6 +195,8 @@ pub(crate) fn with_desk<T>(
         endpoints: &config.endpoints,
         endpoint_client: endpoint_client.as_ref(),
         link: link.as_ref(),
+        config,
+        effectors: sapient_effectors,
     };
     f(desk, &cx, &mut host)
 }

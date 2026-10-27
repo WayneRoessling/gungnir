@@ -42,6 +42,7 @@ enum "EffectorReport" as EffectorReport <<InformationElement>> {
   Executing { at: MissionTime, }
   Completed { at: MissionTime, effective: bool, detail: String, }
   Refused { at: MissionTime, reason: String, }
+  Finished { at: MissionTime, detail: String, }
 }
 enum "HandoffError" as HandoffError <<InformationElement>> {
   UnknownDecision(DecisionId)
@@ -105,7 +106,7 @@ Handoff --> Provenance : track_provenance
 Handoff --> Quality : track_provenance
 Handoff --> Releasability : releasability
 DeliveryState --> MissionTime : Delivered, Refused, Undelivered
-EffectorReport --> MissionTime : Acknowledged, Executing, Completed, Refused
+EffectorReport --> MissionTime : Acknowledged, Executing, Completed, Refused, Finished
 HandoffError --> DecisionId : UnknownDecision
 PlanKind --> FiresPlan : Fires
 PlanKind --> InterceptSolutionView : Intercept

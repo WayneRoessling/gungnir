@@ -326,6 +326,7 @@ impl Node {
                             geofences: &*geo,
                             bus: &bus,
                             endpoint_client: None,
+                            effectors: None,
                             api: &api,
                         };
                         // `main.rs`'s order.
@@ -413,6 +414,7 @@ impl Node {
             geofences: &*self.geo,
             bus: &self.bus,
             endpoint_client: None,
+            effectors: None,
             api: &self.api,
         };
         approval::propose(&mut state.approval, &frame, plan);

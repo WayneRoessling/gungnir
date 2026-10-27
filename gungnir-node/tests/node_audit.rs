@@ -137,6 +137,7 @@ impl Node {
                             geofences: &*geo,
                             bus: &bus,
                             endpoint_client: None,
+                            effectors: None,
                             api: &api,
                         };
                         // The order `main.rs` runs them in.

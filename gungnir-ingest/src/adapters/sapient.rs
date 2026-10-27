@@ -250,6 +250,7 @@ impl TcpSapientSource {
 /// one task for the sensor this connection serves may be issued concurrently.
 ///
 /// [adapter]: gungnir_sensor_management::sapient_task::SapientTaskAdapter
+#[derive(Debug)]
 pub struct TcpTaskSink {
     stream: Mutex<std::net::TcpStream>,
     description: String,
@@ -312,58 +313,63 @@ impl TcpTaskSink {
     /// `gungnir_security::os_keystore::ensure_secret`'s own residual is.
     pub fn send(&self, mut json: String) {
         json.push('\n');
-        self.send_within(json.as_bytes(), Self::SEND_DEADLINE);
+        if let Err(reason) = self.send_within(json.as_bytes(), Self::SEND_DEADLINE) {
+            tracing::error!(sink = %self.description, %reason, "a SAPIENT task was not sent");
+        }
     }
 
-    /// As [`send`][Self::send], with the deadline as a parameter so a test can prove
-    /// the give-up path without waiting out the real one.
-    fn send_within(&self, bytes: &[u8], deadline: std::time::Duration) {
+    /// As [`send`][Self::send], saying whether the whole message left this process
+    /// (GAP-207): a handoff's delivery state has to know, where a sensor task's sink
+    /// cannot carry the answer anywhere.
+    ///
+    /// # Errors
+    ///
+    /// Why the message did not go: a poisoned lock, a connection that took no bytes or
+    /// failed, or one that did not drain before the send deadline.
+    pub fn try_send(&self, json: &str) -> Result<(), String> {
+        let mut line = json.to_owned();
+        line.push('\n');
+        self.send_within(line.as_bytes(), Self::SEND_DEADLINE)
+    }
+
+    /// As [`try_send`][Self::try_send], with the deadline as a parameter so a test can
+    /// prove the give-up path without waiting out the real one.
+    fn send_within(&self, bytes: &[u8], deadline: std::time::Duration) -> Result<(), String> {
         use std::io::Write;
         let Ok(mut stream) = self.stream.lock() else {
-            tracing::error!(
-                sink = %self.description,
-                "the task sink's connection lock is poisoned"
-            );
-            return;
+            return Err(format!(
+                "{}: the task sink's connection lock is poisoned",
+                self.description
+            ));
         };
         let mut sent = 0;
         let give_up_at = std::time::Instant::now() + deadline;
         loop {
             match stream.write(&bytes[sent..]) {
                 Ok(0) => {
-                    tracing::error!(
-                        sink = %self.description,
-                        "a SAPIENT task's connection accepted no more bytes"
-                    );
-                    return;
+                    return Err(format!(
+                        "{}: the connection accepted no more bytes",
+                        self.description
+                    ));
                 }
                 Ok(n) => {
                     sent += n;
                     if sent == bytes.len() {
-                        return;
+                        return Ok(());
                     }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     if std::time::Instant::now() >= give_up_at {
-                        tracing::error!(
-                            sink = %self.description,
-                            sent,
-                            total = bytes.len(),
-                            "a SAPIENT task could not be fully written before its send \
-                             deadline; the connection is not draining"
-                        );
-                        return;
+                        return Err(format!(
+                            "{}: {sent} of {} bytes written before the send deadline; the \
+                             connection is not draining",
+                            self.description,
+                            bytes.len()
+                        ));
                     }
                     std::thread::sleep(Self::SEND_RETRY_INTERVAL);
                 }
-                Err(e) => {
-                    tracing::error!(
-                        sink = %self.description,
-                        %e,
-                        "a SAPIENT task could not be written to the connection"
-                    );
-                    return;
-                }
+                Err(e) => return Err(format!("{}: {e}", self.description)),
             }
         }
     }
@@ -1008,7 +1014,7 @@ impl<S: SapientSource> ProtocolAdapter for SapientDetectionAdapter<S> {
 /// `taskStatus` of `TASK_STATUS_UNSPECIFIED`, the schema's own zero value for a field
 /// that was not actually set -- refuses the whole message rather than reporting half of
 /// it.
-fn parse_task_ack(value: &Value) -> Option<TaskAckReport> {
+pub(crate) fn parse_task_ack(value: &Value) -> Option<TaskAckReport> {
     let task_id = value.get("taskId")?.as_str()?.to_owned();
     let status = match value.get("taskStatus")?.as_str()? {
         "TASK_STATUS_ACCEPTED" => TaskAckStatus::Accepted,
@@ -1719,9 +1725,14 @@ mod tests {
         let mut blocked = None;
         for attempt in 0..200u32 {
             let start = std::time::Instant::now();
-            sink.send_within(&chunk, deadline);
+            let outcome = sink.send_within(&chunk, deadline);
             let elapsed = start.elapsed();
             if elapsed >= deadline / 2 {
+                // GAP-207: the give-up is now said to the caller, not only logged.
+                assert!(
+                    outcome.is_err() || elapsed < deadline,
+                    "a send that ran out its deadline reported success"
+                );
                 blocked = Some((attempt, elapsed));
                 break;
             }

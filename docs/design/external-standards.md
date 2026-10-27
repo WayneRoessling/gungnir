@@ -1058,6 +1058,25 @@ interface agreement, and `github.com/opendroneid/specs` holds only early drafts 
 NATO ACCS ASTERIX categories 158 (strobe reports) and 160 (passive sensor data) are exactly
 on topic and are **not** available from the public ASTERIX site.
 
+### 7.4 The effector half (GAP-207, 2026-10-27)
+
+D-144 put the trial's one effector on SAPIENT until a partner names its own interface. Read
+from the v2.0 protobufs on the `main` branch of `github.com/dstl/SAPIENT-Proto-Files`:
+
+- `registration.proto`'s `NodeType` has five effector values: `NODE_TYPE_KINETIC = 13` ("a
+  physical effector"), `_JAMMER = 14`, `_CYBER = 15`, `_LDEW = 16` and `_RFDEW = 17`.
+- `task.proto`'s `Task.Command` `oneof` has **no engage member**: `request` (free text),
+  three thresholds, `mode_change`, `look_at`, `move_to`, `patrol` and `follow`. Nothing in
+  the folder mentions engaging or defeating.
+- `task_ack.proto`'s `TaskStatus` is `ACCEPTED`, `REJECTED`, `COMPLETED` and `FAILED`, with
+  repeated `reason`. **No field states an effect.**
+
+So the handoff is sent as `request: "engage"`, a vocabulary of ours that an effector must
+agree out of band, as the mode names in `sapient_task.rs` are; a node that does not know it
+rejects the task. `COMPLETED` is read as "over, effect not stated". DN-07 §10 has the
+mapping. If BSI Flex 335's normative text adds an effector command, this is the place it
+changes.
+
 ## 8. Motion imagery: STANAG 4609 and the MISB family -- surveyed 2026-09-06, the metadata half built 2026-09-08 against a secondary source, **still not pinned to the primary text**
 
 **Still not pinned to MISB's own text**, and §8.2 says exactly why: the specification is
