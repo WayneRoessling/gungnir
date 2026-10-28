@@ -50,6 +50,19 @@ afterwards. DN-22 §17 sets out the choices; in short:
 - **`gungnir-app/tests/data_dir_default.rs`.** Profile directories on both platforms; an
   existing journal kept; a host with no profile keeping the old place.
 
+## A test the Miri gate could not finish
+
+This pull request's diff contains the word `unsafe`, in comments that say why the Win32
+API was not used, so the Miri gate ran for the first time since GAP-015 added
+`gungnir-tracking-service`'s `a_dense_scan_puts_a_group_on_the_view_and_it_ages_stale_with_nothing_arriving`.
+- The test runs the dense-group pipeline and waits ten seconds of wall time for the group.
+- Under Miri that pipeline takes hours: `gungnir-fusion-async`'s `dense_group` suite was
+  already left out at over five hours.
+- So the test failed at its wait, not on undefined behaviour.
+
+It is now in the tracking-service entry's `skip` list with that reason, under D-92's rule
+for long runs. The dense-group path is therefore not exercised by Miri at all. It contains
+no `unsafe` of its own.
 ## What this does not do
 
 - **Owner-only keeps out other ordinary accounts.** An administrator or root can still read
