@@ -60,10 +60,7 @@ pub fn declare(
     what: &str,
     releasability: Releasability,
 ) -> Result<LaunchWarningReport, LaunchWarningError> {
-    if !gungnir_security::authz::role_permits(
-        state.role(),
-        gungnir_security::actions::RELEASE_PRODUCT,
-    ) {
+    if !state.may(gungnir_security::actions::RELEASE_PRODUCT) {
         return Err(LaunchWarningError::Forbidden);
     }
     let what = what.trim();

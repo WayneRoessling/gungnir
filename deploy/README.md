@@ -111,6 +111,36 @@ file (D-39). On Windows the file inherits its directory's permissions; the comma
 Point the baseline at the file with `security.authentication.local_accounts.accounts_path`
 and sign in on PN-20. The roles are `operator`, `supervisor`, `analyst`, `sensor-manager`,
 `administrator`, `commander`, `planner`, `security-officer` and `intelligence-analyst`.
+
+### Sessions
+
+No session lasts longer than twelve hours or sits idle longer than fifteen minutes
+(GAP-212, D-143). A baseline may shorten either, and a longer value is refused when the
+baseline loads:
+
+```json
+{ "security": { "authentication": { "session_lifetime_s": 28800, "idle_timeout_s": 600 } } }
+```
+
+A node's tokens default to fifteen minutes' lifetime, as before, and are measured on a
+clock that cannot be set back.
+
+- **Desktop idle lock.** A desktop idle for the timeout locks. The picture and the queue
+  stay on screen, every action is refused, and a sign-in in the window on top unlocks it.
+- **Node token idle.** A node refuses a token unused for the timeout.
+- **Restarts.** A node that restarts believes none of the tokens it issued before, so its
+  desktops sign in again.
+
+A node reads each operator's role from its account store on every request, so a role
+changed with `account add --replace` or on PN-20 is in force at that operator's next
+request. An account removed from the store ends its sessions. An administrator can end
+every session one operator holds with `POST /v3/session/revoke`, and an operator ends
+their own with `DELETE /v3/session`.
+
+`GUNGNIR_TOKEN_KEY` must hold at least 32 bytes. The node derives its signing key from it
+and never uses the value itself as the key; changing the value ends every session.
+Repeated failed sign-ins are slowed for the address they come from, so a stranger's guesses
+do not slow an operator signing in at their own console.
 ## Signing the desktop's audit anchors
 
 A desktop's audit log is a hash chain with its head kept in the event journal. On a

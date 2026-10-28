@@ -29,6 +29,97 @@ use crate::{AuditEntry, AuditLog, OperatorId, Role, SecurityError};
 /// `f64` the audit log uses rather than a `MissionTime`.
 pub type MissionTimeSeconds = f64;
 
+/// The longest any session lasts, a node's token or a desktop's local session: twelve
+/// hours (D-143). A baseline may set it lower and never higher.
+pub const SESSION_MAX_S: MissionTimeSeconds = 43_200.0;
+
+/// Idle this long and a session locks (D-143): fifteen minutes. A baseline may set it
+/// lower and never higher.
+pub const IDLE_LOCK_S: MissionTimeSeconds = 900.0;
+
+/// Seconds on a clock that never runs backwards, from an arbitrary origin (GAP-212).
+///
+/// What a session's lifetime and idleness are measured on. Mission time is the wall
+/// clock's, or a disciplined one's, and a clock set back would re-open a session that had
+/// ended; this one cannot be set at all. It does not survive a restart, and neither does a
+/// session measured on it, which is the point.
+pub trait MonotonicClock: Send + Sync + std::fmt::Debug {
+    fn seconds(&self) -> f64;
+}
+
+/// [`MonotonicClock`] on `std::time::Instant`.
+#[derive(Debug, Clone, Copy)]
+pub struct SystemMonotonic {
+    origin: std::time::Instant,
+}
+
+impl Default for SystemMonotonic {
+    fn default() -> Self {
+        Self {
+            origin: std::time::Instant::now(),
+        }
+    }
+}
+
+impl MonotonicClock for SystemMonotonic {
+    fn seconds(&self) -> f64 {
+        self.origin.elapsed().as_secs_f64()
+    }
+}
+
+/// A [`MonotonicClock`] moved by hand, for a test or a harness that cannot wait twelve
+/// hours. Clones share one reading.
+#[derive(Debug, Clone, Default)]
+pub struct ManualMonotonic(std::sync::Arc<std::sync::Mutex<f64>>);
+
+impl ManualMonotonic {
+    /// Move the clock forward by `seconds`.
+    pub fn advance(&self, seconds: f64) {
+        if let Ok(mut now) = self.0.lock() {
+            *now += seconds.max(0.0);
+        }
+    }
+}
+
+impl MonotonicClock for ManualMonotonic {
+    fn seconds(&self) -> f64 {
+        self.0.lock().map_or(0.0, |now| *now)
+    }
+}
+
+/// Watches a clock for steps backwards (GAP-212): fed each reading, it answers with how
+/// far the clock went back when that is more than [`ClockStepWatch::TOLERANCE_S`].
+/// Forward steps are a clock catching up and are not reported.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ClockStepWatch {
+    last: Option<f64>,
+}
+
+impl ClockStepWatch {
+    /// Readings this close together are jitter, not a step.
+    pub const TOLERANCE_S: f64 = 1.0;
+
+    /// The backward step since the previous reading, if there was one worth recording.
+    pub fn observe(&mut self, now: f64) -> Option<f64> {
+        let step = self.last.map(|last| last - now);
+        self.last = Some(now);
+        step.filter(|s| *s > Self::TOLERANCE_S)
+    }
+}
+
+/// A configured lifetime or idle timeout, held to D-143's ceiling: absent, non-finite or
+/// non-positive is the ceiling, and anything above it is the ceiling too. "Configurable
+/// downward only" means a baseline can shorten a session and never lengthen one.
+#[must_use]
+pub fn at_most(
+    configured: Option<MissionTimeSeconds>,
+    ceiling: MissionTimeSeconds,
+) -> MissionTimeSeconds {
+    configured
+        .filter(|s| s.is_finite() && *s > 0.0)
+        .map_or(ceiling, |s| s.min(ceiling))
+}
+
 /// A verified operator, and how long the system will keep believing it.
 ///
 /// Held only after a credential was checked. Constructed inside this module and nowhere
@@ -78,6 +169,15 @@ pub enum SessionState {
     /// tried: this one belongs in the health summary.
     StoreUnavailable {
         reason: String,
+    },
+    /// Idle past the idle timeout (D-143, GAP-212): the console keeps the picture and the
+    /// queue on screen, in the locked operator's layout, and refuses every action until
+    /// somebody signs in. **Not** nobody signed in: that falls back to the selected role,
+    /// and a lock that did would hand the console's authority to whoever walked up.
+    Locked {
+        operator: OperatorId,
+        role: Role,
+        since: MissionTimeSeconds,
     },
 }
 
@@ -142,6 +242,13 @@ pub trait SessionAuthority: Send + Sync {
     ) -> Result<OperatorSession, AuthFailure>;
 
     fn sign_out(&mut self, now: MissionTimeSeconds);
+
+    /// The operator did something at the console (GAP-212): a session that is still live
+    /// stays live for another idle timeout. One that has locked is not unlocked by this.
+    /// The default does nothing, for an authority with no idle timeout.
+    fn touch(&mut self, now: MissionTimeSeconds) {
+        let _ = now;
+    }
 
     /// Who is signed in as of `now`.
     ///
@@ -472,9 +579,16 @@ pub struct LocalAccountAuthority {
     back_off: BackOff,
     /// Consecutive failures and when the last one was, per operator.
     failures: std::collections::BTreeMap<OperatorId, (u32, MissionTimeSeconds)>,
-    /// Seconds a session lasts, or `None` for the disconnected profile's non-expiring
-    /// session (DN-23 §5). The baseline's `security.authentication.session_lifetime_s`.
-    lifetime_s: Option<MissionTimeSeconds>,
+    /// Seconds a session lasts: the baseline's `security.authentication.session_lifetime_s`
+    /// held to [`SESSION_MAX_S`] (D-143). There is no non-expiring session any more.
+    lifetime_s: MissionTimeSeconds,
+    /// Seconds idle before the session locks: [`IDLE_LOCK_S`] or less (D-143).
+    idle_s: MissionTimeSeconds,
+    /// What the lifetime and idleness are measured on (GAP-212).
+    clock: std::sync::Arc<dyn MonotonicClock>,
+    /// On [`Self::clock`], when the session in `state` began and when it was last used.
+    began: f64,
+    active: f64,
 }
 
 impl std::fmt::Debug for LocalAccountAuthority {
@@ -503,7 +617,11 @@ impl LocalAccountAuthority {
             state,
             back_off: BackOff::default(),
             failures: std::collections::BTreeMap::new(),
-            lifetime_s: None,
+            lifetime_s: SESSION_MAX_S,
+            idle_s: IDLE_LOCK_S,
+            clock: std::sync::Arc::new(SystemMonotonic::default()),
+            began: 0.0,
+            active: 0.0,
         }
     }
 
@@ -513,12 +631,33 @@ impl LocalAccountAuthority {
         self
     }
 
-    /// Sessions expire `lifetime_s` after they are established (GAP-057). `None` keeps
-    /// the non-expiring session only the disconnected profile may issue.
+    /// Sessions expire `lifetime_s` after they are established (GAP-057), and never later
+    /// than [`SESSION_MAX_S`] (D-143): `None`, or anything longer, is the maximum. The
+    /// disconnected profile's non-expiring session ended with GAP-212.
     #[must_use]
     pub fn with_lifetime(mut self, lifetime_s: Option<MissionTimeSeconds>) -> Self {
-        self.lifetime_s = lifetime_s.filter(|l| l.is_finite() && *l > 0.0);
+        self.lifetime_s = at_most(lifetime_s, SESSION_MAX_S);
         self
+    }
+
+    /// A session idle this long locks, and never longer than [`IDLE_LOCK_S`] (D-143).
+    #[must_use]
+    pub fn with_idle_timeout(mut self, idle_s: Option<MissionTimeSeconds>) -> Self {
+        self.idle_s = at_most(idle_s, IDLE_LOCK_S);
+        self
+    }
+
+    /// Measure lifetime and idleness on `clock` rather than the system's (a test's hand).
+    #[must_use]
+    pub fn with_clock(mut self, clock: std::sync::Arc<dyn MonotonicClock>) -> Self {
+        self.clock = clock;
+        self
+    }
+
+    /// Seconds since the session began and since it was last used, on the monotonic clock.
+    fn ages(&self) -> (f64, f64) {
+        let now = self.clock.seconds();
+        (now - self.began, now - self.active)
     }
 
     /// Encode a credential for [`SessionAuthority::sign_in`].
@@ -568,11 +707,13 @@ impl SessionAuthority for LocalAccountAuthority {
                     operator,
                     role: account.role,
                     established: now,
-                    // The disconnected profile's session does not expire unless the
-                    // baseline says how long it lasts; the node's always does, and that
-                    // is minted elsewhere.
-                    expires: self.lifetime_s.map(|l| now + l),
+                    // D-143: every session ends, the disconnected profile's included. The
+                    // mission-time expiry is what the strip counts down; the monotonic
+                    // one below is what holds if the clock is set back.
+                    expires: Some(now + self.lifetime_s),
                 };
+                self.began = self.clock.seconds();
+                self.active = self.began;
                 self.state = SessionState::SignedIn(session.clone());
                 Ok(session)
             }
@@ -630,12 +771,31 @@ impl SessionAuthority for LocalAccountAuthority {
     }
 
     fn state(&self, now: MissionTimeSeconds) -> SessionState {
-        match &self.state {
-            SessionState::SignedIn(session) if !session.is_valid_at(now) => SessionState::Expired {
+        let SessionState::SignedIn(session) = &self.state else {
+            return self.state.clone();
+        };
+        let (age, idle) = self.ages();
+        if !session.is_valid_at(now) || age >= self.lifetime_s {
+            return SessionState::Expired {
                 operator: session.operator,
-                at: session.expires.unwrap_or(now),
-            },
-            other => other.clone(),
+                at: session.expires.map_or(now, |e| e.min(now)),
+            };
+        }
+        if idle >= self.idle_s {
+            return SessionState::Locked {
+                operator: session.operator,
+                role: session.role,
+                since: now - (idle - self.idle_s),
+            };
+        }
+        SessionState::SignedIn(session.clone())
+    }
+
+    fn touch(&mut self, now: MissionTimeSeconds) {
+        // Only a live session is kept alive. A locked one stays locked however much the
+        // pointer moves: it is unlocked by signing in, and by nothing else.
+        if matches!(self.state(now), SessionState::SignedIn(_)) {
+            self.active = self.clock.seconds();
         }
     }
 }
@@ -858,10 +1018,82 @@ mod tests {
             other => panic!("expected an expired session, got {other:?}"),
         }
         assert_eq!(authority.state(700.0).operator(), None);
-        // A non-positive lifetime is not a lifetime.
-        let forever = LocalAccountAuthority::new(Box::new(InMemoryAccountStore::new(vec![])))
-            .with_lifetime(Some(0.0));
-        assert!(forever.lifetime_s.is_none());
+        // D-143: there is no non-expiring session. Absent, non-positive or longer than
+        // twelve hours, a lifetime is the twelve-hour maximum; shorter is kept.
+        let lifetime = |configured| {
+            LocalAccountAuthority::new(Box::new(InMemoryAccountStore::new(vec![])))
+                .with_lifetime(configured)
+                .lifetime_s
+        };
+        assert_eq!(lifetime(None), SESSION_MAX_S);
+        assert_eq!(lifetime(Some(0.0)), SESSION_MAX_S);
+        assert_eq!(lifetime(Some(86_400.0)), SESSION_MAX_S);
+        assert_eq!(lifetime(Some(600.0)), 600.0);
+    }
+
+    fn signed_in_on(clock: &ManualMonotonic) -> LocalAccountAuthority {
+        let store = InMemoryAccountStore::new(vec![Account {
+            operator: OperatorId(7),
+            role: Role::Supervisor,
+            phc: hash_passphrase("correct horse").expect("hashed"),
+        }]);
+        let mut authority = LocalAccountAuthority::new(Box::new(store))
+            .with_clock(std::sync::Arc::new(clock.clone()));
+        authority
+            .sign_in(
+                &LocalAccountAuthority::credential(OperatorId(7), "correct horse"),
+                0.0,
+            )
+            .expect("signs in");
+        authority
+    }
+
+    /// GAP-212, D-143: idle for fifteen minutes and the session locks, keeping the
+    /// operator and role for the picture's layout and attributing nothing. Activity before
+    /// then keeps it alive; activity after does not unlock it; signing in does.
+    #[test]
+    fn an_idle_session_locks_and_only_a_sign_in_unlocks_it() {
+        let clock = ManualMonotonic::default();
+        let mut authority = signed_in_on(&clock);
+        clock.advance(IDLE_LOCK_S - 1.0);
+        authority.touch(10.0);
+        clock.advance(IDLE_LOCK_S - 1.0);
+        assert!(matches!(authority.state(20.0), SessionState::SignedIn(_)));
+        clock.advance(1.0);
+        match authority.state(30.0) {
+            SessionState::Locked { operator, role, .. } => {
+                assert_eq!((operator, role), (OperatorId(7), Role::Supervisor));
+            }
+            other => panic!("expected a locked session, got {other:?}"),
+        }
+        assert_eq!(
+            authority.state(30.0).operator(),
+            None,
+            "a lock attributes nothing"
+        );
+        authority.touch(31.0);
+        assert!(matches!(authority.state(32.0), SessionState::Locked { .. }));
+        authority
+            .sign_in(
+                &LocalAccountAuthority::credential(OperatorId(7), "correct horse"),
+                40.0,
+            )
+            .expect("signs in again");
+        assert!(matches!(authority.state(41.0), SessionState::SignedIn(_)));
+    }
+
+    /// GAP-212: the lifetime holds on the monotonic clock, so a mission clock set back
+    /// does not re-open a session that has run its twelve hours.
+    #[test]
+    fn a_clock_set_back_does_not_extend_a_session() {
+        let clock = ManualMonotonic::default();
+        let mut authority = signed_in_on(&clock);
+        // Kept active every seven and a half minutes for twelve hours.
+        for _ in 0..96 {
+            clock.advance(IDLE_LOCK_S / 2.0);
+            authority.touch(1.0);
+        }
+        assert!(matches!(authority.state(1.0), SessionState::Expired { .. }));
     }
 
     /// Nobody signed in and a session that expired are different states, and neither

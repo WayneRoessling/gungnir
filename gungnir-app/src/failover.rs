@@ -105,7 +105,6 @@ use gungnir_policy::Delegations;
 use gungnir_remote::link::{HistoryOutcome, NodeLink, HEARTBEAT_TIMEOUT};
 use gungnir_remote::queue::{ForwardReply, ForwardedDecision, Settlement};
 use gungnir_resilience::{BothActed, DecisionConflict};
-use gungnir_security::authz::role_permits;
 use gungnir_security::{actions, AuditLog};
 use gungnir_store::EventJournal;
 use gungnir_tracking_service::{PipelineStats, SubmitError, TrackingService};
@@ -1234,7 +1233,7 @@ pub fn resolve_conflict(
     plan: PlanId,
     keep_local: bool,
 ) -> Result<(), String> {
-    if !role_permits(state.role(), actions::DECIDE_PLAN) {
+    if !state.may(actions::DECIDE_PLAN) {
         return Err(format!(
             "{:?} may not decide plans, and resolving a conflict is a decision",
             state.role()

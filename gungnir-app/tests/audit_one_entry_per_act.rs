@@ -58,6 +58,7 @@ fn baseline(dir: &std::path::Path, revision: u32) -> ConfigBaseline {
                     accounts_path: "accounts.json".into(),
                 },
                 session_lifetime_s: None,
+                idle_timeout_s: None,
             },
             ..SecurityConfig::default()
         },

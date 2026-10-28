@@ -58,6 +58,8 @@ pub fn path(route: &str) -> String {
 /// that fills one in builds from the prefix before it (`SENSORS`).
 pub mod routes {
     pub const SESSION: &str = "/session";
+    /// Ending every session one operator holds (GAP-212).
+    pub const SESSION_REVOKE: &str = "/session/revoke";
     pub const SNAPSHOT: &str = "/snapshot";
     pub const HEALTH: &str = "/health";
     pub const COVERAGE: &str = "/coverage";

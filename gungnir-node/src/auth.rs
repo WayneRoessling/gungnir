@@ -53,25 +53,25 @@ pub fn build_caller_authority(
     config: &ConfigBaseline,
 ) -> Result<AccountTokenAuthority, NoAuthority> {
     let key = std::env::var(TOKEN_KEY_ENV).map_err(|_| NoAuthority::NoSigningKey)?;
-    build_with_key(config, key.into_bytes())
+    build_with_key(config, key.as_bytes())
 }
 
-/// The same, with the key supplied, so a test need not touch the environment.
+/// The same, with the secret supplied, so a test need not touch the environment.
 ///
 /// # Errors
 ///
 /// `NoAuthority`, as above.
 pub fn build_with_key(
     config: &ConfigBaseline,
-    key: Vec<u8>,
+    key: &[u8],
 ) -> Result<AccountTokenAuthority, NoAuthority> {
-    let lifetime = config
-        .security
-        .authentication
-        .session_lifetime_s
-        .unwrap_or(900.0);
-    let issuer = gungnir_security::TokenIssuer::new(key, lifetime)
-        .map_err(|e| NoAuthority::KeyRefused(e.to_string()))?;
+    let authentication = &config.security.authentication;
+    let lifetime = authentication.session_lifetime_s.unwrap_or(900.0);
+    // GAP-212: the MAC key is derived from the secret, never the secret's own bytes, and
+    // a token unused for the idle timeout is refused (D-143).
+    let issuer = gungnir_security::TokenIssuer::from_secret(key, lifetime)
+        .map_err(|e| NoAuthority::KeyRefused(e.to_string()))?
+        .with_idle_timeout(authentication.idle_timeout_s);
     let store: Box<dyn gungnir_security::AccountStore> =
         match &config.security.authentication.provider {
             AuthenticationProvider::None => return Err(NoAuthority::NoAccountProvider),
@@ -112,6 +112,7 @@ mod tests {
                 accounts_path: path.to_string_lossy().into_owned(),
             },
             session_lifetime_s: Some(60.0),
+            idle_timeout_s: None,
         };
         config
     }
@@ -121,14 +122,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("gungnir-node-auth-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
         let config = baseline_with_store(&dir);
-        let authority = build_with_key(
-            &config,
-            b"a-signing-key-of-adequate-length-0123456789".to_vec(),
-        )
-        .expect("built");
-        assert!(authority.sign_in(7, "wrong", 0.0).is_err());
+        let authority =
+            build_with_key(&config, b"a-signing-key-of-adequate-length-0123456789").expect("built");
+        assert!(authority.sign_in(7, "wrong", 0.0, None).is_err());
         let issued = authority
-            .sign_in(7, "correct horse", 10.0)
+            .sign_in(7, "correct horse", 10.0, None)
             .expect("signed in");
         let session = authority.verify(&issued.token, 20.0).expect("verifies");
         assert_eq!(session.operator, gungnir_security::OperatorId(7));
@@ -143,7 +141,7 @@ mod tests {
     fn each_missing_half_is_named() {
         let config = ConfigBaseline::default();
         assert!(matches!(
-            build_with_key(&config, vec![0; 32]),
+            build_with_key(&config, &[0; 32]),
             Err(NoAuthority::NoAccountProvider)
         ));
         let mut missing = ConfigBaseline::default();
@@ -151,7 +149,7 @@ mod tests {
             accounts_path: "Z:/nowhere/accounts.json".into(),
         };
         assert!(matches!(
-            build_with_key(&missing, vec![0; 32]),
+            build_with_key(&missing, &[0; 32]),
             Err(NoAuthority::StoreUnavailable(_))
         ));
     }
@@ -196,6 +194,7 @@ mod tests {
                         account: account.clone(),
                     },
                     session_lifetime_s: Some(60.0),
+                    idle_timeout_s: None,
                 },
                 ..gungnir_config::SecurityConfig::default()
             },
@@ -204,13 +203,11 @@ mod tests {
 
         match provisioned {
             Ok(()) => {
-                let authority = build_with_key(
-                    &config,
-                    b"a-signing-key-of-adequate-length-0123456789".to_vec(),
-                )
-                .expect("built despite a successful provisioning above");
+                let authority =
+                    build_with_key(&config, b"a-signing-key-of-adequate-length-0123456789")
+                        .expect("built despite a successful provisioning above");
                 let issued = authority
-                    .sign_in(7, "correct horse", 10.0)
+                    .sign_in(7, "correct horse", 10.0, None)
                     .expect("signed in");
                 let session = authority.verify(&issued.token, 20.0).expect("verifies");
                 assert_eq!(session.operator, gungnir_security::OperatorId(7));
@@ -226,7 +223,7 @@ mod tests {
                     "an unrelated failure, not the documented no-keystore fallback: {reason}"
                 );
                 assert!(matches!(
-                    build_with_key(&config, vec![0; 32]),
+                    build_with_key(&config, &[0; 32]),
                     Err(NoAuthority::StoreUnavailable(_))
                 ));
             }

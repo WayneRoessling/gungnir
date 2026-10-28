@@ -831,6 +831,13 @@ impl ConfigEditorState {
     /// catch what it should not have offered.
     pub fn apply(&mut self, state: &mut AppState) -> Result<(), String> {
         let role = state.role();
+        // GAP-212: a locked session holds the role's layout and none of its authority.
+        if state.is_locked() {
+            return Err(
+                "the session is locked after inactivity; sign in again to apply a baseline"
+                    .to_owned(),
+            );
+        }
         if !may_apply_a_baseline(role) {
             return Err(format!(
                 "the {role:?} role may not apply a configuration baseline (needs {} or {})",
@@ -1029,7 +1036,7 @@ pub fn config_editor_view<'a>(
     profiles: GovernedProfiles<'a>,
     refused: &'a [RefusedSection<'a>],
 ) -> ConfigEditorView<'a> {
-    let apply = if !may_apply_a_baseline(state.role()) {
+    let apply = if state.is_locked() || !may_apply_a_baseline(state.role()) {
         ApplyState::NotPermitted { role: role_name }
     } else if state.config_store.is_none() {
         ApplyState::NoFile {

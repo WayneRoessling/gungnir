@@ -928,10 +928,7 @@ fn render_sensor_management(ui: &mut egui::Ui, state: &AppState) -> Option<Panel
     let view = SensorManagementView {
         sensors: &rows,
         recommendations,
-        may_task: gungnir_security::authz::role_permits(
-            state.role(),
-            gungnir_security::actions::TASK_SENSOR,
-        ),
+        may_task: state.may(gungnir_security::actions::TASK_SENSOR),
         role: &role_name,
         control_path: CONTROL_PATH,
         vocabulary: &state.config.vocabulary,
@@ -1256,10 +1253,7 @@ pub fn render_requirements(
         sensors: &sensors,
         // Concurrence is `sensor.task`, which the intelligence analyst deliberately
         // does not hold: tasking is a request from them, not authority.
-        may_concur: gungnir_security::authz::role_permits(
-            state.role(),
-            gungnir_security::actions::TASK_SENSOR,
-        ),
+        may_concur: state.may(gungnir_security::actions::TASK_SENSOR),
         role: &role_name,
         // GAP-057: real once somebody signs in; a role never stands in for a person.
         operator_session: state.attributed_operator().is_some(),

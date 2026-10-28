@@ -313,6 +313,18 @@ pub struct SessionResponse {
     pub expires_s: f64,
 }
 
+/// What `POST /v3/session/revoke` takes (GAP-212): the operator whose sessions end.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RevokeSessionsRequest {
+    pub operator: u64,
+}
+
+/// What `POST /v3/session/revoke` returns: how many of the operator's tokens were ended.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RevokeSessionsResponse {
+    pub revoked: usize,
+}
+
 /// What `GET /v3/coverage` returns (DN-12 §6, GAP-006).
 ///
 /// **Not a bare `Vec<CoverageGap>`, which is what §6 wrote.** DN-12 §5 puts the sampling

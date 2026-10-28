@@ -2139,6 +2139,7 @@ async fn run(
 
     let ctrl_c = tokio::signal::ctrl_c();
     tokio::pin!(ctrl_c);
+    let mut clock_steps = gungnir_security::ClockStepWatch::default();
 
     loop {
         tokio::select! {
@@ -2360,6 +2361,19 @@ async fn run(
         }
 
         let health = picture::read_health(&tracking, &intercept, &gateway);
+        // GAP-212: sessions are measured on a monotonic clock now, but every timestamp
+        // on the record is this one, so a step backwards goes on the record.
+        if let Some(step) = clock_steps.observe(now.0) {
+            tracing::warn!(step_s = step, "the node's clock went backwards");
+            approval_desk
+                .audit
+                .record(gungnir_security::AuditEntry::new(
+                    None,
+                    gungnir_security::audit::events::CLOCK_STEPPED_BACK,
+                    now.0,
+                    format!("the clock went back {step:.3} s"),
+                ));
+        }
         api.set_now(now.0);
         // The same envelopes reach every connected desktop, offered by `publish_picture`
         // once the picture is out. After the journal append, so nothing is published to
