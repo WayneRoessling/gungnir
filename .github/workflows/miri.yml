@@ -52,6 +52,8 @@ jobs:
     #
     # Left out, with why:
     # - gungnir-metrics motmetrics_diff: 2 h 3 min on CI.
+    # - gungnir-allocation one_step_oracle: over 90 min on CI on 2026-10-28, when the job
+    #   reached its 120 min limit and was cancelled with every suite before it passed.
     # - gungnir-tracking-service sample_set_replay, scenario_truth_replay,
     #   whole_pipeline_replay: hours each; they fail their own 60 s deadlock guard. And the
     #   lib test named in `skip`, which runs the dense-group pipeline and waits ten seconds
@@ -78,7 +80,7 @@ jobs:
           - crate: gungnir-track-fusion
             targets: --lib --tests
           - crate: gungnir-allocation
-            targets: --lib --tests
+            targets: --lib --test bellman_diff --test horizon_first_step
           - crate: gungnir-intercept-service
             targets: --lib --tests
           - crate: gungnir-metrics

@@ -64,6 +64,11 @@ It is now in the tracking-service entry's `skip` list with that reason, under D-
 for long runs. The dense-group path is therefore not exercised by Miri at all. It contains
 no `unsafe` of its own.
 
+The same run showed a second suite that Miri cannot finish. `gungnir-allocation`'s
+`one_step_oracle` ran for over 90 minutes before the job reached its 120-minute limit and
+was cancelled, with every suite before it passing. It too is now left out, by naming the
+allocation suites that finish.
+
 ## What this does not do
 
 - **Owner-only keeps out other ordinary accounts.** An administrator or root can still read
