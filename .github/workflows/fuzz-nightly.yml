@@ -1,5 +1,6 @@
-# Gate 5: nightly fuzzing of the sensor-ingestion parser, the ASTERIX radar adapter, and association
-# cost-matrix construction (docs/agentic-workflow.md). Scheduled, not per-PR.
+# Gate 5: nightly fuzzing of the sensor-ingestion parser, the ASTERIX, SAPIENT, MISB, ADS-B and AIS
+# adapters (the last four since GAP-213), and association cost-matrix construction
+# (docs/agentic-workflow.md). Scheduled, not per-PR.
 #
 # **The schedule did fire, and the job failed before it fuzzed a single byte** (GAP-061).
 # Two independent defects, either of which alone stops the gate; the first hid the second,
@@ -49,13 +50,22 @@ jobs:
     # forty-five is a stuck target, and libFuzzer's -max_total_time cannot end it.
     timeout-minutes: 45
     strategy:
-      # A crash in one target is a finding about that target, and the other two have
+      # A crash in one target is a finding about that target, and the others have
       # earned their twenty minutes regardless. On 2026-09-08 the manifest error above
       # cancelled the two jobs that had not reached the fuzz step, so one broken
       # invocation cost the whole night's coverage rather than a third of it.
       fail-fast: false
       matrix:
-        target: [sensor_ingestion_parser, asterix_feed, cost_matrix_construction]
+        target:
+          [
+            sensor_ingestion_parser,
+            asterix_feed,
+            sapient_feed,
+            misb_feed,
+            adsb_feed,
+            ais_feed,
+            cost_matrix_construction,
+          ]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

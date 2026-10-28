@@ -363,6 +363,58 @@ fn only_the_laydown_rehearsal_names_the_sensor_simulation() {
     );
 }
 
+/// Where `AllowAllAuthenticator` is defined, and the one shipped file that may name it.
+const ALLOW_ALL_DEFINITION: &str = "gungnir-ingest/src/lib.rs";
+
+/// Shipped sources that name `AllowAllAuthenticator` outside a comment or a test module.
+fn shipped_sources_admitting_every_sensor(sources: &[(String, String)]) -> Vec<String> {
+    sources
+        .iter()
+        .filter(|(rel, _)| {
+            rel.contains("/src/")
+                && !rel.starts_with("gungnir-fuzz/")
+                && rel != ALLOW_ALL_DEFINITION
+        })
+        .filter(|(_, text)| {
+            without_test_modules(text).lines().any(|line| {
+                let code = line.split("//").next().unwrap_or("");
+                code.contains("AllowAllAuthenticator")
+            })
+        })
+        .map(|(rel, _)| rel.clone())
+        .collect()
+}
+
+/// **No shipped profile admits every sensor** (GAP-213). `AllowAllAuthenticator` is for
+/// development and replay, and no baseline can select it: a node and a desktop build their
+/// gateway's authenticator from the baseline's sensors and machine identities. What would
+/// change that is code naming it, so code is what is checked, outside tests and fuzz
+/// targets; then a planted use in the node is named.
+#[test]
+fn no_shipped_source_admits_every_sensor() {
+    let mut sources = rust_sources();
+    assert!(
+        sources.iter().any(|(rel, text)| rel == ALLOW_ALL_DEFINITION
+            && text.contains("pub struct AllowAllAuthenticator")),
+        "{ALLOW_ALL_DEFINITION} defines the authenticator; if it moved, this rule moves with it"
+    );
+    assert_eq!(
+        shipped_sources_admitting_every_sensor(&sources),
+        Vec::<String>::new(),
+        "shipped code names AllowAllAuthenticator"
+    );
+    sources.push((
+        "gungnir-node/src/main.rs".to_owned(),
+        "// AllowAllAuthenticator in a comment is not a use of it\n\
+         let gateway = IngestGateway::new(Box::new(AllowAllAuthenticator));\n"
+            .to_owned(),
+    ));
+    assert_eq!(
+        shipped_sources_admitting_every_sensor(&sources),
+        vec!["gungnir-node/src/main.rs".to_owned()],
+        "a planted use is named"
+    );
+}
 /// Every Markdown file under the workspace root and `docs/`, by basename, with the
 /// paths that carry it.
 fn markdown_index(root: &Path) -> BTreeMap<String, Vec<PathBuf>> {

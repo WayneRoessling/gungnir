@@ -207,7 +207,7 @@ history, and an entry is never edited once it has merged.
 | GAP-210 | Configuration baselines are not signed | Technical | CAP-5.6, CAP-6.4 | 4 | 2 | M | 8 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-211 | Issued identities never expire and nothing revokes them | Technical | CAP-6.1, CAP-6.4 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-212 | Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends | Technical | CAP-6.1, CAP-6.2 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-213 | Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll | Technical | CAP-6.7, CAP-1.2 | 3 | 9 | M | 27 | I3 | Services engineer | Open |
+| GAP-213 | Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll | Technical | CAP-6.7, CAP-1.2 | 3 | 9 | M | 27 | I3 | Services engineer | Closed |
 | GAP-214 | The transport has no request timeout, connection cap or pre-credential deadline | Technical | CAP-7.1, CAP-6.4 | 3 | 6 | S | 18 | I3 | Services engineer | Closed |
 | GAP-215 | Sealed files inherit directory permissions on Windows, and nothing is zeroized | Technical | CAP-6.4 | 3 | 2 | S | 6 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-216 | Identity is four states; STANAG 1241's are absent | Technical | CAP-2.6, CAP-7.4 | 4 | 7 | M | 28 | I4 | Services engineer | Open |
@@ -3043,11 +3043,12 @@ Counts: 225 gaps, 3 mission, 222 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.7 Untrusted input; CAP-1.2 Validate and quarantine.
 - History:
   - 2026-10-26, Open: Filed by plan 12. GAP-076 seeded the corpus; the targets stopped at three.
+  - 2026-10-28, Closed: Built under the owner's delegation of 2026-10-28. SAPIENT, MISB, ADS-B and AIS each have a fuzz target over their adapter, seeded from `testdata/`, with `gungnir-ingest/tests/fuzz_seeds.rs` keeping the seeds decodable, and the nightly runs all seven. Category 205 and 129 were already reached through `asterix_feed`. No baseline can select `AllowAllAuthenticator`, so the check is on the code: `architecture_compliance.rs` refuses shipped code that names it. See `../../record/2026-10-28/gap-213-every-feed-adapter-is-fuzzed.md`.
 - Evidence: `gungnir-fuzz/Cargo.toml:24-40` (three targets); `gungnir-ingest/src/lib.rs:66-67`; `gungnir-ingest/src/adapters/misb.rs:76-87`.
 - Severity: 3. Reach: 9 threads. Effort: M. Priority: 27.
 - Impact: The nightly fuzz run found a real defect on its first night (GAP-103) and the MISB length stall was found only in human review; SAPIENT (the largest parser), MISB, ADS-B, AIS and the Category 129 and 205 decoders have no target. `AllowAllAuthenticator` is documented as never for a deployed profile and nothing refuses it when `node` is set.
 - Closing action: Targets for SAPIENT, MISB, ADS-B, AIS, Cat 129 and Cat 205 seeded from the corpora under `testdata/`; `gungnir-config` validation refuses `AllowAll` in a node baseline.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: GAP-076; GAP-103; `../../review/2026-10-26-comprehensive-review.md` §5 finding 9.
 
 **GAP-214 The transport has no request timeout, connection cap or pre-credential deadline**
