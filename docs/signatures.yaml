@@ -3543,3 +3543,28 @@
   commit: 6063077600872f6d1f3966e1f9a54c5ce73c8ab6
   pre_repository: false
   record: "GAP-209; D-03; DN-31 §16; docs/record/2026-10-27/gap-209-the-node-ranks-a-forwarded-outage.md; PR #236"
+
+- date: 2026-10-28
+  signer: Owner
+  subject: >-
+    GAP-211's human-owned code. In `gungnir-security`: `key_fingerprint`, the one
+    definition of a key's name, which `baseline_signing::fingerprint_of` now calls
+    (`keys.rs`, `lib.rs`, `baseline_signing.rs`). In the `gungnir-remote` TLS identity path:
+    a ninety-day window on every issued certificate; `IssuedIdentity`, which re-issues its
+    certificate on the same key in the handshake that finds thirty or fewer days left and
+    is both certificate resolvers (`identity.rs`); and `LinkTls`'s `revoked_keys` with
+    `client_config` refusing a listed server (`lib.rs`). In `gungnir-api`:
+    `acceptor_with_resolver` and `acceptor_revoking` refusing a listed client before the
+    pinned authorities, and `certificate_key_fingerprint` and `refuse_revoked`, the one
+    check both sides call (`tls.rs`).
+  kind: code
+  paths:
+  - gungnir-security/src/keys.rs
+  - gungnir-security/src/lib.rs
+  - gungnir-security/src/baseline_signing.rs
+  - gungnir-remote/src/identity.rs
+  - gungnir-remote/src/lib.rs
+  - gungnir-api/src/tls.rs
+  commit: f3b221c8210748f168d0dead4488e595b6bd1bde
+  pre_repository: false
+  record: "GAP-211; DN-22 §16; docs/record/2026-10-28/gap-211-issued-identities-expire-renew-and-can.md; PR #239"
