@@ -288,10 +288,17 @@ pub const MAX_ALTERNATIVES: usize = 3;
 /// built for a single question, so a solve that does not finish inside the baseline's
 /// budget (GAP-119) has no later call to finish in: that option is reported unavailable
 /// with the planner's own sentence, rather than holding the tick while it completes.
+///
+/// **And one clock** (GAP-244). The budget is measured on the clock the live planner
+/// measures on, not on a monotonic clock of its own. Before, a desktop whose planner was
+/// put on a clock that never advances -- a laydown rehearsal (D-109), every test of the
+/// decision path -- still timed its alternatives on the machine, so how many options the
+/// same picture offered depended on whether the thread was preempted mid-solve.
 struct SnapshotPlanner {
     horizon: usize,
     frame: Option<gungnir_model::LocalFrame>,
     budget: std::time::Duration,
+    clock: std::sync::Arc<dyn gungnir_intercept_service::SolveClock>,
 }
 
 impl gungnir_decision::PlanSource for SnapshotPlanner {
@@ -304,7 +311,8 @@ impl gungnir_decision::PlanSource for SnapshotPlanner {
         use gungnir_intercept_service::{DpInterceptService, InterceptService, PlanOutcome};
         let mut planner = DpInterceptService::new(self.horizon)
             .with_local_frame(self.frame)
-            .with_solve_budget(self.budget);
+            .with_solve_budget(self.budget)
+            .with_clock(std::sync::Arc::clone(&self.clock));
         match planner.plan(now, tracks, resources) {
             // GAP-156: a picture past the exact solver's limits is answered at once with a
             // one-step answer, and that is an option like any other -- labelled, by the
@@ -330,6 +338,11 @@ fn snapshot_planner(state: &AppState) -> SnapshotPlanner {
         // GAP-119: the live planner's budget, read through the same builder so the two
         // cannot come to differ.
         budget: crate::state::embedded_planner(&state.config).solve_budget(),
+        // GAP-244: the live planner's clock where it solves here; a desktop relaying its
+        // node's plan has none to share, and times the rehearsal on the machine.
+        clock: state.intercept.solve_clock().unwrap_or_else(|| {
+            std::sync::Arc::new(gungnir_intercept_service::MonotonicClock::new())
+        }),
     }
 }
 

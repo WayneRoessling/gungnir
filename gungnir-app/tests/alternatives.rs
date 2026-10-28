@@ -18,6 +18,7 @@ use gungnir_app::state::AppState;
 use gungnir_app::update;
 use gungnir_command::ApprovalWorkflow;
 use gungnir_config::{ConfigBaseline, ResourceConfig};
+use gungnir_intercept_service::{DpInterceptService, SteppedClock};
 use gungnir_model::policy_settings::{AuthorityRule, WeaponsControlStatus};
 use gungnir_model::{
     Classification, EffectorLayer, MissionTime, Provenance, Quality, Releasability, TrackId,
@@ -25,6 +26,8 @@ use gungnir_model::{
 };
 use gungnir_policy::PolicyVerdict;
 use gungnir_tracking_service::{SubmitError, TrackingService};
+use std::sync::Arc;
+use std::time::Duration;
 
 const ORIGIN: [f64; 3] = [0.959_931, 0.209_440, 0.0]; // 55 N, 12 E in radians
 
@@ -126,6 +129,12 @@ fn desktop_at(name: &str, status: WeaponsControlStatus) -> (AppState, std::path:
     });
     gungnir_config::validate(&config).expect("the baseline is valid");
     let mut state = AppState::with_config(config).expect("the desktop starts");
+    // GAP-244: the planner on a clock that never advances. The alternatives measure their
+    // budget on the planner's clock, so every solve -- the plan's and each alternative's --
+    // finishes in the call that starts it, and how many options the picture offers is the
+    // picture's answer. On the machine's clock one preemption past 4 ms dropped an option,
+    // and this file's first test failed on main's CI with four options against three.
+    state.intercept = Box::new(planner_stepping(&state, Duration::ZERO));
     state.tracking = Box::new(Picture(vec![
         track(0, 30_000.0),
         track(1, 20_000.0),
@@ -136,6 +145,13 @@ fn desktop_at(name: &str, status: WeaponsControlStatus) -> (AppState, std::path:
 
 fn desktop(name: &str) -> (AppState, std::path::PathBuf) {
     desktop_at(name, WeaponsControlStatus::Free)
+}
+
+/// The desktop's own planner, measuring its budget on a clock that advances `step` at
+/// every reading.
+fn planner_stepping(state: &AppState, step: Duration) -> DpInterceptService {
+    gungnir_app::state::embedded_planner(&state.config)
+        .with_clock(Arc::new(SteppedClock::new(step)))
 }
 
 /// What a course of action says, apart from when it was computed: who is tasked against
@@ -199,6 +215,35 @@ fn every_alternative_carries_a_verdict_from_the_desktops_own_chain() {
     }
     let _ = std::fs::remove_dir_all(free_dir);
     let _ = std::fs::remove_dir_all(held_dir);
+}
+
+/// **The alternatives are timed on the planner's own clock** (GAP-244).
+///
+/// The planner here measures on a clock that advances twice the budget at every reading,
+/// so every solve overruns. If the alternatives timed themselves on the machine's clock,
+/// as they did, this picture would still offer four options, each solved in well under a
+/// millisecond; on the planner's clock it offers the one course saying no plan could be
+/// worked out inside the budget. Neither answer depends on how loaded the machine is,
+/// which is what makes this a test of the wiring rather than of the host.
+#[test]
+fn the_alternatives_measure_their_budget_on_the_planners_clock() {
+    let (mut state, dir) = desktop("overrun");
+    let budget = gungnir_app::state::embedded_planner(&state.config).solve_budget();
+    state.intercept = Box::new(planner_stepping(&state, budget * 2));
+    let courses = decisions::alternatives(&state, decisions::MAX_ALTERNATIVES);
+    assert_eq!(
+        courses.len(),
+        1,
+        "the alternatives were solved on a clock other than the planner's: {courses:#?}"
+    );
+    assert!(
+        courses[0]
+            .rationale
+            .contains("did not finish inside its 4 ms budget"),
+        "the course does not say the budget was spent: {}",
+        courses[0].rationale
+    );
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// Each alternative is a genuinely different plan, and each says which resource it does

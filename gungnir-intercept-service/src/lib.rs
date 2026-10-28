@@ -304,6 +304,16 @@ pub trait InterceptService: Send + Sync {
     fn withheld(&self) -> Vec<WithheldResource> {
         Vec::new()
     }
+
+    /// The clock this planner measures its solve budget on, so a planner built beside it
+    /// for one question -- an alternative, a what-if -- measures on the same one (GAP-244).
+    ///
+    /// Defaults to none, the truthful answer for a planner that does not solve here; a
+    /// caller then measures on the machine's monotonic clock. The embedded planner
+    /// overrides it.
+    fn solve_clock(&self) -> Option<Arc<dyn SolveClock>> {
+        None
+    }
 }
 
 /// The assignment problem a solve answers: which tracks, which adequate resources, in
@@ -933,6 +943,10 @@ impl InterceptService for DpInterceptService {
 
     fn withheld(&self) -> Vec<WithheldResource> {
         self.withheld.clone()
+    }
+
+    fn solve_clock(&self) -> Option<Arc<dyn SolveClock>> {
+        Some(Arc::clone(&self.clock))
     }
 }
 

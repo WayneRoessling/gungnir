@@ -238,8 +238,9 @@ history, and an entry is never edited once it has merged.
 | GAP-241 | No ASTERIX Category 062 encode for system tracks | Technical | CAP-7.2, CAP-7.4 | 3 | 5 | M | 15 | I4 | Services engineer | Open |
 | GAP-242 | No NFFI bearer for friendly-force positions | Technical | CAP-1.6, CAP-4.5, CAP-7.4 | 3 | 5 | L | 15 | I4 | Services engineer | Open |
 | GAP-243 | The session-token MAC key is derived in the node, not held by a key provider | Technical | CAP-6.1, CAP-6.4 | 2 | 10 | M | 20 | I4 | Security engineer (human-owned crate) | Open |
+| GAP-244 | An alternative whose solve overran its budget vanished, timed on a clock of its own | Technical | CAP-3.5 | 3 | 4 | S | 12 | I3 | Services engineer | Closed |
 
-Counts: 225 gaps, 3 mission, 222 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 226 gaps, 3 mission, 223 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3455,4 +3456,19 @@ Counts: 225 gaps, 3 mission, 222 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: Security engineer (human-owned crate). Status: Open.
 - Reference: DN-22; DN-23 §17; GAP-212.
 - Depends on: GAP-212.
+
+**GAP-244 An alternative whose solve overran its budget vanished, timed on a clock of its own**
+
+- Type: Technical.
+- Capability: CAP-3.5 Alternatives and rationale.
+- History:
+  - 2026-10-28, Open: Found from one failure of `every_alternative_carries_a_verdict_from_the_desktops_own_chain` on main, which passed on the next run and every pull-request run.
+  - 2026-10-28, Closed: Fixed. `InterceptService::solve_clock` gives the snapshot planner the embedded planner's clock, and `recommend` keeps an uncomputed alternative as a denied course naming the allocator's reason. A probe at a 0.05 ms budget reproduced both shapes (three options, and one). The two new tests fail on the old code, one with CI's own four against three.
+- Evidence: `gungnir-app/src/decisions.rs` (`SnapshotPlanner` built its planner on a new `MonotonicClock`, while its own documentation said an over-budget option is reported); `gungnir-decision/src/alternatives.rs` (`recommend` skipped a `PlanUnavailable` alternative); CI run 40715701906, job 122912658690, at 46a10829.
+- Severity: 3. Reach: 4 threads. Effort: S. Priority: 12.
+- Impact: The same picture offered a different number of options from one call to the next. Each alternative was solved under the 4 ms budget on the machine's monotonic clock, even on a desktop whose planner was on a clock that never advances, and an alternative whose solve overran was dropped without a word. The operator read "no other option" where the truth was "not worked out", and main's CI failed once with four options against three.
+- Closing action: Measure the snapshot planner's budget on the live planner's clock; report an alternative the allocator could not compute, denied, with the allocator's reason; test both deterministically.
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: Found from main's CI after GAP-213 merged (`../../record/2026-10-28/gap-244-an-alternative-is-timed-on-the.md`).
+- Depends on: GAP-032, GAP-119.
 
