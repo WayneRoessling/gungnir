@@ -61,25 +61,26 @@
 # **Not on pull requests since 2026-09-09.** While the comparison is advisory and
 # cross-machine, a per-PR run is four to five minutes of benchmarks whose ratios the
 # job itself says cannot be attributed to the code, and 21 of the last 21 went green
-# unread. The baseline still needs writing, so the job runs on every push to main,
-# and `workflow_dispatch` from a branch runs the lenient comparison against main's
-# baseline on demand -- which is how a person who suspects a regression gets the
-# ratios without every pull request paying for them. **The `pull_request` trigger does
+# unread. `workflow_dispatch` on main writes the baseline, and from a branch runs the
+# lenient comparison against main's baseline on demand -- which is how a person who
+# suspects a regression gets the ratios without every pull request paying for them.
+#
+# **Not on pushes to main since 2026-10-28.** The self-hosted runner had stopped taking
+# jobs, so each push queued a run that waited up to three hours and was then cancelled by
+# the next push: every push to main on 2026-10-28, and none ran a benchmark. Dispatch on
+# main when the runner is back, to write a fresh baseline, and before comparing. **The `pull_request` trigger does
 # not come back** (D-62): the number does not mean enough on this host, and a different
 # machine is out of scope for this release. ci.yml's `benches compile` step is what proves, per pull
 # request, that the benchmarks still build.
 name: bench-regression
 
 on:
+  # Dispatched on main, it writes the baseline (GAP-093: both halves of the branch below,
+  # and the cache-save step at the end, are guarded on `refs/heads/main`, so a run from
+  # anywhere else never executes `--save-baseline main`); dispatched from a branch, it
+  # compares against that baseline. Without a baseline every comparison reports "compared
+  # 0 benchmark(s)" and passes, measuring nothing, so dispatch on main first.
   workflow_dispatch:
-  # **Without this the baseline is never written and the gate can never fail** (GAP-093).
-  # Both halves of the branch below, and the cache-save step at the end, are guarded on
-  # `refs/heads/main`; in a `pull_request` event `github.ref` is `refs/pull/<n>/merge`,
-  # so the main half was unreachable and no run ever executed `--save-baseline main`.
-  # Every pull request then reported "compared 0 benchmark(s)" and passed -- green, and
-  # measuring nothing, which is the failure the recursive-glob fix above it was for.
-  push:
-    branches: [main]
 
 # Nothing here writes to the repository, and the repository is public.
 permissions:
@@ -253,7 +254,7 @@ jobs:
             python3 .github/scripts/bench_compare.py
           fi
       - name: Save baseline (main only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4
         with:
           path: target/criterion

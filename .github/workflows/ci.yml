@@ -41,29 +41,55 @@ jobs:
         with:
           command: check licenses bans sources advisories
 
-  fmt-clippy-test:
-    name: fmt, clippy, test
+  # What a pull request changes, so a change to documents alone does not build and test
+  # the whole workspace (2026-10-28). A pull request whose every file is a document under
+  # `docs/` (outside `docs/test-tracks/`, which the replay tests consume as input), a
+  # Markdown file at the root, or a Markdown file under `deploy/` is `docs`; anything else,
+  # and every push and merge-queue run, is `code`. The signature pull request #240 changed
+  # only the ledger and spent 39 minutes building everything.
+  changes:
+    name: what changed
     runs-on: ubuntu-latest
-    # Warm, the run is about eighteen minutes (main, 2026-09-27). Cold it is past
-    # thirty: on 2026-10-23, with main's cache evicted after a month without a push,
-    # the debug tests ended at twenty minutes and the release budget build was still
-    # compiling at thirty, when the job was cancelled. Sixty covers a cold run with
-    # room; a job still going then has hung (ARCHITECTURE.md §10 records one test that
-    # looked exactly like that), and the default limit is six hours of runner for nothing.
-    timeout-minutes: 60
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.scan.outputs.code }}
     steps:
-      # The runner ran out of disk twice in a day (pull requests #232 and #234, both on
-      # 2026-10-27), after every test had passed, in the release budget build and then in
-      # the bench build: debug and release artifacts of the whole workspace, side by side,
-      # outgrew what ubuntu-latest leaves free. Deleting `target/debug` before the release
-      # steps would also strip it from the cache main saves, so every pull request would
-      # build cold; this removes toolchains the image preinstalls and this job never uses
-      # instead, which frees well over twenty gigabytes and touches nothing cargo built.
-      - name: free disk the build does not use
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: scan
         run: |
-          df -h /
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "$changed"
+          documents='^(docs/.*|[^/]+\.md|deploy/.*\.md)$'
+          if echo "$changed" | grep -q '^docs/test-tracks/' \
+            || echo "$changed" | grep -vE "$documents" | grep -q .; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The Rust gates as three jobs that run side by side (2026-10-28), where they were one
+  # job of eight steps in series: 21 minutes warm and up to 40 cold, the critical path of
+  # every pull request. Apart, the wait is the slowest of the three, the tests. Each keeps
+  # its own cargo cache, written from main only, and the debug and release builds no
+  # longer share one runner's disk.
+  #
+  # Warm, the one job was about eighteen minutes (main, 2026-09-27); cold it was past
+  # thirty (2026-10-23, main's cache evicted after a month without a push). Sixty minutes
+  # covers a cold run of the slowest job with room; a job still going then has hung
+  # (ARCHITECTURE.md §10 records one test that looked exactly like that).
+  fmt-clippy:
+    name: fmt, clippy
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -71,23 +97,15 @@ jobs:
           components: rustfmt, clippy
       # The cache is written from main only. Every job that restores it can read
       # main's copy (a base branch's caches are visible to every pull request), so a
-      # pull-request branch saving its own 2.4 GB copy on every push bought nothing and
-      # cost the quota: the repository sat at 9.4 GB of its 10 GB, and each eviction
-      # turned an eleven-minute run into a twenty-six-minute one. A pull request that
-      # bumps a dependency rebuilds that dependency on each push until it merges, which
-      # is the trade.
+      # pull-request branch saving its own copy on every push bought nothing and cost
+      # the quota: the repository sat at 9.4 GB of its 10 GB, and each eviction turned an
+      # eleven-minute run into a twenty-six-minute one. A pull request that bumps a
+      # dependency rebuilds that dependency on each push until it merges, which is the
+      # trade.
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
-      # nextest as the test runner (installed as a prebuilt binary, not compiled).
-      # `cargo test` runs the workspace's test binaries one after another, and with
-      # ~150 of them the run is serialised behind the slow few: particle_diff (52 s for
-      # three tests), sqrt_diff (27 s), gungnir-filters' unit tests (26 s), adsb_fixtures
-      # (23 s). nextest schedules every test across every binary at once, so the run is
-      # bounded by the slowest test rather than the sum. Same tests, same profile, same
-      # `cargo test` invocation locally (CONTRIBUTING.md); only the scheduler differs.
-      - uses: taiki-e/install-action@nextest
       - name: System libraries for eframe/glow
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libgl1-mesa-dev
       - name: rustfmt
@@ -104,28 +122,119 @@ jobs:
       # clippy::all; clippy::pedantic stays advisory, so it is not promoted here.
       - name: clippy (all targets; gate 2 property tests compile here too)
         run: cargo clippy --workspace --all-targets
+
+  test:
+    name: test
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      # The runner ran out of disk twice in a day (pull requests #232 and #234, both on
+      # 2026-10-27) when the debug and release builds shared it. They no longer do, but
+      # the debug test build alone is large; this removes toolchains the image preinstalls
+      # and these jobs never use, which frees well over twenty gigabytes and touches
+      # nothing cargo built.
+      - name: free disk the build does not use
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+      # Shared with `docs-tests` below, which reads it and never writes it.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: debug-tests
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      # nextest as the test runner (installed as a prebuilt binary, not compiled).
+      # `cargo test` runs the workspace's test binaries one after another, and with
+      # ~150 of them the run is serialised behind the slow few: particle_diff (52 s for
+      # three tests), sqrt_diff (27 s), gungnir-filters' unit tests (26 s), adsb_fixtures
+      # (23 s). nextest schedules every test across every binary at once, so the run is
+      # bounded by the slowest test rather than the sum. Same tests, same profile, same
+      # `cargo test` invocation locally (CONTRIBUTING.md); only the scheduler differs.
+      - uses: taiki-e/install-action@nextest
+      - name: System libraries for eframe/glow
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libgl1-mesa-dev
       - name: test
-        run: cargo nextest run --workspace --no-fail-fast
+        run: cargo nextest run --workspace --no-fail-fast --locked
       # nextest does not run doctests; `cargo test --doc` is the only runner for them.
       - name: doctests
-        run: cargo test --workspace --doc
+        run: cargo test --workspace --doc --locked
+
+  release-gates:
+    name: budget gates and benches, release
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: free disk the build does not use
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      - name: System libraries for eframe/glow
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libgl1-mesa-dev
       # The journal-append budget in performance-budgets.md is a release figure (157 us
       # release against about 665 us debug), and a shared runner's throttled I/O put the
       # debug measurement at 1.84 ms against a 1 ms budget -- a failure about the build
-      # profile and the hardware, not about the code. The debug run above therefore
-      # measures and prints it without asserting, and this step is where the gate is
-      # enforced. It must stay: a release-only budget that no job runs in release is a
-      # gate that cannot fail.
+      # profile and the hardware, not about the code. The debug run measures and prints it
+      # without asserting, and this step is where the gate is enforced. It must stay: a
+      # release-only budget that no job runs in release is a gate that cannot fail.
       - name: budget gates, release profile
-        run: cargo test -p gungnir-app --test frame_budgets --test desktop_projection --release
+        run: cargo test -p gungnir-app --test frame_budgets --test desktop_projection --release --locked
         # desktop_projection joined it on 2026-09-22: DN-31 §9 row 7's MOP-07 clause is a
         # timing figure and is asserted in release alone, so this is the job that enforces it.
-      # bench-regression.yml runs on main and by dispatch only (since 2026-09-09; see its
-      # header), so this is the only place a pull request proves its benchmarks still
-      # compile. It shares the release-profile dependencies the budget gate above just
-      # built, which is why it sits after it.
+      # bench-regression.yml runs by dispatch only (since 2026-10-28; see its header), so
+      # this is the only place a pull request proves its benchmarks still compile. It
+      # shares the release-profile dependencies the budget gate above just built, which is
+      # why it sits after it.
       - name: benches compile
-        run: cargo bench --workspace --no-run
+        run: cargo bench --workspace --no-run --locked
+
+  # A pull request that changes documents alone still runs the Rust tests that read
+  # documents, because a document can break them: the citation and stack-table checks in
+  # `architecture_compliance`, `ARCHITECTURE.md`'s graph in `dependency_graph`, the
+  # role matrix in `roles-and-stakeholders.md`, the usability report the rehearsal test
+  # reads, and the gap register the desktop's own unit tests read. Minutes, from the test
+  # job's cache, rather than the whole workspace.
+  docs-tests:
+    name: tests that read the documents
+    needs: changes
+    if: needs.changes.outputs.code == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: debug-tests
+          save-if: false
+      - uses: taiki-e/install-action@nextest
+      - name: System libraries for eframe/glow
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libgl1-mesa-dev
+      - name: the desktop's tests that read documents
+        run: >-
+          cargo nextest run --locked -p gungnir-app --lib
+          --test architecture_compliance --test dependency_graph --test rehearsal
+      - name: the role matrix against roles-and-stakeholders.md
+        run: cargo nextest run --locked -p gungnir-security --test role_matrix
 
   # The four document jobs below run .github/scripts/check_documents.sh, which regenerates
   # what is generated and fails on any difference from what is committed.
@@ -209,7 +318,7 @@ jobs:
   # GAP-102 (D-41): the point-cloud CRS conversion, which is the one thing in this
   # workspace that a default `cargo test` cannot run.
   #
-  # **Why it is a job of its own rather than a flag on `fmt-clippy-test`.** `proj` links
+  # **Why it is a job of its own rather than a flag on the `test` job.** `proj` links
   # `libproj` through `proj-sys` 0.27, which wants a system libproj at >= 9.6.2 from
   # pkg-config and otherwise builds PROJ 9.6.2 from source with cmake. Ubuntu's own
   # `libproj-dev` is older than that minimum, so the source build is the path this job
@@ -248,6 +357,8 @@ jobs:
   # restores it and the CDN is asked once per cache eviction, not once per run.
   proj-crs:
     name: DEM and point-cloud CRS conversion (libproj)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -271,7 +382,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake pkg-config libsqlite3-dev sqlite3 libtiff-dev
       # gungnir-app's test binaries link eframe/glow, the same libraries the
-      # `fmt, clippy, test` job installs for exactly that reason. This job builds
+      # `test` job installs for exactly that reason. This job builds
       # gungnir-app too, so it needs them for the same reason and not a new one.
       - name: System libraries for eframe/glow
         run: sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libgl1-mesa-dev
@@ -400,6 +511,8 @@ jobs:
   # Dockerfile's own build stage: its `COPY . .` under `.dockerignore`, its `--locked`.
   node-linux-container:
     name: gungnir-node builds for Linux x86_64
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
