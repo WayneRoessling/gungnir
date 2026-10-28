@@ -45,7 +45,7 @@
 //! answer presented as this question's.
 
 use gungnir_assessment::{RiskScore, ThreatAssessor};
-use gungnir_model::{MissionTime, PlanView, ResourceId, ResourceView, TrackView};
+use gungnir_model::{MissionTime, PlanView, ResourceId, ResourceView, TrackId, TrackView};
 use gungnir_policy::{PolicyEngine, PolicyVerdict};
 
 use crate::{rationale_for, CourseOfAction, DecisionSupport};
@@ -199,8 +199,13 @@ impl DecisionSupport for PlanAlternatives<'_> {
     ///
     /// An alternative whose assignments match the primary's, or an earlier alternative's,
     /// is dropped -- the same plan under a different heading is not a second option.
-    /// An alternative the allocator could not compute is dropped too: the primary is the
-    /// answer, and a hypothesis with no plan behind it is not an alternative to it.
+    ///
+    /// **An alternative the allocator could not compute is said, not dropped** (GAP-244).
+    /// It is the empty plan under its own heading with the allocator's reason, judged by
+    /// the chain like any other, which denies an empty plan, so it ranks last and can
+    /// never be acted on. Dropping it made the number of options a fact about the solve
+    /// rather than the picture: an alternative whose solve overran its budget vanished,
+    /// and the operator read "no other option" where the truth was "not worked out".
     fn recommend(&mut self, max_alternatives: usize) -> Vec<CourseOfAction> {
         let primary = match self.source.plan(self.now, self.tracks, self.resources) {
             Ok(plan) => plan,
@@ -216,6 +221,9 @@ impl DecisionSupport for PlanAlternatives<'_> {
         let mut courses = vec![self.course(primary.clone(), &heading, self.scores)];
 
         let mut alternatives: Vec<CourseOfAction> = Vec::new();
+        // The assignments of the alternatives actually computed, for the duplicate check.
+        // An uncomputed one's empty plan is not a plan it could duplicate.
+        let mut computed: Vec<Vec<(ResourceId, TrackId)>> = vec![primary.assignments()];
         for withheld in self.withholding_order(&primary) {
             if alternatives.len() >= max_alternatives {
                 break;
@@ -226,16 +234,20 @@ impl DecisionSupport for PlanAlternatives<'_> {
                 .filter(|r| r.id != withheld)
                 .cloned()
                 .collect();
-            let Ok(plan) = self.source.plan(self.now, self.tracks, &pool) else {
-                continue;
+            let plan = match self.source.plan(self.now, self.tracks, &pool) {
+                Ok(plan) => plan,
+                Err(err) => {
+                    let heading =
+                        format!("Alternative, if resource {} were unavailable.", withheld.0);
+                    alternatives.push(self.declined(&err, &heading));
+                    continue;
+                }
             };
-            if plan.assignments() == primary.assignments()
-                || alternatives
-                    .iter()
-                    .any(|c| c.plan.assignments() == plan.assignments())
-            {
+            let assignments = plan.assignments();
+            if computed.contains(&assignments) {
                 continue;
             }
+            computed.push(assignments);
             let heading = format!(
                 "Alternative, if resource {} were unavailable (policy value {:.2} against \
                  the recommendation's {:.2}).",
@@ -310,6 +322,9 @@ mod tests {
         calls: AtomicUsize,
         /// When set, the allocator refuses, as the real one does when the solve fails.
         refuse: Option<String>,
+        /// When set, the allocator refuses any pool without this resource, with this
+        /// reason: one alternative's solve failing while the others answer.
+        refuse_without: Option<(ResourceId, String)>,
     }
 
     impl GreedySource {
@@ -318,6 +333,7 @@ mod tests {
                 scores,
                 calls: AtomicUsize::new(0),
                 refuse: None,
+                refuse_without: None,
             }
         }
     }
@@ -334,6 +350,13 @@ mod tests {
                 return Err(PlanUnavailable::Allocator {
                     reason: reason.clone(),
                 });
+            }
+            if let Some((needed, reason)) = &self.refuse_without {
+                if !resources.iter().any(|r| r.id == *needed) {
+                    return Err(PlanUnavailable::Allocator {
+                        reason: reason.clone(),
+                    });
+                }
             }
             let mut ranked: Vec<&TrackView> = tracks.iter().collect();
             ranked.sort_by(|a, b| {
@@ -709,6 +732,73 @@ mod tests {
             what_if.rationale.contains("What if"),
             "{}",
             what_if.rationale
+        );
+    }
+
+    /// **An alternative the allocator could not compute is said, not dropped** (GAP-244).
+    ///
+    /// The desktop's alternatives are each a solve under the baseline's budget, and one
+    /// that overran used to vanish: the same picture offered four options on one call and
+    /// three on the next, and nothing on screen said a fourth had not been worked out.
+    /// Here one alternative's solve refuses and the others answer, and the list is as long
+    /// as it is when every solve answers, with the refused one last, denied, and naming
+    /// the allocator's reason.
+    #[test]
+    fn an_alternative_the_allocator_could_not_compute_is_said_not_dropped() {
+        let tracks = vec![track(1), track(2), track(3)];
+        let resources = vec![resource(1), resource(2), resource(3)];
+        let scores = vec![score(1, 0.9), score(2, 0.6), score(3, 0.3)];
+        let control = control(WeaponsControlStatus::Free);
+        let authority = authority();
+        let chain = chain(&control, &authority, &hostile);
+        let recommend = |source: &GreedySource| {
+            PlanAlternatives {
+                now: MissionTime(0.0),
+                tracks: &tracks,
+                resources: &resources,
+                scores: &scores,
+                source,
+                policy: &chain,
+                assessor: None,
+            }
+            .recommend(3)
+        };
+
+        let answered = recommend(&GreedySource::new(scores.clone()));
+        let reason = "the solve did not finish inside its 4 ms budget";
+        let mut overran = GreedySource::new(scores.clone());
+        overran.refuse_without = Some((ResourceId(2), reason.to_owned()));
+        let courses = recommend(&overran);
+
+        assert_eq!(answered.len(), 4, "the fixture offers three alternatives");
+        assert_eq!(
+            courses.len(),
+            answered.len(),
+            "an alternative whose solve failed was dropped: {courses:#?}"
+        );
+        let said: Vec<&CourseOfAction> = courses
+            .iter()
+            .filter(|c| c.rationale.contains(reason))
+            .collect();
+        assert_eq!(said.len(), 1, "{courses:#?}");
+        assert!(
+            said[0]
+                .rationale
+                .starts_with("Alternative, if resource 2 were unavailable."),
+            "{}",
+            said[0].rationale
+        );
+        assert_eq!(
+            said[0].policy_verdict,
+            PolicyVerdict::Denied {
+                reason_code: DenialReason::EmptyPlan
+            },
+            "an option nobody worked out must not be one anybody can take"
+        );
+        assert_eq!(
+            courses.last().map(|c| &c.rationale),
+            Some(&said[0].rationale),
+            "it ranks behind every option that could be acted on"
         );
     }
 

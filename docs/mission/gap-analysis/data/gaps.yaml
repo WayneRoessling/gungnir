@@ -13312,3 +13312,46 @@
     note: >-
       Filed by GAP-212, whose action named a key-provider purpose with HKDF as the bridge:
       the bridge is built, and the provider half needs a MAC operation no provider has.
+- id: GAP-244
+  name: An alternative whose solve overran its budget vanished, timed on a clock of its own
+  type: Technical
+  caps: [CAP-3.5]
+  layer: "Productization: decision and policy"
+  sev: 3
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: [GAP-032, GAP-119]
+  impact: >-
+    The same picture offered a different number of options from one call to the next. Each
+    alternative was solved under the 4 ms budget on the machine's monotonic clock, even on
+    a desktop whose planner was on a clock that never advances, and an alternative whose
+    solve overran was dropped without a word. The operator read "no other option" where
+    the truth was "not worked out", and main's CI failed once with four options against
+    three.
+  evidence: >-
+    `gungnir-app/src/decisions.rs` (`SnapshotPlanner` built its planner on a new
+    `MonotonicClock`, while its own documentation said an over-budget option is reported);
+    `gungnir-decision/src/alternatives.rs` (`recommend` skipped a `PlanUnavailable`
+    alternative); CI run 40715701906, job 122912658690, at 46a10829
+  action: >-
+    Measure the snapshot planner's budget on the live planner's clock; report an
+    alternative the allocator could not compute, denied, with the allocator's reason;
+    test both deterministically.
+  ref: >-
+    Found from main's CI after GAP-213 merged
+    (`../../record/2026-10-28/gap-244-an-alternative-is-timed-on-the.md`)
+  history:
+  - date: 2026-10-28
+    status: Open
+    note: >-
+      Found from one failure of `every_alternative_carries_a_verdict_from_the_desktops_own_chain`
+      on main, which passed on the next run and every pull-request run.
+  - date: 2026-10-28
+    status: Closed
+    note: >-
+      Fixed. `InterceptService::solve_clock` gives the snapshot planner the embedded
+      planner's clock, and `recommend` keeps an uncomputed alternative as a denied course
+      naming the allocator's reason. A probe at a 0.05 ms budget reproduced both shapes
+      (three options, and one). The two new tests fail on the old code, one with CI's own
+      four against three.
