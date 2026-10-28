@@ -43,6 +43,9 @@ pub fn audit_view<'a>(
             at_s: at,
         },
         SessionState::StoreUnavailable { reason } => SessionLine::StoreUnavailable { reason },
+        SessionState::Locked { operator, .. } => SessionLine::Locked {
+            operator: operator.0,
+        },
     };
     AuditView {
         session,
@@ -54,10 +57,7 @@ pub fn audit_view<'a>(
         handoffs,
         now: state.clock.now(),
         can_sign_in: !matches!(state.session_state(), SessionState::StoreUnavailable { .. }),
-        can_assign_roles: gungnir_security::authz::role_permits(
-            state.role(),
-            gungnir_security::actions::ASSIGN_ROLE,
-        ),
+        can_assign_roles: state.may(gungnir_security::actions::ASSIGN_ROLE),
         record,
         node,
     }
@@ -80,8 +80,8 @@ pub(crate) fn role_named(name: &str) -> Option<gungnir_security::Role> {
 /// rebuilt so the change is in force without a restart.
 pub fn assign_role(state: &mut AppState, operator: u64, role_name: &str) {
     use gungnir_config::AuthenticationProvider;
-    use gungnir_security::{actions, authz::role_permits, FileAccountStore, OperatorId};
-    if !role_permits(state.role(), actions::ASSIGN_ROLE) {
+    use gungnir_security::{actions, FileAccountStore, OperatorId};
+    if !state.may(actions::ASSIGN_ROLE) {
         state.alerts.push(format!(
             "role assignment refused: {:?} does not hold {}",
             state.role(),

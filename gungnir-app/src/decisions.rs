@@ -105,7 +105,7 @@ pub fn decide(
         OperatorDecision::Overridden => OVERRIDE_PLAN,
         _ => DECIDE_PLAN,
     };
-    if !role_permits(role, action) {
+    if !state.may(action) {
         return Err(CommandError::NotPermitted {
             role: format!("{role:?}"),
             action,
@@ -553,7 +553,7 @@ pub fn queue_rows(state: &AppState) -> Vec<QueueRow<'_>> {
             .find(|t| t.id == id)
             .map_or(gungnir_model::Classification::Unknown, |t| t.classification)
     };
-    let may_decide = role_permits(state.role(), DECISION_ACTION);
+    let may_decide = state.may(DECISION_ACTION);
     let now = state.clock.now();
     // The matrix the queue was offered under, with D-15's delegations as they stand now
     // (GAP-134): a delegation that has lapsed is not drawn as though it still stood.
@@ -636,7 +636,7 @@ pub fn queue_view<'a>(
                 .signed_in()
                 .is_some_and(|s| role_permits(s.role, DECISION_ACTION))
         } else {
-            role_permits(state.role(), DECISION_ACTION)
+            state.may(DECISION_ACTION)
         },
         role: role_name,
         handoffs,

@@ -109,6 +109,11 @@ pub mod events {
     /// D-142). Recorded either way, because a failed unlock is somebody trying the
     /// administrator's passphrase.
     pub const SIGNING_UNLOCK: &str = "audit.signing_unlock";
+    /// The host's clock went backwards by more than a second between two readings
+    /// (GAP-212). Sessions no longer depend on it, since they run on a monotonic clock;
+    /// every timestamp on the record does, and a step back is what a replayed or
+    /// back-dated record would need.
+    pub const CLOCK_STEPPED_BACK: &str = "clock.stepped_back";
 }
 
 /// A head is handed to the host once this many entries have been written since the

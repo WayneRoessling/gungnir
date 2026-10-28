@@ -242,6 +242,7 @@ impl eframe::App for App {
         // one line per area of the window, in the order they are drawn. Panels return
         // what was clicked rather than writing to `AppState`, and the last `Some` wins
         // because at most one panel is clicked per frame.
+        self.note_activity(ui.ctx());
         self.draw_status_strip(ui);
         self.draw_about(ui.ctx());
         let mut action = self.draw_workspace(ui);
@@ -255,8 +256,21 @@ impl eframe::App for App {
         self.draw_evidence_card(ui.ctx());
         self.draw_viewport(ui);
         action = self.draw_detached(ui.ctx()).or(action);
+        // GAP-212: drawn last, so it is on top of everything it locks.
+        action = self.draw_locked(ui.ctx()).or(action);
         self.end_frame(ui.ctx(), action);
     }
+}
+
+/// What a locked console still does (D-143, GAP-212): sign in, and look. Selecting a track
+/// or a queue item changes what is shown and nothing else; every other action is refused.
+fn may_act_while_locked(action: &PanelAction) -> bool {
+    matches!(
+        action,
+        PanelAction::Session(gungnir_ui::panels::audit::SessionAction::SignIn)
+            | PanelAction::SelectTrack(_)
+            | PanelAction::SelectApproval(_)
+    )
 }
 
 /// Whether eframe will call `ui` for this window this frame: the rule it applies itself
@@ -272,7 +286,15 @@ impl App {
         // Applied after every panel has been drawn: a click changes what the *next*
         // frame shows, never what the current one has already half-drawn.
         if let Some(action) = action {
-            self.apply(action);
+            if self.state.is_locked() && !may_act_while_locked(&action) {
+                // D-143, GAP-212: the locked screen refuses every action. Whatever a panel
+                // beneath it returned is dropped here, the one place every action passes.
+                self.state.alerts.push(
+                    "refused: the session is locked after inactivity; sign in again to act".into(),
+                );
+            } else {
+                self.apply(action);
+            }
         }
 
         // The replay cursor advances on wall time, not mission time: it is a review
@@ -283,6 +305,38 @@ impl App {
         self.sustainment.replay.advance(dt);
 
         ctx.request_repaint_after(REPAINT_INTERVAL);
+    }
+
+    /// GAP-212: any key, click, scroll or pointer movement this frame keeps a live session
+    /// alive for another idle timeout. It does not unlock a locked one.
+    fn note_activity(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| !i.events.is_empty() || i.pointer.is_moving()) {
+            self.state.touch_session();
+        }
+    }
+
+    /// D-143, GAP-212: the locked screen. A window over the workspace, which stays drawn
+    /// beneath it, saying who it was locked for and asking for a sign-in.
+    fn draw_locked(&mut self, ctx: &egui::Context) -> Option<PanelAction> {
+        let gungnir_security::SessionState::Locked { operator, .. } = self.state.session_state()
+        else {
+            return None;
+        };
+        let mut action = None;
+        egui::Window::new("Locked")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                action = gungnir_ui::panels::audit::render_locked(
+                    ui,
+                    &self.state.palette,
+                    operator.0,
+                    &mut self.sustainment.sign_in,
+                )
+                .map(PanelAction::Session);
+            });
+        action
     }
 
     /// GAP-072: PN-01 is on every layout, so it is a top panel rather than a slot in

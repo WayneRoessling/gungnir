@@ -102,11 +102,11 @@ fn an_account_created_by_the_binary_is_one_the_node_can_authenticate() {
     .expect("issuer");
     let authority = gungnir_api::transport::AccountTokenAuthority::new(Box::new(store), issuer);
     assert!(
-        authority.sign_in(7, "correct horse", 0.0).is_ok(),
+        authority.sign_in(7, "correct horse", 0.0, None).is_ok(),
         "the provisioned passphrase must sign in"
     );
     assert!(
-        authority.sign_in(7, "wrong", 0.0).is_err(),
+        authority.sign_in(7, "wrong", 0.0, None).is_err(),
         "a wrong passphrase must not"
     );
 }
@@ -185,7 +185,7 @@ fn a_second_account_for_the_same_operator_is_refused_unless_replacement_is_asked
     .expect("issuer");
     let authority = gungnir_api::transport::AccountTokenAuthority::new(Box::new(store), issuer);
     assert!(
-        authority.sign_in(3, "first", 0.0).is_ok(),
+        authority.sign_in(3, "first", 0.0, None).is_ok(),
         "the refused write must have left the original passphrase in force"
     );
 
@@ -285,7 +285,7 @@ fn an_intelligence_analyst_account_can_be_created_and_authenticates() {
     .expect("issuer");
     let authority = gungnir_api::transport::AccountTokenAuthority::new(Box::new(store), issuer);
     assert!(
-        authority.sign_in(11, "a passphrase", 0.0).is_ok(),
+        authority.sign_in(11, "a passphrase", 0.0, None).is_ok(),
         "the provisioned passphrase must sign in"
     );
 }
@@ -386,11 +386,11 @@ fn an_os_keystore_account_created_by_the_binary_is_one_the_node_can_authenticate
     .expect("issuer");
     let authority = gungnir_api::transport::AccountTokenAuthority::new(Box::new(store), issuer);
     assert!(
-        authority.sign_in(7, "correct horse", 0.0).is_ok(),
+        authority.sign_in(7, "correct horse", 0.0, None).is_ok(),
         "the refused duplicate must have left the original passphrase in force"
     );
     assert!(
-        authority.sign_in(7, "wrong", 0.0).is_err(),
+        authority.sign_in(7, "wrong", 0.0, None).is_err(),
         "a wrong passphrase must not sign in"
     );
 

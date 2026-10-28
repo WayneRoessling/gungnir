@@ -43,6 +43,7 @@ fn desktop(name: &str, write_store: bool) -> (AppState, std::path::PathBuf) {
                     accounts_path: "accounts.json".into(),
                 },
                 session_lifetime_s: None,
+                idle_timeout_s: None,
             },
             ..SecurityConfig::default()
         },

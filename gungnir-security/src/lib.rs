@@ -60,8 +60,9 @@ pub use os_keystore::DESKTOP_KEYSTORE_SERVICE;
 pub use provider::InProcessKeyProvider;
 pub use session::{
     audit_attempt, audit_sign_out, hash_passphrase, verify_account, Account, AccountStore,
-    AuthFailure, BackOff, FileAccountStore, InMemoryAccountStore, LocalAccountAuthority,
-    MissionTimeSeconds, OperatorSession, SessionAuthority, SessionState,
+    AuthFailure, BackOff, ClockStepWatch, FileAccountStore, InMemoryAccountStore,
+    LocalAccountAuthority, ManualMonotonic, MissionTimeSeconds, MonotonicClock, OperatorSession,
+    SessionAuthority, SessionState, SystemMonotonic, IDLE_LOCK_S, SESSION_MAX_S,
 };
 pub use token::TokenIssuer;
 
