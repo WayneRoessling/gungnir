@@ -1,6 +1,6 @@
 # DN-22 Key custody, rotation, and escrow
 
-Closes GAP-084, filed by plan 11 finding F-3. Status: **amendment 1 (§9)**, after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11)**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12)**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. A first-run race was found in the secret-generation helper; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over. A real defect in the code behind it was found and closed: Azure Key Vault's raw ECDSA signature format, handed through unconverted, would have broken every TLS handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127). **Amendment 6 (§15), 2026-10-27**: configuration baselines signed under `BaselineSigning`, a purpose §3 declared and nothing used, verified against a key pinned outside the baseline, and refused unsigned in the connected profiles (GAP-210). **Amendment 7 (§16), 2026-10-28**: issued identities valid for ninety days and re-issued on their own key before they expire, and revoked by key fingerprint in the baseline (GAP-211).
+Closes GAP-084, filed by plan 11 finding F-3. Status: **amendment 1 (§9)**, after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11)**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12)**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. A first-run race was found in the secret-generation helper; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over. A real defect in the code behind it was found and closed: Azure Key Vault's raw ECDSA signature format, handed through unconverted, would have broken every TLS handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127). **Amendment 6 (§15), 2026-10-27**: configuration baselines signed under `BaselineSigning`, a purpose §3 declared and nothing used, verified against a key pinned outside the baseline, and refused unsigned in the connected profiles (GAP-210). **Amendment 7 (§16), 2026-10-28**: issued identities valid for ninety days and re-issued on their own key before they expire, and revoked by key fingerprint in the baseline (GAP-211). **Amendment 8 (§17), 2026-10-28**: sealed files readable by their owner alone on Windows as on Unix, three secrets cleared from memory when dropped, and a desktop's default data directory in the user's profile (GAP-215).
 **Human-owned**: `gungnir-security` is a low-trust crate and this note decides
 who can read what. What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
@@ -800,6 +800,84 @@ authority's, though its key can be listed like any other.
 **Human-owned.** `gungnir-remote/src/identity.rs` and `client_config` in its `lib.rs` (the
 TLS identity path), the verifier in `gungnir-api/src/tls.rs`, and `key_fingerprint` in
 `gungnir-security`. Their standing is in `../signatures.md`.
+
+## 17. Amendment 8 (2026-10-28): sealed files are their owner's, and secrets are cleared
+
+**Amendment 3's sealed file took its directory's permissions.**
+- `keystore.sealed`, `accounts.sealed` and the cloud-wrapped secret were written with
+  `std::fs::write`.
+- The one permission change in the crate was Unix-only, and was for the plaintext file of
+  password hashes.
+- The keystore's AES wrapping key, the node's token key and a link's passphrase stayed in
+  memory until their allocation was reused.
+- A desktop with no baseline kept its journal and keystores under whatever directory it
+  was started from.
+
+(GAP-215, the comprehensive review's §5 finding 10.) Built under the owner's delegation of
+2026-10-28:
+
+| Question | Taken |
+|---|---|
+| How a file becomes owner-only on Windows | `icacls.exe`, run by its path under `%SystemRoot%`: inheritance removed, the current user's SID (from `whoami.exe`) granted full control, nothing else |
+| Clearing secrets | `zeroize`, admitted by D-145: already compiled in through `aes-gcm`, `p256` and `argon2` |
+| The data directory | The user's profile for a desktop with no baseline, except where a `./gungnir-journal` already exists |
+
+**Owner-only files.** `gungnir_security::owner_only::write` is how every sealed file and
+the account file are written now:
+- the bytes go to a file beside the target;
+- that file is restricted to its owner (mode 0600 on Unix, the access list above on
+  Windows);
+- it is renamed over the target, so the target is never readable by others even
+  momentarily, and a crash leaves the old file.
+
+A restriction that cannot be applied is logged and returned as `NotApplied`, never a
+refused write: a keystore that could not be saved is worse than one whose permissions are
+wider than asked. `account add` says which was applied.
+
+**Why not the Win32 API.** Setting an access list directly needs `unsafe` calls into the
+operating system, and GAP-238 is moving the workspace to forbid `unsafe` altogether. A crate
+that wraps them would be a new §2.9 row. `icacls.exe` and `whoami.exe` are part of every
+Windows installation, and are run by their full paths, so a same-named program earlier on
+`PATH` is never the one run.
+
+**Cleared secrets.**
+- The wrapping key is a `Zeroizing<[u8; 32]>` from derivation to drop.
+- The token issuer's key is a `Zeroizing<Vec<u8>>`.
+- A link's `Credential` zeroizes its passphrase in `Drop`. That keeps it a plain `String` at
+  the twenty-odd places one is built.
+
+Copies made on the way to the wire, such as the request body's own `String`, are outside
+this.
+
+**The data directory.** A desktop started with no baseline file keeps its data under the
+user's profile:
+- `%LOCALAPPDATA%\Gungnir\journal` on Windows;
+- `$XDG_DATA_HOME/gungnir/journal`, or `~/.local/share/gungnir/journal`, elsewhere.
+
+**Two cases keep the old place.**
+- A `./gungnir-journal` that already exists is kept, with a warning to move it, because
+  moving the default out from under an existing journal would look like a lost record.
+- A baseline file's `data_dir` is the deployment's choice and is not rewritten. Rewriting
+  it in the running state would also read on PN-14 as a change to the baseline on every
+  apply.
+
+The node keeps `./gungnir-journal` by default: it runs as a service, and its container names
+`/var/lib/gungnir`.
+
+**Verification.**
+- `owner_only`'s own test checks a written file's access list on Windows (one entry, full
+  control, nothing inherited) and its mode on Unix, then rewrites it.
+- `keystore.rs` checks that a real sealed keystore is owner-only from its first key.
+- `gungnir-app/tests/data_dir_default.rs` checks the directory rule with the environment
+  handed in, so it neither reads nor writes this machine's profile.
+
+**What it does not claim.** An administrator can still take ownership of a file on Windows,
+and root can read it on Unix. Owner-only keeps out other ordinary accounts on the same
+host, which is what the finding asked.
+
+**Human-owned.** `gungnir-security`'s `owner_only.rs`, and the writers and secrets in
+`keystore.rs`, `account_store.rs`, `managed_service.rs`, `session.rs`, `token.rs` and
+`provisioning.rs`. Their standing is in `../signatures.md`.
 
 ## Traceability
 

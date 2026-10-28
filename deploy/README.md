@@ -65,6 +65,14 @@ file:
 If the node cannot be reached the desktop falls back to the embedded services and
 shows an alert (`ARCHITECTURE.md` §8.4).
 
+**Where a desktop keeps its data.** A baseline's `data_dir` names the directory. A desktop
+started with no baseline keeps its journal and keystores in this user's profile:
+`%LOCALAPPDATA%\Gungnir\journal` on Windows, `~/.local/share/gungnir/journal` elsewhere
+(GAP-215). If a `./gungnir-journal` already exists under the working directory, from
+before GAP-215, it is kept, and the desktop logs that it should be moved. Every sealed
+file the desktop or node writes (keystores, account stores, a cloud-wrapped secret) is
+readable by its owner alone, on Windows as on Unix.
+
 **State how long a delegation survives a lost node.** A desktop cut off from its node
 keeps the delegations in force when the node went silent for
 `policy.delegation.disconnected_lapse_s` seconds and then lets them lapse, and makes no new
@@ -106,7 +114,8 @@ can read the screen. `add` refuses an operator that already has an account unles
 `account.assign_role` entry to the `audit` directory beside the file, attributed to nobody
 because the command runs outside any session (DN-23 §5). `add-os-keystore` and
 `list-os-keystore` seal the accounts under the operating system's keystore instead of a
-file (D-39). On Windows the file inherits its directory's permissions; the command says so.
+file (D-39). The file is readable by its owner alone, on Windows as on Unix (GAP-215); the
+command says what was applied.
 
 Point the baseline at the file with `security.authentication.local_accounts.accounts_path`
 and sign in on PN-20. The roles are `operator`, `supervisor`, `analyst`, `sensor-manager`,

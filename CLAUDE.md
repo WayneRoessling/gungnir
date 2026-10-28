@@ -97,7 +97,9 @@ The generated documents carry a line saying so. Edit their source -- the YAML un
 
 The desktop binary is `gungnir-app` (eframe, `Renderer::Glow`); the headless node is
 `gungnir-node [config.json]`. Both start with the default config and run without
-sensors; both journal to `./gungnir-journal` under the working directory.
+sensors. With no baseline, the node journals to `./gungnir-journal` under the working
+directory and the desktop to this user's profile (`%LOCALAPPDATA%\Gungnir\journal`, or
+`~/.local/share/gungnir/journal`), unless a `./gungnir-journal` already exists (GAP-215).
 
 `gungnir-app account add|list|add-os-keystore|list-os-keystore` and the same under
 `gungnir-node` (one implementation, `gungnir_security::provisioning`) provision the accounts

@@ -289,9 +289,9 @@ What was missing was the other end of the sentence.
 
 **Two limitations are stated rather than hidden.** Echo of a typed passphrase is not
 suppressed, because that needs a terminal crate no §2.9 decision admits; the documented
-usage pipes the passphrase in. And the file is set to owner-only on Unix while on Windows
-it inherits the directory's permissions -- the command says which of those happened
-instead of implying the stricter one.
+usage pipes the passphrase in. And the file is set to owner-only on Unix and, since
+GAP-215 (DN-22 §17), on Windows too, where it inherited the directory's permissions until
+then; the command still says what was applied rather than implying it.
 
 **What this does not do.** It does not remove an account, because the audit consequences
 of deleting a credential belong with the audit trail and PN-20's listing, and inventing
