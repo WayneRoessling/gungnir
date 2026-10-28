@@ -178,7 +178,8 @@ covariance update). The gates are structural:
    fails a run that declares no dependency, runs no test in a `loom_` module, or reports
    no explored interleavings.
 5. **Fuzzing** (`gungnir-fuzz`, workflow `fuzz-nightly.yml`) on the sensor-ingestion
-   parser and association cost-matrix construction.
+   parser, every feed adapter in `gungnir-ingest` (ASTERIX, SAPIENT, MISB, ADS-B and AIS;
+   GAP-213), and association cost-matrix construction.
 6. **Benchmark regression gate** (workflow `bench-regression.yml`): `criterion` versus
    the baseline stored from `main`, against a p99 threshold. **Advisory, and it stays
    that way.** It runs on pushes to `main` and by dispatch since 2026-09-09, and became

@@ -38,3 +38,27 @@ name = "cost_matrix_construction"
 path = "fuzz_targets/cost_matrix_construction.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "sapient_feed"
+path = "fuzz_targets/sapient_feed.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "misb_feed"
+path = "fuzz_targets/misb_feed.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "adsb_feed"
+path = "fuzz_targets/adsb_feed.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ais_feed"
+path = "fuzz_targets/ais_feed.rs"
+test = false
+doc = false

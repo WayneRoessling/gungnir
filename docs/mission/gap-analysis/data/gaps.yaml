@@ -12331,7 +12331,16 @@
     status: Open
     note: >-
       Filed by plan 12. GAP-076 seeded the corpus; the targets stopped at three.
-
+  - date: 2026-10-28
+    status: Closed
+    note: >-
+      Built under the owner's delegation of 2026-10-28. SAPIENT, MISB, ADS-B and AIS each
+      have a fuzz target over their adapter, seeded from `testdata/`, with
+      `gungnir-ingest/tests/fuzz_seeds.rs` keeping the seeds decodable, and the nightly
+      runs all seven. Category 205 and 129 were already reached through `asterix_feed`.
+      No baseline can select `AllowAllAuthenticator`, so the check is on the code:
+      `architecture_compliance.rs` refuses shipped code that names it. See
+      `../../record/2026-10-28/gap-213-every-feed-adapter-is-fuzzed.md`.
 - id: GAP-214
   name: The transport has no request timeout, connection cap or pre-credential deadline
   type: Technical

@@ -9,6 +9,9 @@
 # Committed fixtures are compared byte for byte (`testdata/oracles/README.md`,
 # GAP-016 byte parity). They must not be touched by any filter.
 testdata/** -text
+# Fuzz seeds are fixtures too, cut from `testdata/` (GAP-213): a normalised seed is not
+# the input its corpus test proves decodable.
+gungnir-fuzz/corpus/** -text
 *.jsonl -text
 
 # Sparx EA wrote these, not us: they are the evidence for what EA's XMI dialect
