@@ -141,10 +141,17 @@ pub fn acceptor_with_resolver(
     revoked: &[String],
 ) -> Result<TlsAcceptor, ApiError> {
     let verifier = client_verifier(client_ca, revoked)?;
-    let config = ServerConfig::builder()
+    let config = server_config()
         .with_client_cert_verifier(verifier)
         .with_cert_resolver(resolver);
     Ok(TlsAcceptor::from(Arc::new(config)))
+}
+
+/// TLS 1.3 and nothing older (GAP-214). Every peer of this transport is this workspace's
+/// own desktop, node or a partner held to the same contract, so there is no legacy client
+/// to keep 1.2 for, and 1.3 drops every cipher suite and renegotiation path 1.2 carried.
+pub fn server_config() -> rustls::ConfigBuilder<ServerConfig, rustls::WantsVerifier> {
+    ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
 }
 
 /// The authorities in `client_ca`, verified as mutual TLS requires, with `revoked`'s keys
@@ -295,7 +302,7 @@ pub fn acceptor_revoking(paths: &TlsPaths, revoked: &[String]) -> Result<TlsAcce
     }
     let key = read_private_key(Path::new(&paths.private_key))?;
     let verifier = client_verifier(&paths.client_ca, revoked)?;
-    let config = ServerConfig::builder()
+    let config = server_config()
         .with_client_cert_verifier(verifier)
         .with_single_cert(certs, key)
         .map_err(|e| ApiError::Transport(format!("the certificate and key do not match: {e}")))?;
@@ -462,26 +469,99 @@ fn tlv(buf: &[u8], at: usize) -> Option<(u8, &[u8], usize)> {
 pub struct TlsListener {
     inner: tokio::net::TcpListener,
     acceptor: TlsAcceptor,
+    /// One permit per connection open (GAP-214).
+    slots: Arc<tokio::sync::Semaphore>,
 }
+
+/// The most connections a node holds open at once (GAP-214). A node serves its desktops
+/// and its partners, tens of them; past this, a new connection waits in the kernel's
+/// backlog until one closes rather than costing the node another socket and task.
+pub const MAX_CONNECTIONS: usize = 256;
+
+/// How long a client has to complete the TLS handshake (GAP-214). Handshakes are taken one
+/// at a time, so without this one client that stopped mid-handshake would hold up every
+/// connection behind it.
+pub const HANDSHAKE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 
 impl TlsListener {
     #[must_use]
     pub fn new(inner: tokio::net::TcpListener, acceptor: TlsAcceptor) -> Self {
-        Self { inner, acceptor }
+        Self {
+            inner,
+            acceptor,
+            slots: Arc::new(tokio::sync::Semaphore::new(MAX_CONNECTIONS)),
+        }
+    }
+}
+
+/// A served connection, holding its place under [`MAX_CONNECTIONS`] until it closes.
+pub struct Counted<T> {
+    io: T,
+    _slot: tokio::sync::OwnedSemaphorePermit,
+}
+
+impl<T: tokio::io::AsyncRead + Unpin> tokio::io::AsyncRead for Counted<T> {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.io).poll_read(cx, buf)
+    }
+}
+
+impl<T: tokio::io::AsyncWrite + Unpin> tokio::io::AsyncWrite for Counted<T> {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.io).poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.io).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.io).poll_shutdown(cx)
+    }
+
+    fn poll_write_vectored(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        bufs: &[std::io::IoSlice<'_>],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.io).poll_write_vectored(cx, bufs)
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        self.io.is_write_vectored()
     }
 }
 
 impl axum::serve::Listener for TlsListener {
-    type Io = tokio_rustls::server::TlsStream<tokio::net::TcpStream>;
+    type Io = Counted<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>;
     type Addr = Peer;
 
     async fn accept(&mut self) -> (Self::Io, Self::Addr) {
         loop {
+            // GAP-214: a place under the cap first, so a node at its limit stops accepting
+            // rather than accepting and dropping. The semaphore is never closed.
+            let Ok(slot) = Arc::clone(&self.slots).acquire_owned().await else {
+                continue;
+            };
             let Ok((stream, addr)) = self.inner.accept().await else {
                 continue;
             };
-            match self.acceptor.accept(stream).await {
-                Ok(tls) => {
+            match tokio::time::timeout(HANDSHAKE_DEADLINE, self.acceptor.accept(stream)).await {
+                Ok(Ok(tls)) => {
                     // The verified client certificate's subject is the party (GAP-062).
                     let party = tls
                         .get_ref()
@@ -489,13 +569,22 @@ impl axum::serve::Listener for TlsListener {
                         .peer_certificates()
                         .and_then(|chain| chain.first())
                         .and_then(|cert| subject_common_name(cert.as_ref()));
-                    return (tls, Peer { addr, party });
+                    return (
+                        Counted {
+                            io: tls,
+                            _slot: slot,
+                        },
+                        Peer { addr, party },
+                    );
                 }
                 // A failed handshake is one client's problem, not the node's: an
                 // unverified peer is refused and the listener keeps serving. Logged at
                 // debug because a scanner would otherwise fill the log.
-                Err(err) => {
+                Ok(Err(err)) => {
                     tracing::debug!(%addr, %err, "a client failed the TLS handshake");
+                }
+                Err(_) => {
+                    tracing::debug!(%addr, "a client did not finish the TLS handshake in time");
                 }
             }
         }
