@@ -208,7 +208,7 @@ history, and an entry is never edited once it has merged.
 | GAP-211 | Issued identities never expire and nothing revokes them | Technical | CAP-6.1, CAP-6.4 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-212 | Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends | Technical | CAP-6.1, CAP-6.2 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-213 | Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll | Technical | CAP-6.7, CAP-1.2 | 3 | 9 | M | 27 | I3 | Services engineer | Open |
-| GAP-214 | The transport has no request timeout, connection cap or pre-credential deadline | Technical | CAP-7.1, CAP-6.4 | 3 | 6 | S | 18 | I3 | Services engineer | Open |
+| GAP-214 | The transport has no request timeout, connection cap or pre-credential deadline | Technical | CAP-7.1, CAP-6.4 | 3 | 6 | S | 18 | I3 | Services engineer | Closed |
 | GAP-215 | Sealed files inherit directory permissions on Windows, and nothing is zeroized | Technical | CAP-6.4 | 3 | 2 | S | 6 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-216 | Identity is four states; STANAG 1241's are absent | Technical | CAP-2.6, CAP-7.4 | 4 | 7 | M | 28 | I4 | Services engineer | Open |
 | GAP-217 | Airspace control measures are a circle with a flag, and the fires chain's deconfliction checks never evaluate | Technical | CAP-3.6, CAP-3.8, CAP-2.11 | 4 | 7 | L | 28 | I4 | Security engineer (human-owned crate) | Open |
@@ -3056,11 +3056,12 @@ Counts: 225 gaps, 3 mission, 222 technical; 1 already covered by a plan in `../.
 - Capability: CAP-7.1 Versioned interface; CAP-6.4 Data protection.
 - History:
   - 2026-10-26, Open: Filed by plan 12.
+  - 2026-10-28, Closed: Built under the owner's delegation of 2026-10-28, with no new crate. TLS 1.3 only on the node and its clients; at most 256 connections; ten seconds to finish the TLS handshake, which also bounds a stalled client holding up the one-at-a-time accept; ten seconds from the stream's upgrade to its subscribe frame; thirty seconds for any request; 4 MiB bodies. See `../../record/2026-10-28/gap-214-the-transport-bounds-what-a-caller.md`.
 - Evidence: `gungnir-api/src/transport.rs:2125-2131,2150-2157,3704-3714`; no `with_protocol_versions` or `CryptoProvider` anywhere.
 - Severity: 3. Reach: 6 threads. Effort: S. Priority: 18.
 - Impact: The WebSocket upgrades before any credential and waits for the subscribe frame without a deadline, so a peer holding a valid certificate can hold sockets open indefinitely; body size is the framework default; TLS 1.2 is still negotiable. All of it sits behind mutual TLS, which is why the severity is not higher.
 - Closing action: A handshake-to-subscribe deadline, a timeout layer, a concurrency limit, an explicit body limit, TLS 1.3 only. The FIPS provider question is GAP-230's.
-- Target: I3. Owner: Services engineer. Status: Open.
+- Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: GAP-041; `../../review/2026-10-26-comprehensive-review.md` §5 finding 11.
 
 **GAP-215 Sealed files inherit directory permissions on Windows, and nothing is zeroized**
