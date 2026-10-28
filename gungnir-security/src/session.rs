@@ -467,12 +467,15 @@ impl FileAccountStore {
                 "the account list could not be encoded: {e}"
             ))
         })?;
-        std::fs::write(path, text).map_err(|e| {
-            SecurityError::AuthenticationUnavailable(format!(
-                "cannot write the account file {}: {e}",
-                path.display()
-            ))
-        })
+        // GAP-215: the hashes are nobody else's to read, and a crash leaves the old list.
+        crate::owner_only::write(path, text.as_bytes())
+            .map(|_| ())
+            .map_err(|e| {
+                SecurityError::AuthenticationUnavailable(format!(
+                    "cannot write the account file {}: {e}",
+                    path.display()
+                ))
+            })
     }
 }
 

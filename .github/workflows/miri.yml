@@ -52,8 +52,13 @@ jobs:
     #
     # Left out, with why:
     # - gungnir-metrics motmetrics_diff: 2 h 3 min on CI.
+    # - gungnir-allocation one_step_oracle: over 90 min on CI on 2026-10-28, when the job
+    #   reached its 120 min limit and was cancelled with every suite before it passed.
     # - gungnir-tracking-service sample_set_replay, scenario_truth_replay,
-    #   whole_pipeline_replay: hours each; they fail their own 60 s deadlock guard.
+    #   whole_pipeline_replay: hours each; they fail their own 60 s deadlock guard. And the
+    #   lib test named in `skip`, which runs the dense-group pipeline and waits ten seconds
+    #   for its group: added on 2026-10-26 (GAP-015), it first ran under miri on 2026-10-28
+    #   and failed at that wait, the same pipeline as fusion-async's dense_group below.
     # - gungnir-fusion-async dense_group: over 5 h on CI.
     # - gungnir-filters imm_diff, linear_kalman_diff, particle_diff, sqrt_diff: over 10 min
     #   each (local), and the lib tests named in `skip` below, over 10 min each (local).
@@ -75,13 +80,15 @@ jobs:
           - crate: gungnir-track-fusion
             targets: --lib --tests
           - crate: gungnir-allocation
-            targets: --lib --tests
+            targets: --lib --test bellman_diff --test horizon_first_step
           - crate: gungnir-intercept-service
             targets: --lib --tests
           - crate: gungnir-metrics
             targets: --lib
           - crate: gungnir-tracking-service
             targets: --lib --test sensor_position_resolver
+            skip: >-
+              --skip tests::a_dense_scan_puts_a_group_on_the_view_and_it_ages_stale_with_nothing_arriving
           - crate: gungnir-fusion-async
             targets: --lib --test bearing --test oos_convergence
           - crate: gungnir-filters

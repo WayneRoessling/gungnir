@@ -70,7 +70,8 @@ pub const KEYSTORE_FILE: &str = "keystore.sealed";
 pub struct PersistentKeyProvider {
     inner: Mutex<P256KeyProvider>,
     path: PathBuf,
-    wrapping_key: [u8; 32],
+    /// Cleared from memory when the provider is dropped (GAP-215, D-145).
+    wrapping_key: zeroize::Zeroizing<[u8; 32]>,
     salt: Vec<u8>,
 }
 
@@ -82,10 +83,13 @@ impl std::fmt::Debug for PersistentKeyProvider {
     }
 }
 
-fn derive_wrapping_key(passphrase: &str, salt: &[u8]) -> Result<[u8; 32], SecurityError> {
-    let mut out = [0u8; 32];
+fn derive_wrapping_key(
+    passphrase: &str,
+    salt: &[u8],
+) -> Result<zeroize::Zeroizing<[u8; 32]>, SecurityError> {
+    let mut out = zeroize::Zeroizing::new([0u8; 32]);
     argon2::Argon2::default()
-        .hash_password_into(passphrase.as_bytes(), salt, &mut out)
+        .hash_password_into(passphrase.as_bytes(), salt, &mut *out)
         .map_err(|e| {
             SecurityError::KeyProviderUnavailable(format!("deriving the wrapping key: {e}"))
         })?;
@@ -121,7 +125,7 @@ impl PersistentKeyProvider {
                 )));
             }
             let wrapping_key = derive_wrapping_key(passphrase, &file.salt)?;
-            let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&wrapping_key));
+            let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&wrapping_key[..]));
             let plaintext = cipher
                 .decrypt(Nonce::from_slice(&file.nonce), file.ciphertext.as_slice())
                 .map_err(|_| {
@@ -209,7 +213,7 @@ impl PersistentKeyProvider {
         let plaintext = serde_json::to_vec(&snapshot).map_err(|e| {
             SecurityError::KeyProviderUnavailable(format!("encoding the keystore: {e}"))
         })?;
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&self.wrapping_key));
+        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&self.wrapping_key[..]));
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let ciphertext = cipher.encrypt(&nonce, plaintext.as_slice()).map_err(|_| {
             SecurityError::KeyProviderUnavailable("sealing the keystore failed".into())
@@ -223,10 +227,10 @@ impl PersistentKeyProvider {
         let text = serde_json::to_string(&file).map_err(|e| {
             SecurityError::KeyProviderUnavailable(format!("encoding the keystore: {e}"))
         })?;
-        // Write beside, then rename: a crash mid-write must not leave half a keystore.
-        let tmp = self.path.with_extension("sealed.tmp");
-        std::fs::write(&tmp, text)
-            .and_then(|()| std::fs::rename(&tmp, &self.path))
+        // Write beside, then rename: a crash mid-write must not leave half a keystore. And
+        // owner-only (GAP-215): sealed or not, it is nobody else's to read.
+        crate::owner_only::write(&self.path, text.as_bytes())
+            .map(|_| ())
             .map_err(|e| {
                 SecurityError::KeyProviderUnavailable(format!(
                     "writing {}: {e}",
@@ -356,6 +360,22 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).expect("dir");
         d
+    }
+
+    /// GAP-215: the sealed keystore is its owner's alone, from the first key it holds.
+    #[test]
+    fn the_sealed_file_is_its_owners_alone() {
+        let d = dir("owner-only");
+        let provider =
+            PersistentKeyProvider::open_or_create(&d, "correct horse", None).expect("created");
+        let _ = provider
+            .active_or_generate(KeyPurpose::JournalAtRest)
+            .expect("key");
+        assert!(
+            crate::owner_only::is_owner_only(&d.join(KEYSTORE_FILE)),
+            "the keystore is readable by others"
+        );
+        let _ = std::fs::remove_dir_all(d);
     }
 
     #[test]

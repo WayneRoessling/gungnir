@@ -12422,7 +12422,16 @@
     status: Open
     note: >-
       Filed by plan 12.
-
+  - date: 2026-10-28
+    status: Closed
+    note: >-
+      Built under the owner's delegation of 2026-10-28. Every sealed file and the account
+      file are written beside, restricted to their owner and renamed: mode 0600 on Unix,
+      an access list naming the current user alone on Windows, set by `icacls.exe` rather
+      than `unsafe` calls. The wrapping key, the token key and a link's passphrase are
+      cleared when dropped, with `zeroize` admitted by D-145. A desktop with no baseline
+      keeps its data in the user's profile unless `./gungnir-journal` already exists. See
+      DN-22 §17 and `../../record/2026-10-28/gap-215-sealed-files-are-their-owner-s.md`.
 - id: GAP-216
   name: Identity is four states; STANAG 1241's are absent
   type: Technical

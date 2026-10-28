@@ -44,8 +44,8 @@
 //! **`add-os-keystore` and `list-os-keystore` (GAP-057's node half, D-39).** The same
 //! provisioning need, against [`EncryptedAccountStore`] instead of a plaintext file:
 //! accounts sealed under a key the operating system's own keystore holds, rather than
-//! protected only by whatever file permissions the platform grants (Windows grants none:
-//! see [`permissions_note`]). This path names a data directory and a keystore account
+//! protected only by the file's permissions, which since GAP-215 are its owner's alone
+//! (`crate::owner_only`). This path names a data directory and a keystore account
 //! rather than a file, and reaches the real backend on this machine every time it runs.
 //!
 //! **Every account change is on the audit record** (GAP-111, D-87): an `account.assign_role`
@@ -199,44 +199,15 @@ fn read_accounts(path: &Path) -> Result<Vec<Account>, AccountError> {
     })
 }
 
-/// Write the accounts back, and restrict the file to its owner where the platform can.
-fn write_accounts(path: &Path, accounts: &[Account]) -> Result<(), AccountError> {
+/// Write the accounts back, restricted to their owner (GAP-215), and say what was applied.
+fn write_accounts(
+    path: &Path,
+    accounts: &[Account],
+) -> Result<crate::owner_only::Restricted, AccountError> {
     let text = serde_json::to_string_pretty(accounts)
         .map_err(|e| AccountError::WriteFailed(e.to_string()))?;
-    std::fs::write(path, text + "\n")
-        .map_err(|e| AccountError::WriteFailed(format!("{}: {e}", path.display())))?;
-    restrict_to_owner(path);
-    Ok(())
-}
-
-/// Narrow the file's permissions to its owner.
-///
-/// Best effort by design. On Unix this is a mode change that either works or does not;
-/// on Windows the equivalent is an ACL rewrite that this workspace has no crate for, and
-/// the file inherits the directory's permissions. The caller is told which happened by
-/// [`permissions_note`] rather than being left to assume the strict case.
-fn restrict_to_owner(path: &Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = path;
-    }
-}
-
-/// What was actually done about the file's permissions, so the operator is not left
-/// believing in a protection the platform did not apply.
-#[must_use]
-pub fn permissions_note() -> &'static str {
-    if cfg!(unix) {
-        "the file is set to owner-only (0600)"
-    } else {
-        "the file inherits this directory's permissions; restrict it yourself if the \
-         directory is readable by others"
-    }
+    crate::owner_only::write(path, (text + "\n").as_bytes())
+        .map_err(|e| AccountError::WriteFailed(format!("{}: {e}", path.display())))
 }
 
 /// Read a passphrase from standard input.
@@ -286,7 +257,7 @@ pub fn add(
         accounts.push(account);
         "added"
     };
-    write_accounts(path, &accounts)?;
+    let restricted = write_accounts(path, &accounts)?;
     let recorded = record_provisioning(
         audit,
         format!(
@@ -295,9 +266,9 @@ pub fn add(
         ),
     );
     Ok(format!(
-        "{verb} operator {operator} as {role:?} in {}; {}; {recorded}",
+        "{verb} operator {operator} as {role:?} in {}; the file is {}; {recorded}",
         path.display(),
-        permissions_note()
+        restricted.describe()
     ))
 }
 

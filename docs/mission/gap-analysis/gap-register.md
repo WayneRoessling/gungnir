@@ -209,7 +209,7 @@ history, and an entry is never edited once it has merged.
 | GAP-212 | Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends | Technical | CAP-6.1, CAP-6.2 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-213 | Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll | Technical | CAP-6.7, CAP-1.2 | 3 | 9 | M | 27 | I3 | Services engineer | Closed |
 | GAP-214 | The transport has no request timeout, connection cap or pre-credential deadline | Technical | CAP-7.1, CAP-6.4 | 3 | 6 | S | 18 | I3 | Services engineer | Closed |
-| GAP-215 | Sealed files inherit directory permissions on Windows, and nothing is zeroized | Technical | CAP-6.4 | 3 | 2 | S | 6 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-215 | Sealed files inherit directory permissions on Windows, and nothing is zeroized | Technical | CAP-6.4 | 3 | 2 | S | 6 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-216 | Identity is four states; STANAG 1241's are absent | Technical | CAP-2.6, CAP-7.4 | 4 | 7 | M | 28 | I4 | Services engineer | Open |
 | GAP-217 | Airspace control measures are a circle with a flag, and the fires chain's deconfliction checks never evaluate | Technical | CAP-3.6, CAP-3.8, CAP-2.11 | 4 | 7 | L | 28 | I4 | Security engineer (human-owned crate) | Open |
 | GAP-218 | No global track identity crosses a peer link, and a peer's track can be re-ingested in a loop | Technical | CAP-2.7, CAP-1.6, CAP-2.3 | 4 | 5 | L | 20 | I4 | Services engineer | Open |
@@ -3071,11 +3071,12 @@ Counts: 225 gaps, 3 mission, 222 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.4 Data protection.
 - History:
   - 2026-10-26, Open: Filed by plan 12.
+  - 2026-10-28, Closed: Built under the owner's delegation of 2026-10-28. Every sealed file and the account file are written beside, restricted to their owner and renamed: mode 0600 on Unix, an access list naming the current user alone on Windows, set by `icacls.exe` rather than `unsafe` calls. The wrapping key, the token key and a link's passphrase are cleared when dropped, with `zeroize` admitted by D-145. A desktop with no baseline keeps its data in the user's profile unless `./gungnir-journal` already exists. See DN-22 §17 and `../../record/2026-10-28/gap-215-sealed-files-are-their-owner-s.md`.
 - Evidence: `gungnir-security/src/keystore.rs:226-235`; `account_store.rs:190-199`; `managed_service.rs:196`; `gungnir-node/src/account.rs:210-220`; no `zeroize` in any manifest.
 - Severity: 3. Reach: 2 threads. Effort: S. Priority: 6.
 - Impact: `keystore.sealed`, `accounts.sealed` and `keystore.kms-wrapped` are written with `std::fs::write` and no permission handling; the only `set_permissions` is Unix-only and for the plaintext PHC file. The AES wrapping key, the token key and the link's passphrase stay in heap memory until dropped. The default data directory is under the working directory.
 - Closing action: An owner-only DACL on Windows and mode 0600 on Unix for every sealed file; `zeroize::Zeroizing` around the three secrets, with its §2.9 row and the Decision and Duplicate linkage lines a new crate needs; the data directory defaults to the per-user profile.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: DN-22; `../../review/2026-10-26-comprehensive-review.md` §5 finding 10.
 
 **GAP-216 Identity is four states; STANAG 1241's are absent**

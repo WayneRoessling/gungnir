@@ -20,6 +20,8 @@ pub mod keys;
 pub mod keystore;
 pub mod managed_service;
 mod os_keystore;
+// GAP-215: sealed files written for their owner alone.
+pub mod owner_only;
 pub mod provider;
 pub mod provisioning;
 pub mod session;
