@@ -334,6 +334,10 @@ fn why_nobody_is_named(session: &SessionState) -> String {
             "nobody can sign in to this desktop, because its account store is unavailable \
              ({reason}). No requirement can be tasked from here until somebody can sign in."
         ),
+        SessionState::Locked { operator, .. } => format!(
+            "operator {}'s session is locked after inactivity. Sign in again to task it.",
+            operator.0
+        ),
         // Read a moment after attribution found nobody, so a session that began in
         // between is not the one the concurrence would have named.
         SessionState::SignedIn(_) => {
@@ -438,7 +442,7 @@ pub fn task(
     // rule held only where a panel hid the control. Asked first, before the requirement
     // is even looked up, so a refused role learns nothing about it either.
     let role = state.role();
-    if !gungnir_security::authz::role_permits(role, gungnir_security::actions::TASK_SENSOR) {
+    if !state.may(gungnir_security::actions::TASK_SENSOR) {
         return Err(RequirementError::NotPermitted {
             role: format!("{role:?}"),
             action: gungnir_security::actions::TASK_SENSOR,

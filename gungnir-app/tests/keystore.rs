@@ -35,6 +35,7 @@ fn desktop(dir: &std::path::Path, officer_pem: Option<String>) -> AppState {
                     accounts_path: accounts.to_string_lossy().into_owned(),
                 },
                 session_lifetime_s: None,
+                idle_timeout_s: None,
             },
             escrow: officer_pem.map(|public_key_pem| EscrowConfig {
                 holder: 9,

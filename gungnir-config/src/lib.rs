@@ -1503,11 +1503,26 @@ pub struct TlsClientConfig {
 pub struct AuthenticationConfig {
     #[serde(default)]
     pub provider: AuthenticationProvider,
-    /// How long a session lasts, in seconds; absent means until sign-out or shutdown,
-    /// which is the disconnected desktop's rule.
+    /// How long a session lasts, in seconds; absent means [`SESSION_MAX_S`], twelve hours
+    /// (D-143). Shorter is allowed and longer is refused: a node's token and a desktop's
+    /// local session alike. Before GAP-212, absent meant a desktop session that never
+    /// ended.
     #[serde(default)]
     pub session_lifetime_s: Option<f64>,
+    /// How long a session may sit unused, in seconds; absent means [`IDLE_LOCK_S`],
+    /// fifteen minutes (D-143), and longer is refused. Idle that long, a desktop locks and
+    /// a node's token is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idle_timeout_s: Option<f64>,
 }
+
+/// D-143's ceiling on a session's lifetime: twelve hours. `gungnir-security` holds the
+/// same number as `SESSION_MAX_S`, which this crate may not depend on; a test in
+/// `gungnir-app` holds the two equal.
+pub const SESSION_MAX_S: f64 = 43_200.0;
+
+/// D-143's ceiling on a session's idle time: fifteen minutes. As [`SESSION_MAX_S`].
+pub const IDLE_LOCK_S: f64 = 900.0;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -4459,11 +4474,32 @@ fn validate_security(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             }
         }
     }
-    if let Some(s) = baseline.security.authentication.session_lifetime_s {
-        if !(s.is_finite() && s > 0.0) {
-            return Err(ConfigError::Invalid(
-                "security.authentication.session_lifetime_s must be finite and positive".into(),
-            ));
+    // D-143: both configurable downward only. A longer value is refused rather than
+    // clamped, so a baseline never reads as granting what the host will not do.
+    for (name, value, ceiling) in [
+        (
+            "session_lifetime_s",
+            baseline.security.authentication.session_lifetime_s,
+            SESSION_MAX_S,
+        ),
+        (
+            "idle_timeout_s",
+            baseline.security.authentication.idle_timeout_s,
+            IDLE_LOCK_S,
+        ),
+    ] {
+        if let Some(s) = value {
+            if !(s.is_finite() && s > 0.0) {
+                return Err(ConfigError::Invalid(format!(
+                    "security.authentication.{name} must be finite and positive"
+                )));
+            }
+            if s > ceiling {
+                return Err(ConfigError::Invalid(format!(
+                    "security.authentication.{name} is {s} s; D-143 allows at most {ceiling} s, \
+                     shortened by a baseline and never lengthened"
+                )));
+            }
         }
     }
     let provider = &baseline.security.key_provider;
@@ -5217,6 +5253,7 @@ MFkw
                         account: "gungnir-node".into(),
                     },
                     session_lifetime_s: None,
+                    idle_timeout_s: None,
                 },
                 tls: TlsClientConfig::default(),
                 escrow: None,
@@ -5238,6 +5275,7 @@ MFkw
                         account: "  ".into(),
                     },
                     session_lifetime_s: None,
+                    idle_timeout_s: None,
                 },
                 tls: TlsClientConfig::default(),
                 escrow: None,
@@ -5261,6 +5299,7 @@ MFkw
                         account: "$argon2id$v=19$m=19456,t=2,p=1$abc$def".into(),
                     },
                     session_lifetime_s: None,
+                    idle_timeout_s: None,
                 },
                 tls: TlsClientConfig::default(),
                 escrow: None,
@@ -7682,6 +7721,25 @@ MFkw
 
     /// GAP-210: what a signature covers survives the file being written back
     /// pretty-printed, as PN-14's apply writes it, and any change of content changes it.
+    /// GAP-212, D-143: a session's lifetime and idle timeout may be shortened by a baseline
+    /// and never lengthened.
+    #[test]
+    fn a_session_may_be_shortened_and_never_lengthened() {
+        let with = |lifetime: Option<f64>, idle: Option<f64>| {
+            let mut baseline = ConfigBaseline::default();
+            baseline.security.authentication.session_lifetime_s = lifetime;
+            baseline.security.authentication.idle_timeout_s = idle;
+            validate(&baseline)
+        };
+        assert!(with(None, None).is_ok());
+        assert!(with(Some(3_600.0), Some(300.0)).is_ok());
+        assert!(with(Some(SESSION_MAX_S), Some(IDLE_LOCK_S)).is_ok());
+        let err = with(Some(SESSION_MAX_S + 1.0), None).expect_err("longer than twelve hours");
+        assert!(err.to_string().contains("session_lifetime_s"), "{err}");
+        let err = with(None, Some(IDLE_LOCK_S + 1.0)).expect_err("longer than fifteen minutes");
+        assert!(err.to_string().contains("idle_timeout_s"), "{err}");
+        assert!(with(None, Some(0.0)).is_err());
+    }
     /// GAP-211: a revoked key is named as an identity's name carries it, and anything
     /// else is refused rather than kept as an entry that matches no key.
     #[test]
@@ -8760,6 +8818,7 @@ mod authentication_tests {
                         accounts_path: "accounts.json".into(),
                     },
                     session_lifetime_s: Some(3600.0),
+                    idle_timeout_s: None,
                 },
                 ..SecurityConfig::default()
             },
@@ -8773,6 +8832,7 @@ mod authentication_tests {
                         accounts_path: "$argon2id$v=19$m=19456,t=2,p=1$abc$def".into(),
                     },
                     session_lifetime_s: None,
+                    idle_timeout_s: None,
                 },
                 ..SecurityConfig::default()
             },

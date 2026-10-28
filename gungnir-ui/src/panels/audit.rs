@@ -61,6 +61,10 @@ pub enum SessionLine {
     StoreUnavailable {
         reason: String,
     },
+    /// Idle past the timeout (D-143, GAP-212): every action is refused until a sign-in.
+    Locked {
+        operator: u64,
+    },
 }
 
 /// One account as PN-20 lists it: never the hash.
@@ -669,9 +673,60 @@ fn draw_session(
                 .color(palette.warning_color),
             );
         }
+        SessionLine::Locked { operator } => {
+            ui.label(
+                RichText::new(format!(
+                    "Operator {operator}'s session is locked after inactivity. Every action is \
+                     refused until somebody signs in."
+                ))
+                .color(palette.alert_color),
+            );
+        }
     }
 
     action
+}
+
+/// The operator and passphrase fields and the sign-in button: PN-20's, and the locked
+/// screen's (GAP-212).
+pub fn render_sign_in_form(ui: &mut Ui, draft: &mut SignInDraft) -> Option<SessionAction> {
+    let mut action = None;
+    ui.horizontal(|ui| {
+        ui.label("Operator");
+        ui.add(egui::TextEdit::singleline(&mut draft.operator).desired_width(80.0));
+        ui.label("Passphrase");
+        ui.add(
+            egui::TextEdit::singleline(&mut draft.passphrase)
+                .password(true)
+                .desired_width(160.0),
+        );
+        let ready = !draft.operator.trim().is_empty() && !draft.passphrase.is_empty();
+        if ui
+            .add_enabled(ready, egui::Button::new("Sign in"))
+            .clicked()
+        {
+            action = Some(SessionAction::SignIn);
+        }
+    });
+    action
+}
+
+/// The locked screen's contents (D-143, GAP-212): who it was locked for, and a sign-in.
+/// The host draws it over the workspace, which stays on screen beneath it.
+pub fn render_locked(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    operator: u64,
+    draft: &mut SignInDraft,
+) -> Option<SessionAction> {
+    ui.label(
+        RichText::new(format!(
+            "Locked after inactivity (operator {operator}). The picture and the queue stay on \
+             screen; every action is refused until somebody signs in."
+        ))
+        .color(palette.alert_color),
+    );
+    render_sign_in_form(ui, draft)
 }
 
 /// Render the panel.
@@ -690,23 +745,9 @@ pub fn render_audit(
 
     if !matches!(view.session, SessionLine::SignedIn { .. }) {
         ui.add_enabled_ui(view.can_sign_in, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Operator");
-                ui.add(egui::TextEdit::singleline(&mut draft.operator).desired_width(80.0));
-                ui.label("Passphrase");
-                ui.add(
-                    egui::TextEdit::singleline(&mut draft.passphrase)
-                        .password(true)
-                        .desired_width(160.0),
-                );
-                let ready = !draft.operator.trim().is_empty() && !draft.passphrase.is_empty();
-                if ui
-                    .add_enabled(ready, egui::Button::new("Sign in"))
-                    .clicked()
-                {
-                    action = Some(SessionAction::SignIn);
-                }
-            });
+            if let Some(a) = render_sign_in_form(ui, draft) {
+                action = Some(a);
+            }
         });
     }
 

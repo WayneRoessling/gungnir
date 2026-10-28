@@ -12300,7 +12300,17 @@
     note: >-
       D-143 taken 2026-10-26: twelve hours maximum, fifteen minutes idle, both downward
       only; a locked screen keeps the picture and refuses every action.
-
+  - date: 2026-10-28
+    status: Closed
+    note: >-
+      Built under the owner's delegation of 2026-10-28. The MAC key is an HKDF of the
+      environment secret. A node believes only tokens it issued, held on a monotonic clock
+      for D-143's lifetime and idle timeout, so a set-back clock extends nothing and a
+      restart ends every session. The role is re-read from the store on each request.
+      Sign-out and an administrator's revocation end tokens; a clock step back is audited.
+      Back-off is keyed by address and operator. The desktop locks idle sessions and
+      refuses every action. Holding the key in a provider is GAP-243. See DN-23 §17 and
+      `../../record/2026-10-28/gap-212-sessions-end-follow-the-store-and.md`.
 - id: GAP-213
   name: Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll
   type: Technical
@@ -13253,3 +13263,35 @@
     note: >-
       Filed under D-137, taken the same day past the recommended default: the owner
       judged the blue-force feed worth the specification pinning.
+
+- id: GAP-243
+  name: The session-token MAC key is derived in the node, not held by a key provider
+  type: Technical
+  caps: [CAP-6.1, CAP-6.4]
+  layer: "Productization: security"
+  sev: 2
+  effort: M
+  target: I4
+  owner: Security engineer (human-owned crate)
+  deps: [GAP-212]
+  impact: >-
+    GAP-212 derives the node's token MAC key from `GUNGNIR_TOKEN_KEY` by HKDF, so the
+    secret's own bytes no longer reach the MAC, but the derived key is still in the node's
+    memory and the secret is still in its environment. DN-22's custody rule is that key
+    material stays inside a provider; for this key it does not.
+  evidence: >-
+    `gungnir-security/src/token.rs` (`TokenIssuer::from_secret`, the HKDF bridge);
+    `gungnir-security/src/keys.rs` (`KeyProvider` has no MAC operation, and its signature
+    schemes are asymmetric); DN-23 §17
+  action: >-
+    A `SessionToken` key purpose and a MAC operation on `KeyProvider`, implemented by the
+    in-process, persistent and managed-service providers; the node's issuer asks its
+    provider for each MAC; the environment secret retired once a provider holds the key.
+  ref: >-
+    DN-22; DN-23 §17; GAP-212
+  history:
+  - date: 2026-10-28
+    status: Open
+    note: >-
+      Filed by GAP-212, whose action named a key-provider purpose with HKDF as the bridge:
+      the bridge is built, and the provider half needs a MAC operation no provider has.

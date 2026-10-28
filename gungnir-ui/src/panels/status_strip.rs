@@ -124,6 +124,10 @@ pub enum OperatorLine<'a> {
     },
     /// The account store cannot be reached, so nobody *can* sign in.
     StoreUnavailable,
+    /// Idle past the timeout (D-143, GAP-212): every action refused until a sign-in.
+    Locked {
+        operator: u64,
+    },
 }
 
 /// Weapons control status for one effector layer.
@@ -432,6 +436,12 @@ fn draw_operator(ui: &mut Ui, palette: &theme::Palette, line: OperatorLine<'_>) 
         OperatorLine::StoreUnavailable => {
             ui.label(
                 RichText::new("No account store: nobody can sign in").color(palette.alert_color),
+            );
+        }
+        OperatorLine::Locked { operator } => {
+            ui.label(
+                RichText::new(format!("Operator {operator} LOCKED: sign in to act"))
+                    .color(palette.alert_color),
             );
         }
     }

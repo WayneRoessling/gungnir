@@ -649,9 +649,114 @@ Verification: `gungnir-security/src/audit/signing.rs`'s tests; `gungnir-node/src
 (over mutual TLS); `gungnir-app/tests/audit_signing.rs` (unlock, refusal, and a cut file
 found against the node's heads on reconnect).
 
+## 17. Amendment 8 (2026-10-28, D-143): sessions end, follow the store, and can be revoked
+
+**Five findings on one token path** (GAP-212, the comprehensive review's §5 findings 5
+to 8):
+- the node's MAC key was the bytes of `GUNGNIR_TOKEN_KEY` itself;
+- a token's role was the one it was minted under, so a demoted operator kept their
+  authority until the token expired;
+- nothing revoked a token;
+- expiry was compared on mission time, which a clock set back re-opens;
+- the desktop's session had no lifetime by default and no idle timeout, and the sign-in
+  back-off was keyed by operator alone.
+
+D-143 (2026-10-26) settled the numbers: twelve hours at most and fifteen minutes idle,
+both configurable downward only, and a locked screen that keeps the picture and the queue
+and refuses every action. The rest was **taken under the owner's delegation of
+2026-10-28**, each to the gap's own stated action:
+
+| Question | Taken |
+|---|---|
+| The key | HKDF-SHA256 of the environment secret under the label `gungnir-session-token/1`. The secret is never the key |
+| Monotonic expiry | A registry of issued tokens on a monotonic clock. A node restart ends every session |
+| Revocation | Sign-out of one's own token; an administrator ends one operator's sessions (`role.assign`); a removed account's tokens end |
+| The role | Re-read from the store on every request |
+| Back-off | Keyed by address and operator, and by address alone |
+| The desktop's lock | A `Locked` session state with the operator's role for the layout and none of its authority |
+
+**Why a registry, and why a restart ends sessions.** The gap asked for expiry against a
+monotonic clock captured at issue. A monotonic reading is not comparable across
+processes, so a token can only be judged by the process that issued it. Each token carries
+a random identifier, and the issuer holds, per identifier:
+- the operator;
+- when it was issued;
+- when it was last used.
+
+A token not in the registry is refused, even with a valid MAC. That one structure gives:
+- lifetime and idleness that a clock cannot extend;
+- revocation, by removing the entry;
+- the end of every session at a restart.
+
+The desktop already signs in again when its token lapses, so a restart costs a sign-in.
+
+**The key.** Holding the MAC key in a `KeyProvider` needs a MAC operation, and no provider
+has one: the trait exposes no key bytes by design, and its signing schemes are asymmetric.
+Until one does, `TokenIssuer::from_secret` derives the key from the environment secret by
+HKDF. The secret's own bytes no longer reach the MAC, and the derivation is the bridge to a
+provider-held key, which GAP-243 files.
+
+**The role.** `AccountTokenAuthority::verify` reads the operator's account after the token
+verifies:
+- the role in force is the store's;
+- an account that is gone has its token refused and forgotten;
+- a store that cannot be read refuses as unavailable.
+
+`FileAccountStore` already re-reads its file on each lookup, so a role changed on PN-20 or
+with `account add --replace` is in force at the next request.
+
+**Revocation.** `DELETE /v3/session` ends the caller's own token. `POST /v3/session/revoke`
+ends every token one operator holds; it needs `role.assign`, account administration, as
+PN-20's role assignment does. Both are on the audit record. A control-status confirmation
+(D-140) mints a token only to read its role, and now ends it at once rather than leaving it
+to idle out.
+
+**Back-off.** Failures are counted per address and operator, and per address. A stranger
+failing as an operator no longer slows that operator at their own console, and one
+address guessing across operators is slowed for all of them. A success clears both counts
+for its address.
+
+**The desktop.** `LocalAccountAuthority` measures its lifetime and idleness on the same
+kind of clock:
+- an absent lifetime is now twelve hours, where it was a session that never ended;
+- idle past the timeout, `state` answers `SessionState::Locked`;
+- `touch`, called by the desktop on any input, keeps a live session alive and never
+  unlocks a locked one.
+
+`AppState::role` keeps the locked operator's role, so the workspace does not change. Its
+authority goes through `AppState::may`, which refuses everything while locked, and through
+the signed-in session, which a lock does not count as. `main.rs` drops every panel action
+but a sign-in or a selection while locked, at the one place every action passes, and draws
+a re-authentication window over the workspace.
+
+**A clock stepping back** by more than a second between two of the node's ticks is a
+`clock.stepped_back` entry on its audit record. Sessions no longer depend on that clock,
+but every timestamp on the record does.
+
+**What it does not claim.** The idle timeout on a node's token measures requests, and a
+linked desktop's link keeps making them; the operator's own idleness is the desktop's lock.
+A desktop whose clock is set back keeps its timestamps; only the node audits the step.
+
+**Verification.** `gungnir-security`'s session and token tests, run on a clock the tests
+move by hand, cover:
+- idle refusal and locking;
+- a clock set back extending nothing;
+- revocation;
+- a restarted issuer believing nothing;
+- the derived key.
+
+`gungnir-api/tests/session_tokens.rs`, over the routes, covers:
+- a role followed at each request;
+- a removed account's token staying refused;
+- sign-out, and an administrator's revocation;
+- the address-keyed back-off.
+
+`gungnir-app/tests/session_lock.rs` locks a desktop, refuses its actions and applies, and
+unlocks it by sign-in. `gungnir-config` refuses a longer lifetime or idle timeout.
+
 ## Traceability
 
-GAP-057; CAP-6.1, and CAP-6.2/CAP-6.3 through PN-20; D-02 for the mechanism, D-20 for the
+GAP-057, and GAP-212 for §17 (D-143); CAP-6.1, and CAP-6.2/CAP-6.3 through PN-20; D-02 for the mechanism, D-20 for the
 crates; unblocks the CAP-2.12 criterion in DN-11 §8 and the write paths GAP-041 left
 refusing; depends on GAP-060 for the machine-identity row and on GAP-059 for the account
 list; GAP-163, GAP-152 and GAP-179 for the audit record (D-104, D-105, D-106, D-116);

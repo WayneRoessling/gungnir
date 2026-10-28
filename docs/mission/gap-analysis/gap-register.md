@@ -206,7 +206,7 @@ history, and an entry is never edited once it has merged.
 | GAP-209 | Reconciliation arbitration ranks a role string the desktop's own journal asserts | Technical | CAP-5.4, CAP-4.2 | 4 | 6 | M | 24 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-210 | Configuration baselines are not signed | Technical | CAP-5.6, CAP-6.4 | 4 | 2 | M | 8 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-211 | Issued identities never expire and nothing revokes them | Technical | CAP-6.1, CAP-6.4 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-212 | Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends | Technical | CAP-6.1, CAP-6.2 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-212 | Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends | Technical | CAP-6.1, CAP-6.2 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-213 | Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll | Technical | CAP-6.7, CAP-1.2 | 3 | 9 | M | 27 | I3 | Services engineer | Closed |
 | GAP-214 | The transport has no request timeout, connection cap or pre-credential deadline | Technical | CAP-7.1, CAP-6.4 | 3 | 6 | S | 18 | I3 | Services engineer | Open |
 | GAP-215 | Sealed files inherit directory permissions on Windows, and nothing is zeroized | Technical | CAP-6.4 | 3 | 2 | S | 6 | I3 | Security engineer (human-owned crate) | Open |
@@ -237,8 +237,9 @@ history, and an entry is never edited once it has merged.
 | GAP-240 | Dependency-linkage notes and advisory ignores have drifted | Technical | CAP-6.5 | 1 | 1 | S | 1 | I4 | Services engineer | Open |
 | GAP-241 | No ASTERIX Category 062 encode for system tracks | Technical | CAP-7.2, CAP-7.4 | 3 | 5 | M | 15 | I4 | Services engineer | Open |
 | GAP-242 | No NFFI bearer for friendly-force positions | Technical | CAP-1.6, CAP-4.5, CAP-7.4 | 3 | 5 | L | 15 | I4 | Services engineer | Open |
+| GAP-243 | The session-token MAC key is derived in the node, not held by a key provider | Technical | CAP-6.1, CAP-6.4 | 2 | 10 | M | 20 | I4 | Security engineer (human-owned crate) | Open |
 
-Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 225 gaps, 3 mission, 222 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3027,11 +3028,12 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-10-26, Open: Filed by plan 12 as one work package: five findings on the same token path, each small on its own.
   - 2026-10-26, Open: D-143 taken 2026-10-26: twelve hours maximum, fifteen minutes idle, both downward only; a locked screen keeps the picture and refuses every action.
+  - 2026-10-28, Closed: Built under the owner's delegation of 2026-10-28. The MAC key is an HKDF of the environment secret. A node believes only tokens it issued, held on a monotonic clock for D-143's lifetime and idle timeout, so a set-back clock extends nothing and a restart ends every session. The role is re-read from the store on each request. Sign-out and an administrator's revocation end tokens; a clock step back is audited. Back-off is keyed by address and operator. The desktop locks idle sessions and refuses every action. Holding the key in a provider is GAP-243. See DN-23 §17 and `../../record/2026-10-28/gap-212-sessions-end-follow-the-store-and.md`.
 - Evidence: `gungnir-node/src/auth.rs:17,55-56`; `gungnir-security/src/token.rs:43-51,79-83,154-162`; `gungnir-api/src/transport.rs:309-361`; `gungnir-app/src/state.rs:1592-1596`; `gungnir-time/src/lib.rs:221-226`.
 - Severity: 3. Reach: 10 threads. Effort: M. Priority: 30.
 - Impact: The node's MAC key is whatever `GUNGNIR_TOKEN_KEY` holds past a length check; a token carries its role and is never re-read from the account store, so a demoted operator keeps authority until expiry; nothing revokes a token; expiry is compared on the wall clock, so a set-back clock re-accepts one; the disconnected session has no lifetime by default and no idle timeout; sign-in back-off is keyed by operator id alone.
 - Closing action: A `SessionToken` purpose in the key provider (an HKDF of the environment string as the bridge); re-read the role on each authorization; a revocation set keyed by operator and issued-before; a mandatory lifetime maximum and an idle timeout (D-143); expiry against a monotonic clock captured at issue; a clock step backwards audited; back-off keyed by peer address and operator.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: DN-23; GAP-057; `../../review/2026-10-26-comprehensive-review.md` §5 findings 5 to 8.
 - Depends on: D-143.
 
@@ -3437,4 +3439,18 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: Services engineer. Status: Open.
 - Reference: D-137; DN-16; GAP-090; `../../review/2026-10-26-comprehensive-review.md` §4 finding 4.
 - Depends on: GAP-206, GAP-216.
+
+**GAP-243 The session-token MAC key is derived in the node, not held by a key provider**
+
+- Type: Technical.
+- Capability: CAP-6.1 Authenticate; CAP-6.4 Data protection.
+- History:
+  - 2026-10-28, Open: Filed by GAP-212, whose action named a key-provider purpose with HKDF as the bridge: the bridge is built, and the provider half needs a MAC operation no provider has.
+- Evidence: `gungnir-security/src/token.rs` (`TokenIssuer::from_secret`, the HKDF bridge); `gungnir-security/src/keys.rs` (`KeyProvider` has no MAC operation, and its signature schemes are asymmetric); DN-23 §17.
+- Severity: 2. Reach: 10 threads. Effort: M. Priority: 20.
+- Impact: GAP-212 derives the node's token MAC key from `GUNGNIR_TOKEN_KEY` by HKDF, so the secret's own bytes no longer reach the MAC, but the derived key is still in the node's memory and the secret is still in its environment. DN-22's custody rule is that key material stays inside a provider; for this key it does not.
+- Closing action: A `SessionToken` key purpose and a MAC operation on `KeyProvider`, implemented by the in-process, persistent and managed-service providers; the node's issuer asks its provider for each MAC; the environment secret retired once a provider holds the key.
+- Target: I4. Owner: Security engineer (human-owned crate). Status: Open.
+- Reference: DN-22; DN-23 §17; GAP-212.
+- Depends on: GAP-212.
 

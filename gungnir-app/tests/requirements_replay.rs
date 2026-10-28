@@ -328,6 +328,7 @@ fn baseline(dir: &Path, steps: &[Step], origin: Geodetic) -> ConfigBaseline {
                     accounts_path: "accounts.json".into(),
                 },
                 session_lifetime_s: None,
+                idle_timeout_s: None,
             },
             ..SecurityConfig::default()
         },

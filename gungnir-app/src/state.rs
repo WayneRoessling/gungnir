@@ -1031,12 +1031,42 @@ impl AppState {
     /// working role-selected and attributes nothing. Read from the session on every call
     /// rather than cached, because an expiry happens on the clock and nothing calls in when
     /// it does.
+    ///
+    /// **A locked session keeps its role here** (D-143, GAP-212), so the workspace stays the
+    /// locked operator's and the picture and queue stay on screen. It holds no authority:
+    /// every check goes through [`AppState::may`], which refuses everything while locked.
     #[must_use]
     pub fn role(&self) -> Role {
         match self.session_state() {
             gungnir_security::SessionState::SignedIn(session) => session.role,
+            gungnir_security::SessionState::Locked { role, .. } => role,
             _ => self.selected_role,
         }
+    }
+
+    /// Whether the session has locked after inactivity (D-143, GAP-212).
+    #[must_use]
+    pub fn is_locked(&self) -> bool {
+        matches!(
+            self.session_state(),
+            gungnir_security::SessionState::Locked { .. }
+        )
+    }
+
+    /// Whether this desktop may take `action` now: the role in force holds it, and the
+    /// session is not locked (GAP-212). **The one question every act on the desktop asks**
+    /// of its role, so a lock refuses all of them at once rather than wherever someone
+    /// remembered to check.
+    #[must_use]
+    pub fn may(&self, action: &str) -> bool {
+        !self.is_locked() && gungnir_security::authz::role_permits(self.role(), action)
+    }
+
+    /// The operator did something at the console (GAP-212): a live session stays live
+    /// for another idle timeout. A locked one is unlocked only by a sign-in.
+    pub fn touch_session(&mut self) {
+        let now = self.clock.now().0;
+        self.session.touch(now);
     }
 
     /// The workspace for the current role, built from [`AppState::role`] so it follows a
@@ -1678,11 +1708,13 @@ fn build_session_authority(
                 ))
             }
         };
-    // GAP-057: the lifetime the baseline names is enforced here; absent means the
-    // disconnected profile's non-expiring session (DN-23 §5).
+    // GAP-057: the lifetime the baseline names is enforced here. GAP-212, D-143: absent,
+    // or longer than twelve hours, is twelve hours; idle past fifteen minutes, or the
+    // baseline's shorter timeout, the session locks. A baseline may shorten either.
     Box::new(
         LocalAccountAuthority::new(store)
-            .with_lifetime(config.security.authentication.session_lifetime_s),
+            .with_lifetime(config.security.authentication.session_lifetime_s)
+            .with_idle_timeout(config.security.authentication.idle_timeout_s),
     )
 }
 

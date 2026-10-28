@@ -249,16 +249,32 @@ pub struct Issued {
 /// A trait so `gungnir-api` holds no account store and no signing key: custody belongs to
 /// the host (DN-22 §4), and the node constructs the implementation.
 pub trait CallerAuthority: Send + Sync {
-    /// Verify a credential and mint a token.
+    /// Verify a credential and mint a token. `from` is the address the attempt came from,
+    /// which the back-off is keyed on with the operator (GAP-212).
     fn sign_in(
         &self,
         operator: u64,
         passphrase: &str,
         now: MissionTimeSeconds,
+        from: Option<std::net::IpAddr>,
     ) -> Result<Issued, AuthFailure>;
 
     /// Verify a presented token.
     fn verify(&self, token: &str, now: MissionTimeSeconds) -> Result<OperatorSession, AuthFailure>;
+
+    /// End the session a token stands for, so it is refused from now on (GAP-212). False
+    /// when it was not a session this authority holds. The default holds none.
+    fn sign_out(&self, token: &str) -> bool {
+        let _ = token;
+        false
+    }
+
+    /// End every session `operator` holds (GAP-212), returning how many. The default
+    /// holds none.
+    fn revoke_operator(&self, operator: u64) -> usize {
+        let _ = operator;
+        0
+    }
 
     /// Verify a second person's credential without establishing a session for them
     /// (GAP-203; D-140): who they are and which role their account carries, or why not.
@@ -273,9 +289,13 @@ pub trait CallerAuthority: Send + Sync {
         operator: u64,
         passphrase: &str,
         now: MissionTimeSeconds,
+        from: Option<std::net::IpAddr>,
     ) -> Result<OperatorSession, AuthFailure> {
-        let issued = self.sign_in(operator, passphrase, now)?;
-        self.verify(&issued.token, now)
+        let issued = self.sign_in(operator, passphrase, now, from)?;
+        let session = self.verify(&issued.token, now);
+        // GAP-212: the token was never handed to anyone, and is not left to idle out.
+        self.sign_out(&issued.token);
+        session
     }
 
     /// The role this node's own account store holds for `operator`, without any
@@ -308,9 +328,56 @@ pub struct AccountTokenAuthority {
     store: Box<dyn gungnir_security::AccountStore>,
     issuer: gungnir_security::TokenIssuer,
     back_off: gungnir_security::BackOff,
-    /// Consecutive failures and when the last one was, per operator. Behind a mutex
-    /// because requests are concurrent, unlike the desktop's single-threaded authority.
-    failures: Mutex<std::collections::BTreeMap<u64, (u32, MissionTimeSeconds)>>,
+    /// Consecutive failures and when the last one was, per address and operator, and per
+    /// address alone (GAP-212). Behind a mutex because requests are concurrent, unlike the
+    /// desktop's single-threaded authority.
+    failures: Mutex<Failures>,
+}
+
+/// Failed sign-ins, counted two ways (GAP-212).
+///
+/// **Per operator alone, as it was, let anyone lock an operator out** by failing as them
+/// from anywhere, and let one address try every operator in turn at full speed. Keyed by
+/// address and operator, a stranger's failures do not slow the operator's own console;
+/// counted per address as well, one address guessing across operators is slowed too.
+#[derive(Debug, Default)]
+struct Failures {
+    by_pair: std::collections::BTreeMap<(Option<std::net::IpAddr>, u64), (u32, MissionTimeSeconds)>,
+    by_address: std::collections::BTreeMap<Option<std::net::IpAddr>, (u32, MissionTimeSeconds)>,
+}
+
+impl Failures {
+    /// The delay still owed, the longer of the two.
+    fn owed(
+        &self,
+        back_off: &gungnir_security::BackOff,
+        from: Option<std::net::IpAddr>,
+        operator: u64,
+        now: MissionTimeSeconds,
+    ) -> Option<MissionTimeSeconds> {
+        let owed = |entry: Option<&(u32, MissionTimeSeconds)>| {
+            entry.map_or(0.0, |(count, last)| {
+                (back_off.delay_after(*count) - (now - last)).max(0.0)
+            })
+        };
+        let owed = owed(self.by_pair.get(&(from, operator))).max(owed(self.by_address.get(&from)));
+        (owed > 0.0).then_some(owed)
+    }
+
+    fn failed(&mut self, from: Option<std::net::IpAddr>, operator: u64, now: MissionTimeSeconds) {
+        for entry in [
+            self.by_pair.entry((from, operator)).or_insert((0, now)),
+            self.by_address.entry(from).or_insert((0, now)),
+        ] {
+            entry.0 = entry.0.saturating_add(1);
+            entry.1 = now;
+        }
+    }
+
+    fn succeeded(&mut self, from: Option<std::net::IpAddr>, operator: u64) {
+        self.by_pair.remove(&(from, operator));
+        self.by_address.remove(&from);
+    }
 }
 
 impl std::fmt::Debug for AccountTokenAuthority {
@@ -330,7 +397,7 @@ impl AccountTokenAuthority {
             store,
             issuer,
             back_off: gungnir_security::BackOff::default(),
-            failures: Mutex::new(std::collections::BTreeMap::new()),
+            failures: Mutex::new(Failures::default()),
         }
     }
 }
@@ -341,6 +408,7 @@ impl CallerAuthority for AccountTokenAuthority {
         operator: u64,
         passphrase: &str,
         now: MissionTimeSeconds,
+        from: Option<std::net::IpAddr>,
     ) -> Result<Issued, AuthFailure> {
         let id = gungnir_security::OperatorId(operator);
 
@@ -348,21 +416,15 @@ impl CallerAuthority for AccountTokenAuthority {
         // rather than the node: argon2 is deliberately expensive, and a node that
         // hashed on every request would be denying itself service.
         if let Ok(failures) = self.failures.lock() {
-            if let Some((count, last)) = failures.get(&operator) {
-                let delay = self.back_off.delay_after(*count);
-                let elapsed = now - last;
-                if elapsed < delay {
-                    return Err(AuthFailure::TooFast {
-                        retry_after_s: delay - elapsed,
-                    });
-                }
+            if let Some(retry_after_s) = failures.owed(&self.back_off, from, operator, now) {
+                return Err(AuthFailure::TooFast { retry_after_s });
             }
         }
 
         match gungnir_security::verify_account(self.store.as_ref(), id, passphrase) {
             Ok(account) => {
                 if let Ok(mut failures) = self.failures.lock() {
-                    failures.remove(&operator);
+                    failures.succeeded(from, operator);
                 }
                 let session = OperatorSession {
                     operator: id,
@@ -384,9 +446,7 @@ impl CallerAuthority for AccountTokenAuthority {
             Err(failure) => {
                 if !matches!(failure, AuthFailure::Unavailable) {
                     if let Ok(mut failures) = self.failures.lock() {
-                        let entry = failures.entry(operator).or_insert((0, now));
-                        entry.0 = entry.0.saturating_add(1);
-                        entry.1 = now;
+                        failures.failed(from, operator, now);
                     }
                 }
                 Err(failure)
@@ -394,8 +454,32 @@ impl CallerAuthority for AccountTokenAuthority {
         }
     }
 
+    /// The token, then the account behind it (GAP-212): the role a session acts in is the
+    /// one the store holds **now**, not the one the token was minted under, so an operator
+    /// demoted, promoted or removed is believed accordingly on their next request rather
+    /// than at their token's expiry. A removed account's token is forgotten.
     fn verify(&self, token: &str, now: MissionTimeSeconds) -> Result<OperatorSession, AuthFailure> {
-        self.issuer.verify(token, now)
+        let mut session = self.issuer.verify(token, now)?;
+        match self.store.account(session.operator) {
+            Ok(Some(account)) => {
+                session.role = account.role;
+                Ok(session)
+            }
+            Ok(None) => {
+                self.issuer.revoke(token);
+                Err(AuthFailure::Rejected)
+            }
+            Err(_) => Err(AuthFailure::Unavailable),
+        }
+    }
+
+    fn sign_out(&self, token: &str) -> bool {
+        self.issuer.revoke(token)
+    }
+
+    fn revoke_operator(&self, operator: u64) -> usize {
+        self.issuer
+            .revoke_operator(gungnir_security::OperatorId(operator))
     }
 
     fn role_of(&self, operator: u64) -> Result<Option<gungnir_security::Role>, AuthFailure> {
@@ -1764,8 +1848,9 @@ pub fn router(api: Arc<NodeApi>) -> Router {
         // reads as one door with two directions.
         .route(
             &crate::path(routes::SESSION),
-            post(sign_in).get(session_status),
+            post(sign_in).get(session_status).delete(sign_out),
         )
+        .route(&crate::path(routes::SESSION_REVOKE), post(revoke_sessions))
         .route(&crate::path(routes::SNAPSHOT), get(snapshot))
         .route(&crate::path(routes::HEALTH), get(health))
         .route(&crate::path(routes::COVERAGE), get(coverage))
@@ -2202,7 +2287,12 @@ async fn sign_in(
         return problem(StatusCode::SERVICE_UNAVAILABLE, why);
     };
     let now = api.now();
-    match callers.sign_in(request.operator, &request.passphrase, now) {
+    match callers.sign_in(
+        request.operator,
+        &request.passphrase,
+        now,
+        Some(peer.addr.ip()),
+    ) {
         Ok(issued) => {
             // The role is read back off the token just minted, so the entry says what the
             // session will be believed to be rather than what the store said a moment ago.
@@ -2327,6 +2417,81 @@ async fn session_status(
             expires_s: session.expires.unwrap_or_default(),
         }),
     }
+}
+
+/// `DELETE /v3/session`: end the caller's own session (GAP-212). The token is refused from
+/// now on, wherever it was copied to. Audited as a sign-out.
+async fn sign_out(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    let session = match operator_caller(&api, &headers, &peer, "the session route") {
+        Err(response) => return response,
+        Ok(session) => session,
+    };
+    let token = bearer(&headers);
+    if api.callers.as_ref().is_some_and(|c| c.sign_out(token)) {
+        api.audit(
+            &peer,
+            Some(session.operator),
+            events::SIGN_OUT,
+            format_args!("signed out; the session's token is refused from now on"),
+        );
+    }
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `POST /v3/session/revoke`: end every session an operator holds on this node (GAP-212),
+/// for an account that is compromised or a person who has left. `role.assign`, which is
+/// account administration, as PN-20's role assignment is. Audited either way.
+async fn revoke_sessions(
+    State(api): State<Arc<NodeApi>>,
+    ConnectInfo(peer): ConnectInfo<Peer>,
+    headers: axum::http::HeaderMap,
+    Json(request): Json<v3::RevokeSessionsRequest>,
+) -> Response {
+    let session = match operator_caller(&api, &headers, &peer, "the session revocation route") {
+        Err(response) => return response,
+        Ok(session) => session,
+    };
+    if !gungnir_security::authz::role_permits(session.role, actions::ASSIGN_ROLE) {
+        let why = format!(
+            "role {:?} may not end another operator's sessions ({})",
+            session.role,
+            actions::ASSIGN_ROLE
+        );
+        api.audit(
+            &peer,
+            Some(session.operator),
+            actions::ASSIGN_ROLE,
+            format_args!("refused: {why}"),
+        );
+        return problem(StatusCode::FORBIDDEN, &why);
+    }
+    let revoked = api
+        .callers
+        .as_ref()
+        .map_or(0, |c| c.revoke_operator(request.operator));
+    api.audit(
+        &peer,
+        Some(session.operator),
+        actions::ASSIGN_ROLE,
+        format_args!(
+            "ended operator {}'s sessions on this node ({revoked} token(s))",
+            request.operator
+        ),
+    );
+    lossless_json(&v3::RevokeSessionsResponse { revoked })
+}
+
+/// The bearer token a request presents, or empty.
+fn bearer(headers: &axum::http::HeaderMap) -> &str {
+    headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .unwrap_or_default()
 }
 
 /// Serve the contract in the clear, until the future is dropped.
@@ -3858,7 +4023,12 @@ fn verify_confirmation(
         return Err(v3::ControlStatusRefused::ConfirmationRejected);
     };
     let confirmer = callers
-        .confirm(confirmation.operator, &confirmation.passphrase, api.now())
+        .confirm(
+            confirmation.operator,
+            &confirmation.passphrase,
+            api.now(),
+            None,
+        )
         .map_err(|failure| {
             // The failure's own words stay in the log, never in the answer: a prober told
             // "unknown operator" from "wrong passphrase" learns which half to work on.

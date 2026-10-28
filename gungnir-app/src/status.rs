@@ -386,6 +386,9 @@ fn operator_line<'a>(
             operator: operator.0,
         },
         SessionState::StoreUnavailable { .. } => OperatorLine::StoreUnavailable,
+        SessionState::Locked { operator, .. } => OperatorLine::Locked {
+            operator: operator.0,
+        },
     }
 }
 

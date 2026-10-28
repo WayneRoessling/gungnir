@@ -29,18 +29,48 @@
 //! `<hex payload>.<hex mac>`, where the payload is JSON. Hex rather than base64 so this
 //! module needs no encoding crate; the tokens are not typed by hand and their length
 //! does not matter.
+//!
+//! # A token is believed only by the process that issued it (GAP-212)
+//!
+//! A valid MAC is necessary and no longer sufficient. Every token carries a random
+//! identifier, and the issuer holds a registry of the ones it issued, with when each was
+//! issued and last used **on a monotonic clock**. So:
+//!
+//! - a token outlives neither its lifetime nor D-143's idle timeout, measured on a clock
+//!   that cannot be set back, where the mission-time expiry it carries could be;
+//! - a token can be revoked, one at a time or every one an operator holds, by taking it
+//!   out of the registry;
+//! - a node that restarts believes no token it issued before, which is what a monotonic
+//!   clock that starts again at zero would have required anyway. A desktop signs in again.
+//!
+//! # The key (GAP-212)
+//!
+//! [`TokenIssuer::from_secret`] derives the MAC key from the deployment's secret with
+//! HKDF-SHA256 under this module's own label, rather than using the secret's bytes as the
+//! key. Holding the key in a `KeyProvider` needs a MAC operation no provider has; until
+//! one does, this is the bridge DN-23 §17 names.
 
-use crate::session::{AuthFailure, MissionTimeSeconds, OperatorSession};
+use crate::session::{
+    AuthFailure, MissionTimeSeconds, MonotonicClock, OperatorSession, SystemMonotonic, IDLE_LOCK_S,
+    SESSION_MAX_S,
+};
 use crate::{OperatorId, Role, SecurityError};
 use hmac::{Mac, SimpleHmac};
 use sha2::Sha256;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use subtle::ConstantTimeEq;
+
+/// The HKDF label the MAC key is derived under (GAP-212). Changing it ends every session.
+const KEY_LABEL: &[u8] = b"gungnir-session-token/1";
 
 type HmacSha256 = SimpleHmac<Sha256>;
 
 /// The claims a token carries. Deliberately small: identity and lifetime, nothing else.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 struct Claims {
+    /// Random, and the key to the issuer's registry (GAP-212).
+    id: u64,
     operator: OperatorId,
     role: Role,
     established: MissionTimeSeconds,
@@ -57,6 +87,18 @@ struct Claims {
 pub struct TokenIssuer {
     key: Vec<u8>,
     lifetime_s: MissionTimeSeconds,
+    idle_s: MissionTimeSeconds,
+    clock: Arc<dyn MonotonicClock>,
+    /// The tokens this issuer has issued and not yet forgotten, by identifier.
+    issued: Mutex<HashMap<u64, Live>>,
+}
+
+/// One issued token, on the monotonic clock.
+#[derive(Debug, Clone, Copy)]
+struct Live {
+    operator: OperatorId,
+    began: f64,
+    used: f64,
 }
 
 impl std::fmt::Debug for TokenIssuer {
@@ -65,6 +107,7 @@ impl std::fmt::Debug for TokenIssuer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TokenIssuer")
             .field("lifetime_s", &self.lifetime_s)
+            .field("idle_s", &self.idle_s)
             .finish_non_exhaustive()
     }
 }
@@ -72,9 +115,10 @@ impl std::fmt::Debug for TokenIssuer {
 impl TokenIssuer {
     /// # Errors
     ///
-    /// When the key is too short to be worth using, or the lifetime is not positive.
-    /// Both are refused rather than defaulted: a token signed with an empty key, or one
-    /// that never expires, is worse than a node that will not start.
+    /// When the key is too short to be worth using, or the lifetime is not positive or is
+    /// longer than D-143's twelve hours. Each is refused rather than defaulted: a token
+    /// signed with an empty key, or one that outlives the maximum, is worse than a node
+    /// that will not start.
     pub fn new(key: Vec<u8>, lifetime_s: MissionTimeSeconds) -> Result<Self, SecurityError> {
         if key.len() < 32 {
             return Err(SecurityError::AuthenticationUnavailable(
@@ -86,7 +130,76 @@ impl TokenIssuer {
                 "a session token lifetime must be finite and positive".into(),
             ));
         }
-        Ok(Self { key, lifetime_s })
+        if lifetime_s > SESSION_MAX_S {
+            return Err(SecurityError::AuthenticationUnavailable(format!(
+                "a session token lifetime of {lifetime_s} s is longer than the {SESSION_MAX_S} s \
+                 maximum (D-143)"
+            )));
+        }
+        Ok(Self {
+            key,
+            lifetime_s,
+            idle_s: IDLE_LOCK_S,
+            clock: Arc::new(SystemMonotonic::default()),
+            issued: Mutex::new(HashMap::new()),
+        })
+    }
+
+    /// [`Self::new`], with the MAC key derived from `secret` by HKDF-SHA256 under this
+    /// module's label (GAP-212), so the deployment's secret is never itself the key.
+    ///
+    /// # Errors
+    ///
+    /// A secret shorter than 32 bytes, and anything [`Self::new`] refuses.
+    pub fn from_secret(
+        secret: &[u8],
+        lifetime_s: MissionTimeSeconds,
+    ) -> Result<Self, SecurityError> {
+        if secret.len() < 32 {
+            return Err(SecurityError::AuthenticationUnavailable(
+                "the token signing secret must be at least 32 bytes".into(),
+            ));
+        }
+        let key = hkdf_sha256(KEY_LABEL, secret, KEY_LABEL)
+            .map_err(|e| SecurityError::AuthenticationUnavailable(e.to_string()))?;
+        Self::new(key, lifetime_s)
+    }
+
+    /// A token unused this long is refused, and never longer than D-143's fifteen minutes.
+    #[must_use]
+    pub fn with_idle_timeout(mut self, idle_s: Option<MissionTimeSeconds>) -> Self {
+        self.idle_s = crate::session::at_most(idle_s, IDLE_LOCK_S);
+        self
+    }
+
+    /// Measure lifetime and idleness on `clock` rather than the system's (a test's hand).
+    #[must_use]
+    pub fn with_clock(mut self, clock: Arc<dyn MonotonicClock>) -> Self {
+        self.clock = clock;
+        self
+    }
+
+    fn registry(&self) -> std::sync::MutexGuard<'_, HashMap<u64, Live>> {
+        // Every entry is written whole, so a poisoned lock holds nothing half-written.
+        self.issued
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Forget every token `operator` holds, so each is refused from now on (GAP-212).
+    /// Returns how many there were.
+    pub fn revoke_operator(&self, operator: OperatorId) -> usize {
+        let mut issued = self.registry();
+        let before = issued.len();
+        issued.retain(|_, live| live.operator != operator);
+        before - issued.len()
+    }
+
+    /// Forget one token, so it is refused from now on: a sign-out (GAP-212). False when
+    /// it was not one this issuer holds.
+    pub fn revoke(&self, token: &str) -> bool {
+        self.claims(token)
+            .is_some_and(|claims| self.registry().remove(&claims.id).is_some())
     }
 
     #[must_use]
@@ -107,7 +220,9 @@ impl TokenIssuer {
         session: &OperatorSession,
         now: MissionTimeSeconds,
     ) -> Result<String, SecurityError> {
+        let id = random_id();
         let claims = Claims {
+            id,
             operator: session.operator,
             role: session.role,
             established: now,
@@ -118,6 +233,19 @@ impl TokenIssuer {
         let mac = self
             .mac(&payload)
             .map_err(|e| SecurityError::AuthenticationUnavailable(e.to_string()))?;
+        let at = self.clock.seconds();
+        let mut issued = self.registry();
+        // Forget what can no longer verify, so the registry is bounded by the tokens alive.
+        let (lifetime, idle) = (self.lifetime_s, self.idle_s);
+        issued.retain(|_, live| at - live.began < lifetime && at - live.used < idle);
+        issued.insert(
+            id,
+            Live {
+                operator: session.operator,
+                began: at,
+                used: at,
+            },
+        );
         Ok(format!("{}.{}", hex(&payload), hex(&mac)))
     }
 
@@ -134,23 +262,24 @@ impl TokenIssuer {
         token: &str,
         now: MissionTimeSeconds,
     ) -> Result<OperatorSession, AuthFailure> {
-        let (payload_hex, mac_hex) = token.split_once('.').ok_or(AuthFailure::Rejected)?;
-        let payload = unhex(payload_hex).ok_or(AuthFailure::Rejected)?;
-        let presented = unhex(mac_hex).ok_or(AuthFailure::Rejected)?;
+        let claims = self.claims(token).ok_or(AuthFailure::Rejected)?;
 
-        // Constant-time, so the comparison does not leak how much of a forged MAC was
-        // right. `ct_eq` on differing lengths is false without short-circuiting.
-        // A key the MAC will not take is an authenticator that cannot verify anything,
-        // which is a rejection of every token rather than a panic in the request path.
-        let expected = self.mac(&payload).map_err(|_| AuthFailure::Rejected)?;
-        if expected.ct_eq(&presented).unwrap_u8() != 1 {
-            return Err(AuthFailure::Rejected);
+        // GAP-212: a token this process issued, still inside its lifetime and its idle
+        // timeout on the monotonic clock. Using it keeps it alive; an expired or idle one
+        // is forgotten, so it is not revived by a later use either.
+        {
+            let at = self.clock.seconds();
+            let mut issued = self.registry();
+            let live = issued.get_mut(&claims.id).ok_or(AuthFailure::Rejected)?;
+            if live.operator != claims.operator
+                || at - live.began >= self.lifetime_s
+                || at - live.used >= self.idle_s
+            {
+                issued.remove(&claims.id);
+                return Err(AuthFailure::Rejected);
+            }
+            live.used = at;
         }
-
-        // Only now is the payload worth reading: an unauthenticated payload is attacker
-        // input, and deserializing it before the MAC check would be parsing what an
-        // attacker chose.
-        let claims: Claims = serde_json::from_slice(&payload).map_err(|_| AuthFailure::Rejected)?;
         let session = OperatorSession {
             operator: claims.operator,
             role: claims.role,
@@ -163,6 +292,27 @@ impl TokenIssuer {
         Ok(session)
     }
 
+    /// The claims of a token whose MAC verifies under this issuer's key, or `None`.
+    fn claims(&self, token: &str) -> Option<Claims> {
+        let (payload_hex, mac_hex) = token.split_once('.')?;
+        let payload = unhex(payload_hex)?;
+        let presented = unhex(mac_hex)?;
+
+        // Constant-time, so the comparison does not leak how much of a forged MAC was
+        // right. `ct_eq` on differing lengths is false without short-circuiting.
+        // A key the MAC will not take is an authenticator that cannot verify anything,
+        // which is a rejection of every token rather than a panic in the request path.
+        let expected = self.mac(&payload).ok()?;
+        if expected.ct_eq(&presented).unwrap_u8() != 1 {
+            return None;
+        }
+
+        // Only now is the payload worth reading: an unauthenticated payload is attacker
+        // input, and deserializing it before the MAC check would be parsing what an
+        // attacker chose.
+        serde_json::from_slice(&payload).ok()
+    }
+
     /// HMAC accepts a key of any length, so the error is unreachable in practice; it is
     /// still returned rather than unwrapped, because the unwrap policy (CONTRIBUTING,
     /// checked by `gungnir-app/tests/architecture_compliance.rs`) allows no exception
@@ -173,6 +323,29 @@ impl TokenIssuer {
         mac.update(payload);
         Ok(mac.finalize().into_bytes().to_vec())
     }
+}
+
+/// HKDF-SHA256 (RFC 5869) with one block of output: extract under `salt`, expand with
+/// `info`. Written over `hmac` rather than adding the `hkdf` crate for two HMAC calls.
+fn hkdf_sha256(
+    salt: &[u8],
+    ikm: &[u8],
+    info: &[u8],
+) -> Result<Vec<u8>, hmac::digest::InvalidLength> {
+    let mut extract = <HmacSha256 as Mac>::new_from_slice(salt)?;
+    extract.update(ikm);
+    let prk = extract.finalize().into_bytes();
+    let mut expand = <HmacSha256 as Mac>::new_from_slice(&prk)?;
+    expand.update(info);
+    expand.update(&[1]);
+    Ok(expand.finalize().into_bytes().to_vec())
+}
+
+/// A token identifier from the operating system's generator.
+fn random_id() -> u64 {
+    let mut bytes = [0u8; 8];
+    aes_gcm::aead::rand_core::RngCore::fill_bytes(&mut aes_gcm::aead::OsRng, &mut bytes);
+    u64::from_le_bytes(bytes)
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -264,8 +437,9 @@ mod tests {
     /// permanent credential handed out over the network.
     #[test]
     fn a_minted_token_always_expires() {
-        let recovered = issuer()
-            .verify(&issuer().mint(&session(), 5.0).expect("minted"), 5.0)
+        let issuer = issuer();
+        let recovered = issuer
+            .verify(&issuer.mint(&session(), 5.0).expect("minted"), 5.0)
             .expect("verified");
         assert!(
             recovered.expires.is_some(),
@@ -306,6 +480,88 @@ mod tests {
         assert!(!printed.contains("ab"), "{printed}");
         assert!(!printed.contains("171"), "{printed}");
         assert!(printed.contains("lifetime_s"), "{printed}");
+    }
+
+    /// GAP-212: a token unused for D-143's idle timeout is refused, on the monotonic
+    /// clock, however far mission time has or has not moved; one used is kept alive.
+    #[test]
+    fn an_idle_token_is_refused_and_a_used_one_lives() {
+        let clock = crate::session::ManualMonotonic::default();
+        let issuer = TokenIssuer::new(vec![7u8; 32], 3600.0)
+            .expect("issuer")
+            .with_idle_timeout(Some(300.0))
+            .with_clock(Arc::new(clock.clone()));
+        let token = issuer.mint(&session(), 0.0).expect("minted");
+        clock.advance(299.0);
+        assert!(issuer.verify(&token, 0.0).is_ok());
+        clock.advance(299.0);
+        assert!(issuer.verify(&token, 0.0).is_ok(), "used, so still alive");
+        clock.advance(300.0);
+        assert_eq!(issuer.verify(&token, 0.0), Err(AuthFailure::Rejected));
+        assert_eq!(issuer.verify(&token, 0.0), Err(AuthFailure::Rejected));
+    }
+
+    /// GAP-212: the lifetime holds on the monotonic clock, so a mission clock set back
+    /// does not make an expired token good again.
+    #[test]
+    fn a_clock_set_back_does_not_revive_a_token() {
+        let clock = crate::session::ManualMonotonic::default();
+        let issuer = TokenIssuer::new(vec![7u8; 32], 600.0)
+            .expect("issuer")
+            .with_clock(Arc::new(clock.clone()));
+        let token = issuer.mint(&session(), 1_000.0).expect("minted");
+        for _ in 0..3 {
+            clock.advance(200.0);
+            let _ = issuer.verify(&token, 1_000.0);
+        }
+        assert_eq!(issuer.verify(&token, 900.0), Err(AuthFailure::Rejected));
+    }
+
+    /// GAP-212: a token can be revoked alone, or with every other its operator holds;
+    /// another operator's is untouched.
+    #[test]
+    fn a_revoked_token_is_refused() {
+        let issuer = issuer();
+        let one = issuer.mint(&session(), 0.0).expect("minted");
+        let two = issuer.mint(&session(), 0.0).expect("minted");
+        let other = issuer
+            .mint(
+                &OperatorSession {
+                    operator: OperatorId(8),
+                    ..session()
+                },
+                0.0,
+            )
+            .expect("minted");
+        assert!(issuer.revoke(&one));
+        assert!(!issuer.revoke(&one), "already gone");
+        assert_eq!(issuer.verify(&one, 1.0), Err(AuthFailure::Rejected));
+        assert!(issuer.verify(&two, 1.0).is_ok());
+        assert_eq!(issuer.revoke_operator(OperatorId(7)), 1);
+        assert_eq!(issuer.verify(&two, 1.0), Err(AuthFailure::Rejected));
+        assert!(issuer.verify(&other, 1.0).is_ok());
+    }
+
+    /// GAP-212: a token is believed only by the issuer that minted it. The same key in a
+    /// restarted node verifies the MAC and still refuses the token.
+    #[test]
+    fn a_restarted_issuer_believes_no_earlier_token() {
+        let token = issuer().mint(&session(), 0.0).expect("minted");
+        assert_eq!(issuer().verify(&token, 1.0), Err(AuthFailure::Rejected));
+    }
+
+    /// GAP-212: the deployment's secret is not the key, a short secret is refused, and
+    /// two issuers from one secret agree on the key.
+    #[test]
+    fn the_key_is_derived_from_the_secret() {
+        let secret = b"a-deployment-secret-of-adequate-length-01";
+        assert!(TokenIssuer::from_secret(&secret[..31], 60.0).is_err());
+        let derived = TokenIssuer::from_secret(secret, 60.0).expect("issuer");
+        assert_ne!(derived.key, secret.to_vec());
+        assert_eq!(derived.key.len(), 32);
+        let again = TokenIssuer::from_secret(secret, 60.0).expect("issuer");
+        assert_eq!(derived.key, again.key);
+        assert!(TokenIssuer::new(vec![1u8; 32], SESSION_MAX_S + 1.0).is_err());
     }
 
     #[test]
