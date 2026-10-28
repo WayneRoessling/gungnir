@@ -99,6 +99,7 @@ impl Pki {
             trust_roots_pem: vec![self.ca_pem.clone()],
             issued: None,
             identity_pem: Some(format!("{}\n{}", cert.pem(), key.serialize_pem())),
+            revoked_keys: Vec::new(),
         }
     }
 

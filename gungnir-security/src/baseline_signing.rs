@@ -42,7 +42,6 @@ use std::path::Path;
 use p256::ecdsa::signature::Verifier;
 use p256::ecdsa::{Signature, VerifyingKey};
 use p256::pkcs8::{DecodePublicKey, EncodePublicKey};
-use sha2::{Digest, Sha256};
 
 use crate::keys::{KeyId, KeyProvider, KeyPurpose, SignatureScheme};
 use crate::keystore::{PersistentKeyProvider, KEYSTORE_FILE};
@@ -62,17 +61,11 @@ pub const SCHEME: &str = "ecdsa-p256-sha256";
 pub const MIN_PASSPHRASE_CHARS: usize = 12;
 
 /// A key's fingerprint: the first sixteen hex digits of the SHA-256 of its public half,
-/// SPKI DER. What an audit entry and a `.sig` file name the signer by.
+/// SPKI DER. What an audit entry and a `.sig` file name the signer by: the crate's one
+/// [`crate::key_fingerprint`], under the name this module has always called it.
 #[must_use]
 pub fn fingerprint_of(public_der: &[u8]) -> String {
-    let digest = Sha256::digest(public_der);
-    digest
-        .iter()
-        .take(8)
-        .fold(String::with_capacity(16), |mut s, b| {
-            let _ = std::fmt::Write::write_fmt(&mut s, format_args!("{b:02x}"));
-            s
-        })
+    crate::key_fingerprint(public_der)
 }
 
 /// The baseline-signing key, unlocked where baselines are authored (GAP-210).

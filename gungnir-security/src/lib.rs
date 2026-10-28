@@ -183,7 +183,8 @@ impl Role {
 /// trait boundary so new crates can add actions without touching this one; these
 /// constants are the canonical names.
 pub use keys::{
-    may_destroy, DestructionOverride, EncryptionStatus, KeyId, KeyProvider, KeyPurpose, KeyState,
+    key_fingerprint, may_destroy, DestructionOverride, EncryptionStatus, KeyId, KeyProvider,
+    KeyPurpose, KeyState,
 };
 
 pub mod actions {

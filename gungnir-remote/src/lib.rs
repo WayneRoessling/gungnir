@@ -96,12 +96,16 @@ pub struct LinkTls {
     /// an `https` endpoint is refused**: the platform's store is not consulted, because a
     /// defended network's nodes are signed by the deployment's own authority.
     pub trust_roots_pem: Vec<String>,
-    /// The identity this host issued from its own key provider. Preferred.
-    pub issued: Option<std::sync::Arc<rustls::sign::CertifiedKey>>,
+    /// The identity this host issued from its own key provider, which re-issues itself
+    /// before it expires (GAP-211). Preferred.
+    pub issued: Option<std::sync::Arc<crate::identity::IssuedIdentity>>,
     /// A certificate chain and its private key as PEM: the development fallback. `None`
     /// in both fields connects without a client certificate, which a node configured per
     /// D-02 refuses at the handshake and the link reports.
     pub identity_pem: Option<String>,
+    /// Keys no server is trusted under, by fingerprint, whatever a trust root says
+    /// (`security.tls.revoked_keys`, GAP-211). Public material, like the roots.
+    pub revoked_keys: Vec<String>,
 }
 
 impl LinkTls {
@@ -120,13 +124,12 @@ impl LinkTls {
 /// comparison is on the certificate's DER and not on the signer behind it.
 impl PartialEq for LinkTls {
     fn eq(&self, other: &Self) -> bool {
-        fn chain(tls: &LinkTls) -> Option<Vec<Vec<u8>>> {
-            tls.issued
-                .as_ref()
-                .map(|k| k.cert.iter().map(|c| c.as_ref().to_vec()).collect())
+        fn chain(tls: &LinkTls) -> Option<Vec<u8>> {
+            tls.issued.as_ref().map(|k| k.certificate_der())
         }
         self.trust_roots_pem == other.trust_roots_pem
             && self.identity_pem == other.identity_pem
+            && self.revoked_keys == other.revoked_keys
             && chain(self) == chain(other)
     }
 }
@@ -139,30 +142,55 @@ impl std::fmt::Debug for LinkTls {
             .field("trust_roots", &self.trust_roots_pem.len())
             .field("issued", &self.issued.is_some())
             .field("identity_pem", &self.identity_pem.is_some())
+            .field("revoked_keys", &self.revoked_keys.len())
             .finish()
     }
 }
 
-/// Presents this host's issued certificate to any node that asks for one.
-///
-/// It offers the same certificate whatever the server's acceptable-issuer list says. That
-/// is correct here and would not be in general: a deployment's node trusts one authority,
-/// and a client with one identity that guessed it was unwanted and presented nothing would
-/// turn a clear handshake refusal into a silent anonymous connection.
+/// A server verifier that refuses a revoked key before the trust roots are consulted
+/// (GAP-211, DN-22 §16): the client half of `gungnir_api::tls`'s client verifier, so a
+/// desktop or a node's peer link refuses a revoked node as the node refuses a revoked
+/// desktop. Every other judgement is the inner verifier's.
 #[derive(Debug)]
-struct IssuedClientCert(std::sync::Arc<rustls::sign::CertifiedKey>);
+struct RevokingServerVerifier {
+    inner: std::sync::Arc<rustls::client::WebPkiServerVerifier>,
+    revoked: Vec<String>,
+}
 
-impl rustls::client::ResolvesClientCert for IssuedClientCert {
-    fn resolve(
+impl rustls::client::danger::ServerCertVerifier for RevokingServerVerifier {
+    fn verify_server_cert(
         &self,
-        _acceptable_issuers: &[&[u8]],
-        _sigschemes: &[rustls::SignatureScheme],
-    ) -> Option<std::sync::Arc<rustls::sign::CertifiedKey>> {
-        Some(std::sync::Arc::clone(&self.0))
+        end_entity: &CertificateDer<'_>,
+        intermediates: &[CertificateDer<'_>],
+        server_name: &rustls::pki_types::ServerName<'_>,
+        ocsp_response: &[u8],
+        now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        gungnir_api::tls::refuse_revoked(end_entity, &self.revoked, "server")?;
+        self.inner
+            .verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)
     }
 
-    fn has_certs(&self) -> bool {
-        true
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        self.inner.verify_tls12_signature(message, cert, dss)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        self.inner.verify_tls13_signature(message, cert, dss)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.inner.supported_verify_schemes()
     }
 }
 
@@ -187,14 +215,26 @@ pub fn client_config(tls: &LinkTls) -> Result<rustls::ClientConfig, String> {
                 .map_err(|e| format!("trust root {i} is not usable: {e}"))?;
         }
     }
-    let builder = rustls::ClientConfig::builder().with_root_certificates(roots);
-    // The issued identity wins over the PEM fallback; see `LinkTls`.
+    let builder = if tls.revoked_keys.is_empty() {
+        rustls::ClientConfig::builder().with_root_certificates(roots)
+    } else {
+        // GAP-211: the same roots, with the revoked keys refused first.
+        let inner = rustls::client::WebPkiServerVerifier::builder(std::sync::Arc::new(roots))
+            .build()
+            .map_err(|e| format!("the server verifier is unusable: {e}"))?;
+        rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(std::sync::Arc::new(RevokingServerVerifier {
+                inner,
+                revoked: tls.revoked_keys.clone(),
+            }))
+    };
+    // The issued identity wins over the PEM fallback; see `LinkTls`. It is its own
+    // resolver, so a certificate it re-issues is the next handshake's.
     if let Some(issued) = &tls.issued {
-        return Ok(
-            builder.with_client_cert_resolver(std::sync::Arc::new(IssuedClientCert(
-                std::sync::Arc::clone(issued),
-            ))),
-        );
+        return Ok(builder
+            .with_client_cert_resolver(std::sync::Arc::clone(issued)
+                as std::sync::Arc<dyn rustls::client::ResolvesClientCert>));
     }
     match &tls.identity_pem {
         None => Ok(builder.with_no_client_auth()),

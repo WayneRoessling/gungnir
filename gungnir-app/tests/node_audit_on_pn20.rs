@@ -495,9 +495,7 @@ fn a_cut_on_the_node_reaches_a_linked_desktop_s_pn20_for_the_roles_that_hold_aud
         .as_ref()
         .expect("the desktop issued its own identity (GAP-141)")
         .key
-        .cert[0]
-        .as_ref()
-        .to_vec();
+        .certificate_der();
 
     let node_dir = scratch("node");
     let node_config = baseline(&node_dir, BackendConfig::Embedded);

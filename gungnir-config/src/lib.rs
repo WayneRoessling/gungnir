@@ -1482,11 +1482,20 @@ pub struct EscrowConfig {
     pub public_key_pem: String,
 }
 
-/// The endpoint client's trust roots (GAP-060).
+/// The endpoint client's trust roots (GAP-060), and the keys no host trusts (GAP-211).
 #[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TlsClientConfig {
     #[serde(default)]
     pub trust_roots_pem: Vec<String>,
+    /// Revoked identities, by key fingerprint: the sixteen hex digits an issued identity
+    /// is named by (`desktop-<fingerprint>`, `node-<fingerprint>`,
+    /// `node-peer-<fingerprint>`), `gungnir_security::key_fingerprint` of the key's public
+    /// half (GAP-211, DN-22 §16). A node refuses a client presenting one, and a desktop or
+    /// a node's peer link refuses a server presenting one, whatever a pinned certificate
+    /// says. Takes effect when a host starts on the baseline, which since GAP-210 is
+    /// signed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub revoked_keys: Vec<String>,
 }
 
 /// The operator authentication provider (DN-23 §5, one mechanism per profile).
@@ -2795,6 +2804,17 @@ fn validate_trust_roots(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
         if !pem.contains("-----BEGIN CERTIFICATE-----") {
             return Err(ConfigError::Invalid(format!(
                 "security.tls.trust_roots_pem[{i}] is not a PEM certificate"
+            )));
+        }
+    }
+    // GAP-211: a revoked key is named exactly as an identity's name carries it. Anything
+    // else matches no key, and a deny list entry that matches nothing reads in the file
+    // exactly like a revocation.
+    for (i, key) in baseline.security.tls.revoked_keys.iter().enumerate() {
+        if key.len() != 16 || !key.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            return Err(ConfigError::Invalid(format!(
+                "security.tls.revoked_keys[{i}] is {key:?}; a revoked key is the sixteen \
+                 lower-case hex digits its identity is named by, as in desktop-<fingerprint>"
             )));
         }
     }
@@ -7662,6 +7682,27 @@ MFkw
 
     /// GAP-210: what a signature covers survives the file being written back
     /// pretty-printed, as PN-14's apply writes it, and any change of content changes it.
+    /// GAP-211: a revoked key is named as an identity's name carries it, and anything
+    /// else is refused rather than kept as an entry that matches no key.
+    #[test]
+    fn a_revoked_key_is_sixteen_lower_case_hex_digits() {
+        let with = |keys: &[&str]| {
+            let mut baseline = ConfigBaseline::default();
+            baseline.security.tls.revoked_keys = keys.iter().map(|k| (*k).to_owned()).collect();
+            validate(&baseline)
+        };
+        assert!(with(&["0123456789abcdef"]).is_ok());
+        for bad in [
+            "desktop-0123456789abcdef",
+            "0123456789ABCDEF",
+            "0123456789abcde",
+            "0123456789abcdef0",
+        ] {
+            let err = with(&[bad]).expect_err(bad);
+            assert!(err.to_string().contains("revoked_keys[0]"), "{err}");
+        }
+    }
+
     /// The signature file round-trips beside its baseline.
     #[test]
     fn signing_bytes_survive_a_rewrite_and_change_with_the_content() {

@@ -107,9 +107,24 @@
 //! them. `spawn_tls_from_provider` (the node's serving identity) has no equivalent
 //! deployment-wide switch to read and is reached only along a narrow, already
 //! deliberately-configured path, so it carries no such gate.
+//!
+//! # A window, re-issue, and revocation (GAP-211, DN-22 §16)
+//!
+//! Every certificate issued here is valid for [`VALIDITY_DAYS`] (ninety, every role, the
+//! owner's choice of 2026-10-28), where it used to carry rcgen's defaults of 1975 to 4096.
+//! What a TLS configuration holds is an [`IssuedIdentity`], which re-issues its
+//! certificate on the same key once [`RENEW_DAYS_LEFT`] remain, in the handshake that
+//! finds it due, so a host that never restarts never presents an expired one. A peer's
+//! pin is a name and a key, so it still matches the re-issued certificate.
+//!
+//! A window bounds what a copied certificate is worth, not what a copied key is worth: a
+//! key can issue itself another. Revocation is therefore by key, in the baseline's
+//! `security.tls.revoked_keys`, which `gungnir_api::tls` and `crate::client_config` refuse
+//! at the handshake on both sides.
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 
 use gungnir_security::{KeyId, KeyProvider, KeyPurpose, SignatureScheme};
 
@@ -312,8 +327,8 @@ pub fn desktop_name(spki_der: &[u8], persisted: bool) -> String {
 /// A desktop's identity: the key it presents, the name that key gives it, and whether
 /// that name survives a restart (GAP-141).
 pub struct DesktopIdentity {
-    /// Ready for [`crate::LinkTls::issued`].
-    pub key: Arc<rustls::sign::CertifiedKey>,
+    /// Ready for [`crate::LinkTls::issued`]; re-issues itself before it expires (GAP-211).
+    pub key: Arc<IssuedIdentity>,
     /// The certificate's subject common name, which is what a node reads as the party.
     pub name: String,
     /// True when the key came from the operating system's keystore, so the name is the
@@ -332,10 +347,66 @@ pub struct HostIdentity {
     /// True when the key came from the operating system's keystore and survives a
     /// restart.
     pub persisted: bool,
+    /// The end of the certificate's validity window (GAP-211).
+    pub not_after: SystemTime,
+    /// The same issuance again at a later time, on the same key: how
+    /// [`IssuedIdentity`] renews itself.
+    reissue: Reissue,
+}
+
+/// Re-issue an identity at a given time, on the key it was first issued on.
+type Reissue = Arc<dyn Fn(SystemTime) -> Result<HostIdentity, String> + Send + Sync>;
+
+/// How long an issued identity is valid, every role alike (GAP-211, DN-22 §16; the owner's
+/// choice of 2026-10-28).
+///
+/// It was unbounded until GAP-211: rcgen's defaults run from 1975 to 4096. A window bounds
+/// how long a certificate taken off a host is worth. It does not bound the key: whoever
+/// holds the key can issue another, and `security.tls.revoked_keys` is what refuses that.
+pub const VALIDITY_DAYS: u64 = 90;
+
+/// An identity is re-issued on its own key once this few days of its window are left, a
+/// third of it, so a host that never restarts never presents an expired certificate.
+pub const RENEW_DAYS_LEFT: u64 = 30;
+
+/// After a failed re-issue, how long before the next attempt: an hour, so a provider that
+/// refuses to sign is not asked again on every handshake.
+const RETRY_AFTER: Duration = Duration::from_secs(3600);
+
+const DAY_S: u64 = 86_400;
+
+/// The window an identity issued at `now` carries, as days since 1970-01-01 UTC: from the
+/// start of the day before, so a peer whose clock is some hours behind still accepts it,
+/// to the start of the day [`VALIDITY_DAYS`] after today. Whole days, because rcgen's
+/// `date_time_ymd` is the one way to give it a date without naming the `time` crate.
+fn validity(now: SystemTime) -> (u64, u64) {
+    let today = now
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() / DAY_S);
+    (today.saturating_sub(1), today + VALIDITY_DAYS)
+}
+
+/// The proleptic Gregorian date `days` after 1970-01-01 (Howard Hinnant's
+/// `civil_from_days`, for days on or after the epoch).
+fn civil_from_days(days: u64) -> (i32, u8, u8) {
+    let z = days + 719_468;
+    let era = z / 146_097;
+    let doe = z % 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + u64::from(month <= 2);
+    (
+        i32::try_from(year).unwrap_or(i32::MAX),
+        u8::try_from(month).unwrap_or(1),
+        u8::try_from(day).unwrap_or(1),
+    )
 }
 
 /// Issue an identity for `names` (DNS names or IP addresses the host is reached as),
-/// limited to `usage` (D-135).
+/// limited to `usage` (D-135), valid for [`VALIDITY_DAYS`] from now (GAP-211).
 ///
 /// # Errors
 ///
@@ -349,15 +420,59 @@ pub fn issue<P: KeyProvider + 'static>(
     common_name: &str,
     usage: Usage,
 ) -> Result<HostIdentity, String> {
+    issue_at(
+        provider,
+        key,
+        spki_der,
+        names,
+        common_name,
+        usage,
+        SystemTime::now(),
+    )
+}
+
+/// [`issue`], as at `now`.
+fn issue_at<P: KeyProvider + 'static>(
+    provider: Arc<P>,
+    key: KeyId,
+    spki_der: Vec<u8>,
+    names: Vec<String>,
+    common_name: &str,
+    usage: Usage,
+    now: SystemTime,
+) -> Result<HostIdentity, String> {
     if key.purpose != KeyPurpose::TransportIdentity {
         return Err(format!("{key:?} is not a transport identity key"));
     }
+    let reissue: Reissue = {
+        let provider = Arc::clone(&provider);
+        let spki_der = spki_der.clone();
+        let names = names.clone();
+        let common_name = common_name.to_owned();
+        Arc::new(move |at| {
+            issue_at(
+                Arc::clone(&provider),
+                key,
+                spki_der.clone(),
+                names.clone(),
+                &common_name,
+                usage,
+                at,
+            )
+        })
+    };
     let signing = ProviderKey::new(provider, key, spki_der);
     let mut params = rcgen::CertificateParams::new(names).map_err(|e| e.to_string())?;
     params
         .distinguished_name
         .push(rcgen::DnType::CommonName, common_name);
     params.extended_key_usages = vec![usage.purpose()];
+    let (start, end) = validity(now);
+    let (y, m, d) = civil_from_days(start);
+    params.not_before = rcgen::date_time_ymd(y, m, d);
+    let (y, m, d) = civil_from_days(end);
+    params.not_after = rcgen::date_time_ymd(y, m, d);
+    let ends = SystemTime::UNIX_EPOCH + Duration::from_secs(end * DAY_S);
     let certificate = params.self_signed(&signing).map_err(|e| e.to_string())?;
     Ok(HostIdentity {
         certificate_der: certificate.der().as_ref().to_vec(),
@@ -365,7 +480,203 @@ pub fn issue<P: KeyProvider + 'static>(
         key: Arc::new(signing),
         common_name: common_name.to_owned(),
         persisted: false,
+        not_after: ends,
+        reissue,
     })
+}
+
+/// An issued identity that re-issues itself on the same key before it expires (GAP-211,
+/// DN-22 §16), and is what a TLS configuration presents: it is the client resolver on a
+/// desktop's and a node's outbound links and the server resolver a node serves through.
+///
+/// **Renewed in the handshake, not on a timer.** The first handshake after the window has
+/// [`RENEW_DAYS_LEFT`] days left re-issues the certificate and swaps it in, so the next
+/// handshake and every one after presents the new one, with no restart and no task to
+/// keep alive. The key never changes, so a peer's pin still matches: a pin is a name and a
+/// key, not a validity window. A re-issue that fails is said once, kept for PN-01, and
+/// tried again an hour later while the old certificate is still presented.
+pub struct IssuedIdentity {
+    name: String,
+    persisted: bool,
+    held: Mutex<Held>,
+    reissue: Option<Reissue>,
+}
+
+struct Held {
+    certified: Arc<rustls::sign::CertifiedKey>,
+    not_after: Option<SystemTime>,
+    failure: Option<String>,
+    retry_at: SystemTime,
+}
+
+impl IssuedIdentity {
+    /// A certificate that is never re-issued and whose window this crate did not set: a
+    /// harness's, or one a caller already holds as a `CertifiedKey`.
+    #[must_use]
+    pub fn fixed(name: &str, certified: Arc<rustls::sign::CertifiedKey>) -> Self {
+        Self {
+            name: name.to_owned(),
+            persisted: false,
+            held: Mutex::new(Held {
+                certified,
+                not_after: None,
+                failure: None,
+                retry_at: SystemTime::UNIX_EPOCH,
+            }),
+            reissue: None,
+        }
+    }
+
+    fn held(&self) -> std::sync::MutexGuard<'_, Held> {
+        // Nothing is left half-written under this lock: every field is assigned whole.
+        self.held
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// The subject common name, which a peer reads as the party.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// True when the key survives a restart.
+    #[must_use]
+    pub fn persisted(&self) -> bool {
+        self.persisted
+    }
+
+    /// The certificate to present now, re-issued first when it is due.
+    #[must_use]
+    pub fn current(&self) -> Arc<rustls::sign::CertifiedKey> {
+        self.current_at(SystemTime::now())
+    }
+
+    /// [`Self::current`], as at `now`.
+    #[must_use]
+    pub fn current_at(&self, now: SystemTime) -> Arc<rustls::sign::CertifiedKey> {
+        let mut held = self.held();
+        let due = held.not_after.is_some_and(|end| {
+            now + Duration::from_secs(RENEW_DAYS_LEFT * DAY_S) >= end && now >= held.retry_at
+        });
+        if let (true, Some(reissue)) = (due, self.reissue.as_ref()) {
+            match reissue(now) {
+                Ok(identity) => {
+                    tracing::info!(name = %self.name, "identity re-issued on its own key before it expired");
+                    held.not_after = Some(identity.not_after);
+                    held.certified = certified_key(identity.certificate_der, identity.key);
+                    held.failure = None;
+                }
+                Err(err) => {
+                    tracing::warn!(name = %self.name, %err, "the identity could not be re-issued; presenting the current one until it expires");
+                    held.failure = Some(err);
+                    held.retry_at = now + RETRY_AFTER;
+                }
+            }
+        }
+        Arc::clone(&held.certified)
+    }
+
+    /// When the certificate now presented stops being valid; `None` for a
+    /// [`Self::fixed`] one.
+    #[must_use]
+    pub fn not_after(&self) -> Option<SystemTime> {
+        self.held().not_after
+    }
+
+    /// Whole days until [`Self::not_after`] at `now`, negative once it has passed.
+    #[must_use]
+    pub fn days_left(&self, now: SystemTime) -> Option<i64> {
+        let end = self.not_after()?;
+        Some(match end.duration_since(now) {
+            Ok(left) => i64::try_from(left.as_secs() / DAY_S).unwrap_or(i64::MAX),
+            Err(past) => {
+                -i64::try_from(past.duration().as_secs().div_ceil(DAY_S)).unwrap_or(i64::MAX)
+            }
+        })
+    }
+
+    /// Why the last re-issue failed, until one succeeds.
+    #[must_use]
+    pub fn renewal_failure(&self) -> Option<String> {
+        self.held().failure.clone()
+    }
+
+    /// The DER of the certificate now presented, leaf only.
+    #[must_use]
+    pub fn certificate_der(&self) -> Vec<u8> {
+        self.held()
+            .certified
+            .cert
+            .first()
+            .map(|c| c.as_ref().to_vec())
+            .unwrap_or_default()
+    }
+}
+
+impl From<HostIdentity> for IssuedIdentity {
+    fn from(identity: HostIdentity) -> Self {
+        Self {
+            name: identity.common_name,
+            persisted: identity.persisted,
+            held: Mutex::new(Held {
+                certified: certified_key(identity.certificate_der, identity.key),
+                not_after: Some(identity.not_after),
+                failure: None,
+                retry_at: SystemTime::UNIX_EPOCH,
+            }),
+            reissue: Some(identity.reissue),
+        }
+    }
+}
+
+impl std::fmt::Debug for IssuedIdentity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IssuedIdentity")
+            .field("name", &self.name)
+            .field("persisted", &self.persisted)
+            .field("not_after", &self.not_after())
+            .finish_non_exhaustive()
+    }
+}
+
+/// Presents this host's issued certificate to any node that asks for one.
+///
+/// It offers the same certificate whatever the server's acceptable-issuer list says. That
+/// is correct here and would not be in general: a deployment's node trusts one authority,
+/// and a client with one identity that guessed it was unwanted and presented nothing would
+/// turn a clear handshake refusal into a silent anonymous connection.
+impl rustls::client::ResolvesClientCert for IssuedIdentity {
+    fn resolve(
+        &self,
+        _acceptable_issuers: &[&[u8]],
+        _sigschemes: &[rustls::SignatureScheme],
+    ) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        Some(self.current())
+    }
+
+    fn has_certs(&self) -> bool {
+        true
+    }
+}
+
+impl rustls::server::ResolvesServerCert for IssuedIdentity {
+    fn resolve(
+        &self,
+        _client_hello: rustls::server::ClientHello<'_>,
+    ) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        Some(self.current())
+    }
+}
+
+fn certified_key(
+    certificate_der: Vec<u8>,
+    key: Arc<dyn rustls::sign::SigningKey>,
+) -> Arc<rustls::sign::CertifiedKey> {
+    Arc::new(rustls::sign::CertifiedKey::new(
+        vec![rustls::pki_types::CertificateDer::from(certificate_der)],
+        key,
+    ))
 }
 
 /// Issue a client identity for this host from an ephemeral key provider, ready to put in
@@ -386,12 +697,12 @@ pub fn issue<P: KeyProvider + 'static>(
 /// # Errors
 ///
 /// When the provider cannot report its public half, or `rcgen` refuses the name.
-pub fn issue_for_client(common_name: &str) -> Result<Arc<rustls::sign::CertifiedKey>, String> {
-    Ok(as_certified_key(issue_ephemeral_named(
+pub fn issue_for_client(common_name: &str) -> Result<Arc<IssuedIdentity>, String> {
+    Ok(Arc::new(IssuedIdentity::from(issue_ephemeral_named(
         vec!["localhost".to_owned()],
         Usage::Client,
         &|_, _| common_name.to_owned(),
-    )?))
+    )?)))
 }
 
 /// As [`issue_for_client`], limited to serving (D-135): an ephemeral serving identity
@@ -423,7 +734,7 @@ pub fn issue_desktop_identity() -> Result<DesktopIdentity, String> {
         })?;
     Ok(DesktopIdentity {
         name: identity.common_name.clone(),
-        key: as_certified_key(identity),
+        key: Arc::new(IssuedIdentity::from(identity)),
         persisted: false,
     })
 }
@@ -449,14 +760,10 @@ fn issue_ephemeral_named(
     issue(Arc::new(provider), key, spki, names, &common_name, usage)
 }
 
-/// [`HostIdentity`] wrapped as a `CertifiedKey`, ready for [`crate::LinkTls::issued`].
+/// [`HostIdentity`] wrapped as a `CertifiedKey`, for a harness that serves one fixed
+/// certificate.
 fn as_certified_key(identity: HostIdentity) -> Arc<rustls::sign::CertifiedKey> {
-    Arc::new(rustls::sign::CertifiedKey::new(
-        vec![rustls::pki_types::CertificateDer::from(
-            identity.certificate_der,
-        )],
-        identity.key,
-    ))
+    certified_key(identity.certificate_der, identity.key)
 }
 
 /// The name a node's serving-identity keystore entries live under in the operating
@@ -625,8 +932,8 @@ pub fn issue_node_serving_identity(
 /// What a node presents on its peer links (D-135): the key, the name that key gives it,
 /// and whether both survive a restart.
 pub struct NodePeerIdentity {
-    /// Ready for [`crate::LinkTls::issued`].
-    pub key: Arc<rustls::sign::CertifiedKey>,
+    /// Ready for [`crate::LinkTls::issued`]; re-issues itself before it expires (GAP-211).
+    pub key: Arc<IssuedIdentity>,
     /// The certificate's subject common name, which is what a peer reads as the party
     /// and names in its `machine_identities`.
     pub name: String,
@@ -642,7 +949,7 @@ impl From<HostIdentity> for NodePeerIdentity {
             name: identity.common_name.clone(),
             persisted: identity.persisted,
             certificate_pem: identity.certificate_pem.clone(),
-            key: as_certified_key(identity),
+            key: Arc::new(IssuedIdentity::from(identity)),
         }
     }
 }
@@ -710,7 +1017,7 @@ pub fn issue_desktop_outbound_identity(data_dir: &Path) -> Result<DesktopIdentit
     .map(|identity| DesktopIdentity {
         name: identity.common_name.clone(),
         persisted: identity.persisted,
-        key: as_certified_key(identity),
+        key: Arc::new(IssuedIdentity::from(identity)),
     })
 }
 
@@ -917,7 +1224,7 @@ mod tests {
 
         let identity =
             issue_desktop_outbound_identity(&path).expect("the ephemeral fallback still issues");
-        assert!(!identity.key.cert.is_empty());
+        assert!(!identity.key.certificate_der().is_empty());
         // GAP-141: the fallback's name says the key behind it does not survive a restart,
         // so a record carrying it says what the origin is worth.
         assert!(!identity.persisted);
@@ -957,9 +1264,9 @@ mod tests {
             .expect("issued")
             .certificate_der;
         let peer = issue_node_peer_identity(&blocked).expect("issued");
-        let peer = peer.key.cert[0].as_ref().to_vec();
+        let peer = peer.key.certificate_der();
         let desktop = issue_desktop_identity().expect("issued");
-        let desktop = desktop.key.cert[0].as_ref().to_vec();
+        let desktop = desktop.key.certificate_der();
         let server_harness = issue_for_server("harness").expect("issued");
         let client_harness = issue_for_client("harness").expect("issued");
         assert!(states(&serving, SERVER) && !states(&serving, CLIENT));
@@ -967,7 +1274,7 @@ mod tests {
         for der in [
             peer.as_slice(),
             desktop.as_slice(),
-            client_harness.cert[0].as_ref(),
+            client_harness.certificate_der().as_slice(),
         ] {
             assert!(states(der, CLIENT) && !states(der, SERVER));
         }
@@ -992,7 +1299,7 @@ mod tests {
         let two = issue_node_peer_identity_ephemeral().expect("issued");
         assert_ne!(one.name, two.name, "two nodes issued one name");
         // The name a peer reads off the certificate is the one the identity reports.
-        let on_certificate = gungnir_api::tls::subject_common_name(one.key.cert[0].as_ref());
+        let on_certificate = gungnir_api::tls::subject_common_name(&one.key.certificate_der());
         assert_eq!(on_certificate.as_deref(), Some(one.name.as_str()));
         assert!(one.certificate_pem.contains("BEGIN CERTIFICATE"));
     }
@@ -1053,8 +1360,8 @@ mod tests {
     #[test]
     fn the_issued_certificate_carries_the_name_the_identity_reports() {
         let identity = issue_desktop_identity().expect("issued");
-        let der = identity.key.cert.first().expect("a certificate").as_ref();
-        let on_certificate = gungnir_api::tls::subject_common_name(der);
+        let der = identity.key.certificate_der();
+        let on_certificate = gungnir_api::tls::subject_common_name(&der);
         assert_eq!(on_certificate.as_deref(), Some(identity.name.as_str()));
     }
 
@@ -1136,5 +1443,93 @@ mod tests {
         }
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// GAP-211: the date arithmetic the window is written in.
+    #[test]
+    fn days_since_the_epoch_are_the_calendar_dates() {
+        assert_eq!(civil_from_days(0), (1970, 1, 1));
+        assert_eq!(civil_from_days(10_957), (2000, 1, 1));
+        assert_eq!(civil_from_days(11_016), (2000, 2, 29));
+        assert_eq!(civil_from_days(11_017), (2000, 3, 1));
+        assert_eq!(civil_from_days(20_754), (2026, 10, 28));
+    }
+
+    fn verifier_pinning(pin: &[u8]) -> Arc<dyn rustls::server::danger::ClientCertVerifier> {
+        let mut roots = rustls::RootCertStore::empty();
+        roots
+            .add(rustls::pki_types::CertificateDer::from(pin.to_vec()))
+            .expect("a usable pin");
+        rustls::server::WebPkiClientVerifier::builder(Arc::new(roots))
+            .build()
+            .expect("a verifier")
+    }
+
+    fn at(time: SystemTime) -> rustls::pki_types::UnixTime {
+        rustls::pki_types::UnixTime::since_unix_epoch(
+            time.duration_since(SystemTime::UNIX_EPOCH)
+                .expect("after 1970"),
+        )
+    }
+
+    /// GAP-211, against rustls's own verifier: an issued identity is valid for
+    /// [`VALIDITY_DAYS`] and not after; it re-issues itself on the same key once
+    /// [`RENEW_DAYS_LEFT`] remain, and not before; and the re-issued certificate still
+    /// verifies against the pin a peer took of the first one, past the first one's end.
+    #[test]
+    fn an_identity_expires_and_re_issues_itself_under_the_same_pin() {
+        let day = Duration::from_secs(DAY_S);
+        let now = SystemTime::now();
+        let identity = issue_node_peer_identity_ephemeral().expect("issued").key;
+        let pin = identity.certificate_der();
+        let first_end = identity.not_after().expect("a window");
+        let left = identity.days_left(now).expect("days left");
+        assert!(
+            (89..=90).contains(&left),
+            "{left} days left on a new identity"
+        );
+
+        let verifier = verifier_pinning(&pin);
+        let first = rustls::pki_types::CertificateDer::from(pin.clone());
+        assert!(verifier.verify_client_cert(&first, &[], at(now)).is_ok());
+        assert!(
+            verifier
+                .verify_client_cert(&first, &[], at(first_end + day))
+                .is_err(),
+            "a certificate past its window still verified"
+        );
+
+        // Fifty-nine days in, thirty-one left: not yet due.
+        let _ = identity.current_at(now + day * 59);
+        assert_eq!(
+            identity.certificate_der(),
+            pin,
+            "re-issued before it was due"
+        );
+
+        // Sixty-one days in, twenty-nine left: re-issued, on the same key and name.
+        let later = now + day * 61;
+        let _ = identity.current_at(later);
+        let renewed = identity.certificate_der();
+        assert_ne!(renewed, pin, "not re-issued when due");
+        assert!(identity.not_after().expect("a window") > first_end);
+        assert!(identity.renewal_failure().is_none());
+        assert_eq!(
+            gungnir_api::tls::subject_common_name(&renewed).as_deref(),
+            Some(identity.name()),
+            "the re-issued certificate carries the same name"
+        );
+        let renewed_cert = rustls::pki_types::CertificateDer::from(renewed);
+        assert_eq!(
+            gungnir_api::tls::certificate_key_fingerprint(&renewed_cert).expect("parses"),
+            gungnir_api::tls::certificate_key_fingerprint(&first).expect("parses"),
+            "re-issued on another key"
+        );
+        assert!(
+            verifier
+                .verify_client_cert(&renewed_cert, &[], at(first_end + day))
+                .is_ok(),
+            "the old pin refused the re-issued certificate after the first one's end"
+        );
     }
 }

@@ -633,9 +633,7 @@ fn one_scenario_through_both_backends_leaves_both_desktops_the_same_picture() {
         .as_ref()
         .expect("the desktop issued its own identity (GAP-141)")
         .key
-        .cert[0]
-        .as_ref()
-        .to_vec();
+        .certificate_der();
 
     let node_dir = scratch("node");
     let mut node = Node::start(

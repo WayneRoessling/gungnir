@@ -63,6 +63,9 @@ pub struct StatusStripData<'a> {
     session_role: String,
     /// The rehearsal in progress, named (GAP-089).
     rehearsal: Option<String>,
+    /// Why this desktop's identity last failed to re-issue, owned because the identity
+    /// keeps it behind a lock (GAP-211).
+    identity_failure: Option<String>,
 }
 
 /// One health line per configured sensor, saying which of the four things a silent sensor
@@ -236,6 +239,10 @@ impl<'a> StatusStripData<'a> {
                 .rehearsal
                 .as_ref()
                 .map(crate::rehearsal::Rehearsal::label),
+            identity_failure: state
+                .machine_identity
+                .as_ref()
+                .and_then(|identity| identity.key.renewal_failure()),
         }
     }
 }
@@ -339,7 +346,26 @@ pub fn status_strip_view<'a>(
         coverage: crate::sustainment::coverage_status(state, data.coverage.as_ref()),
         rehearsal: data.rehearsal.as_deref(),
         operator: operator_line(state, &data.session_role),
+        identity: identity_line(state, data.identity_failure.as_deref()),
     }
+}
+
+/// PN-01's identity element (GAP-211): this desktop's machine identity and the days left
+/// on it, as wall-clock days, because a certificate's window is the wall clock's.
+fn identity_line<'a>(
+    state: &'a AppState,
+    renewal_failure: Option<&'a str>,
+) -> gungnir_ui::panels::status_strip::IdentityLine<'a> {
+    use gungnir_ui::panels::status_strip::IdentityLine;
+    state
+        .machine_identity
+        .as_ref()
+        .map_or(IdentityLine::None, |identity| IdentityLine::Issued {
+            name: identity.key.name(),
+            days_left: identity.key.days_left(std::time::SystemTime::now()),
+            renewal_failure,
+            warn_days: crate::session::IDENTITY_WARN_DAYS,
+        })
 }
 
 /// PN-01's operator line from the session authority (GAP-057).

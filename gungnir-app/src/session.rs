@@ -363,6 +363,72 @@ pub fn origin_of(state: &AppState) -> String {
     )
 }
 
+/// Fewer days than this left on this desktop's certificate and PN-01 colours it and an
+/// alert is raised (GAP-211). Re-issue starts at thirty
+/// (`gungnir_remote::identity::RENEW_DAYS_LEFT`), so reaching seven means re-issue has
+/// been failing for three weeks.
+pub const IDENTITY_WARN_DAYS: i64 = 7;
+
+/// What is wrong with this desktop's identity, if anything: the condition's key and the
+/// sentence to raise (GAP-211). A failed re-issue is named first, because it is the cause
+/// of the other two.
+#[must_use]
+pub fn identity_concern(
+    identity: &gungnir_remote::identity::IssuedIdentity,
+    now: std::time::SystemTime,
+) -> Option<(&'static str, String)> {
+    let days = identity.days_left(now);
+    let left = days.map_or_else(String::new, |d| format!(" ({d} days left)"));
+    if let Some(err) = identity.renewal_failure() {
+        return Some((
+            "renewal",
+            format!(
+                "this desktop's identity {} could not be re-issued{left}: {err}",
+                identity.name()
+            ),
+        ));
+    }
+    match days {
+        Some(d) if d < 0 => Some((
+            "expired",
+            format!(
+                "this desktop's identity {} has expired; a node refuses it",
+                identity.name()
+            ),
+        )),
+        Some(d) if d < IDENTITY_WARN_DAYS => Some((
+            "expiring",
+            format!(
+                "this desktop's identity {} expires in {d} days",
+                identity.name()
+            ),
+        )),
+        _ => None,
+    }
+}
+
+/// Keep this desktop's identity current and say when it is not (GAP-211), once a tick.
+///
+/// Asking for the current certificate is what re-issues it when it is due, so a desktop
+/// that has not handshaken with anything for weeks still renews on time rather than at
+/// its next connection. Each condition is raised once, and again only after it clears.
+pub fn keep_identity_current(state: &mut AppState) {
+    let Some(identity) = state.machine_identity.as_ref() else {
+        return;
+    };
+    let now = std::time::SystemTime::now();
+    let _ = identity.key.current_at(now);
+    match identity_concern(&identity.key, now) {
+        Some((key, sentence)) => {
+            if state.identity_alerted != Some(key) {
+                state.identity_alerted = Some(key);
+                state.alerts.push(sentence);
+            }
+        }
+        None => state.identity_alerted = None,
+    }
+}
+
 /// What a desktop calls itself when it has no identity of its own to be named by
 /// (GAP-141).
 ///
@@ -445,6 +511,8 @@ fn tls_with(
         trust_roots_pem: config.security.tls.trust_roots_pem.clone(),
         issued,
         identity_pem,
+        // GAP-211: a node whose key is revoked is refused, whatever a trust root says.
+        revoked_keys: config.security.tls.revoked_keys.clone(),
     }
 }
 

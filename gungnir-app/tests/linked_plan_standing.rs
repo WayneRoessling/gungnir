@@ -401,9 +401,7 @@ fn a_linked_desktop_draws_the_nodes_plan_as_the_node_stands_it() {
         .as_ref()
         .expect("the desktop issued its own identity (GAP-141)")
         .key
-        .cert[0]
-        .as_ref()
-        .to_vec();
+        .certificate_der();
 
     let node_dir = scratch("node");
     let clock = Arc::new(SteppedClock::new(Duration::ZERO));
@@ -649,9 +647,7 @@ fn a_linked_desktop_is_told_a_held_layer_refuses_every_plan() {
         .as_ref()
         .expect("the desktop issued its own identity (GAP-141)")
         .key
-        .cert[0]
-        .as_ref()
-        .to_vec();
+        .certificate_der();
 
     let node_dir = scratch("held-node");
     let mut node = Node::start(
