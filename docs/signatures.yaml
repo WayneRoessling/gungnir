@@ -3476,3 +3476,24 @@
   commit: d8554f683962f180367db877d3d8d62199c656ab
   pre_repository: false
   record: "GAP-015; docs/record/2026-10-26/gap-015-the-dense-group-off-the-executor.md; PR #225"
+
+- date: 2026-10-27
+  signer: Owner
+  subject: >-
+    GAP-210's human-owned code in `gungnir-security`: the baseline-signing key, made once
+    under `BaselineSigning`, sealed in its own keystore file and never replaced, unlocked
+    to sign; the verifying key pinned outside the baseline by `GUNGNIR_BASELINE_KEY`, a pin
+    that does not read refused rather than read as none, its PEM read with the whitespace
+    around it trimmed; `BaselineTrust`'s judgement and `admit`'s rule, refusing an
+    unsigned, mis-signed or unverifiable baseline in a connected profile and warning
+    elsewhere (`baseline_signing.rs`); the module's registration (`lib.rs`); and
+    `baseline-key provision` and the key half of `baseline sign`, both reading the
+    passphrase from standard input (`provisioning.rs`).
+  kind: code
+  paths:
+  - gungnir-security/src/baseline_signing.rs
+  - gungnir-security/src/lib.rs
+  - gungnir-security/src/provisioning.rs
+  commit: 098328926c4e85a2819df7fc0eacff885b95e3dc
+  pre_repository: false
+  record: "GAP-210; DN-22 §15; docs/record/2026-10-27/gap-210-configuration-baselines-signed.md; PR #237"
