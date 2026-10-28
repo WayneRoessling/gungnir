@@ -3497,3 +3497,49 @@
   commit: 098328926c4e85a2819df7fc0eacff885b95e3dc
   pre_repository: false
   record: "GAP-210; DN-22 §15; docs/record/2026-10-27/gap-210-configuration-baselines-signed.md; PR #237"
+- date: 2026-10-27
+  signer: Owner
+  subject: >-
+    GAP-208's human-owned code. In `gungnir-security`: `KeyPurpose::AuditSigning` and its
+    purpose codes (`keys.rs`, `provider.rs`, `asymmetric.rs`); the audit-signing key in its
+    own sealed file under an administrator's passphrase, never replaced, refused at unlock
+    when it is not the key the baseline names, each attempt an `audit.signing_unlock`
+    entry; the signature over a head's segment, line count, sequence and hash, and the
+    report of which heads were signed, unsigned or signed by another key
+    (`audit/signing.rs`, `audit.rs`, `audit/anchor.rs`); and `audit-key provision`
+    (`provisioning.rs`). In the `gungnir-api` write path: `POST /v3/audit/anchors`, holding
+    a desktop's heads under the party its certificate verified and never the body's, and
+    `GET` serving only the caller's own (`transport.rs`, `v3/mod.rs`, `lib.rs`).
+  kind: code
+  paths:
+  - gungnir-security/src/keys.rs
+  - gungnir-security/src/provider.rs
+  - gungnir-security/src/asymmetric.rs
+  - gungnir-security/src/audit.rs
+  - gungnir-security/src/audit/anchor.rs
+  - gungnir-security/src/audit/signing.rs
+  - gungnir-security/src/provisioning.rs
+  - gungnir-api/src/transport.rs
+  - gungnir-api/src/v3/mod.rs
+  - gungnir-api/src/lib.rs
+  commit: 2bd568b51a3a723171aa7ed3584be5748c70a3c3
+  pre_repository: false
+  record: "GAP-208; D-142; DN-23 §16; docs/record/2026-10-27/gap-208-audit-anchors-signed-and-held-by.md; PR #235"
+
+- date: 2026-10-27
+  signer: Owner
+  subject: >-
+    GAP-209's human-owned code. In `gungnir-security`: `Role::named`, the one parser for
+    the role names records carry (`lib.rs`). In the `gungnir-api` write path:
+    `CallerAuthority::role_of`, reading an operator's role from the node's account store
+    with no credential; `NodeApi::role_of` answering `Known`, `Unknown` or `Unavailable`;
+    and `ForwardRefused`'s `RoleMismatch`, `ArbitratedOtherwise`, `ResolverNotPermitted`
+    and `CannotVouch` (`transport.rs`, `v3/mod.rs`).
+  kind: code
+  paths:
+  - gungnir-security/src/lib.rs
+  - gungnir-api/src/transport.rs
+  - gungnir-api/src/v3/mod.rs
+  commit: 6063077600872f6d1f3966e1f9a54c5ce73c8ab6
+  pre_repository: false
+  record: "GAP-209; D-03; DN-31 §16; docs/record/2026-10-27/gap-209-the-node-ranks-a-forwarded-outage.md; PR #236"
