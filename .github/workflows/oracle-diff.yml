@@ -19,7 +19,7 @@
 # against 19 checked-in fixtures under `testdata/oracles/`, generated offline by the 13
 # pinned Python oracles in `testdata/oracles/tools/` (filterpy, pymap3d, Stone Soup, scipy,
 # motmetrics; provenance in `testdata/oracles/SOURCE.md`). They pass, and they have been
-# passing all along inside the ordinary `fmt, clippy, test` job.
+# passing all along inside the ordinary `test` job of `ci.yml`.
 #
 # So the true statement is not "nothing is verified". It is: **this gate contributed none
 # of the evidence `docs/release-governance.md` says the evidence package is made of**,

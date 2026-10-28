@@ -31,9 +31,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # `unsafe` in added code, not in added comments (2026-10-28). The scan read every
+      # added line, so a comment explaining why something is *not* unsafe ran two hours of
+      # miri: GAP-215's pull request did, three times. Added lines only (not the `+++`
+      # file header), with everything from `//` to the end of the line removed, which
+      # covers line and doc comments. Not `grep -q`: under `pipefail` its early exit would
+      # fail `sed` upstream and read as no match.
       - id: scan
         run: |
-          if git diff --unified=0 origin/${{ github.base_ref }}...HEAD -- '*.rs' | grep -E '^\+.*\bunsafe\b' ; then
+          if git diff --unified=0 origin/${{ github.base_ref }}...HEAD -- '*.rs' \
+            | grep -E '^\+[^+]' | sed -E 's#//.*$##' | grep -E '\bunsafe\b' ; then
             echo "has_unsafe=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_unsafe=false" >> "$GITHUB_OUTPUT"

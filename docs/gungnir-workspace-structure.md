@@ -55,7 +55,7 @@ gungnir-workspace/
 ├── benches/README.md               # index of the criterion groups (they live per crate)
 │
 ├── .github/workflows/
-│   ├── ci.yml                      # fmt, clippy, test (nextest), release budget gates, benches compile, document checks, node container build
+│   ├── ci.yml                      # fmt and clippy, tests (nextest), release budget gates and benches as parallel jobs; a docs-only PR runs only the tests that read documents; document checks; node container build
 │   ├── pr-rules.yml                # a dependency change's Decision and Duplicate linkage lines; commit message length
 │   ├── cross-document-recheck.yml  # after each merge, every open PR's document checks against the new main
 │   ├── oracle-diff.yml             # gate 1
@@ -155,10 +155,10 @@ Its runner has existed since 2026-09-08.
 |---|---|---|---|
 | 1 | Differential testing versus oracle | `oracle-diff.yml` | PR touching an oracle-comparable core crate, `gungnir-oracle`, `gungnir-scenario` or `gungnir-sensor-sim` |
 | 2 | Property-based invariants (`proptest`) | Runs as part of `cargo test` in `ci.yml`; the strategies live in `gungnir-testkit` | Every PR |
-| 3 | `cargo miri` on `unsafe` | `miri.yml` | Any PR whose diff adds `unsafe` |
+| 3 | `cargo miri` on `unsafe` | `miri.yml` | Any PR whose diff adds `unsafe` in code, not in a comment (since 2026-10-28) |
 | 4 | `loom` exhaustive interleaving | `loom.yml` | PR touching `gungnir-fusion-async` or `gungnir-tracking-service` |
 | 5 | Fuzzing (`cargo-fuzz`) | `fuzz-nightly.yml` | Scheduled nightly, not per-PR |
-| 6 | Benchmark regression gate | `bench-regression.yml` | Pushes to `main` and manual dispatch (since 2026-09-09); advisory, and never enforcing on its runner (D-62) |
+| 6 | Benchmark regression gate | `bench-regression.yml` | Manual dispatch (since 2026-10-28; on main it writes the baseline); advisory, and never enforcing on its runner (D-62) |
 
 `gungnir-fusion-async` (concurrency) and any `unsafe` block are two of the items
 `agentic-workflow.md` marks human-owned. Both get their own always-required workflow

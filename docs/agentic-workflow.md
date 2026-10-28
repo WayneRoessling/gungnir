@@ -182,7 +182,8 @@ covariance update). The gates are structural:
    GAP-213), and association cost-matrix construction.
 6. **Benchmark regression gate** (workflow `bench-regression.yml`): `criterion` versus
    the baseline stored from `main`, against a p99 threshold. **Advisory, and it stays
-   that way.** It runs on pushes to `main` and by dispatch since 2026-09-09, and became
+   that way.** It runs by dispatch alone since 2026-10-28 (on pushes to `main` before then,
+   while its self-hosted runner took jobs), and became
    advisory on 2026-09-07 because the comparison could not attribute a difference to the
    code. Moving it onto one self-hosted machine (2026-09-15) did not change that: its
    noise floor was measured three times there, with core pinning tried and the

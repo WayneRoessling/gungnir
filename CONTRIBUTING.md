@@ -121,8 +121,10 @@ checks (`oracle-diff`, `miri`, `loom`, `fuzz-nightly`, `bench-regression`,
 profile, but every test binary is scheduled at once instead of one after another)
 followed by `cargo test --workspace --doc` for the doctests nextest does not run.
 `cargo test --workspace` locally remains exactly right; nextest is optional there
-(`cargo install cargo-nextest --locked`). `bench-regression.yml` runs on main and
-by dispatch, not per pull request, since 2026-09-09; its header says why.
+(`cargo install cargo-nextest --locked`). In `ci.yml` the formatting and lint checks,
+the tests, and the release-profile gates are three jobs that run side by side, and a pull
+request that changes only documents runs just the Rust tests that read documents.
+`bench-regression.yml` runs by dispatch only, since 2026-10-28; its header says why.
 `cross-document-recheck.yml` re-runs the document checks of every open pull request after
 each merge to `main` and posts the result on it, and `pr-rules.yml` checks the description
 and the commit messages.
