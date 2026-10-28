@@ -591,6 +591,81 @@ pub fn run_audit_key(binary: &str, args: &[String]) -> Result<String, AccountErr
     }
 }
 
+/// The usage text for `baseline-key` and `baseline sign` (GAP-210).
+#[must_use]
+pub fn baseline_usage(binary: &str) -> String {
+    format!(
+        "\
+usage: {binary} baseline-key provision <keystore-dir>
+       {binary} baseline sign <baseline.json> <keystore-dir>
+
+provision makes the deployment's baseline-signing key in <keystore-dir>/baseline-signing/,
+sealed under a passphrase read from standard input, and prints its public half. Pin that
+file on every host that runs baselines, named by {env}. An existing key is never replaced.
+
+sign checks the baseline, signs it with the key, and writes <baseline.json>.sig beside it:
+
+  printf '%s' 'the passphrase' | {binary} baseline sign baseline.json ./keys
+
+Sign where baselines are authored, not on a host that only runs them.",
+        env = crate::baseline_signing::BASELINE_KEY_ENV
+    )
+}
+
+/// `baseline-key provision <keystore-dir>` (GAP-210): make the baseline-signing key and
+/// print its public half to pin.
+///
+/// # Errors
+///
+/// [`AccountError::Usage`] for anything else; an empty passphrase; and
+/// [`AccountError::StoreUnavailable`] for a short passphrase, a key already there, or a
+/// directory that cannot be written.
+pub fn run_baseline_key(binary: &str, args: &[String]) -> Result<String, AccountError> {
+    let usage_err = |what: &str| AccountError::Usage {
+        what: what.to_owned(),
+        usage: baseline_usage(binary),
+    };
+    match args.first().map(String::as_str) {
+        Some("provision") => {
+            let dir = args
+                .get(1)
+                .ok_or_else(|| usage_err("baseline-key provision needs a keystore directory"))?;
+            let passphrase = passphrase_from_stdin(binary)?;
+            let pem =
+                crate::baseline_signing::BaselineSigner::provision(Path::new(dir), &passphrase)
+                    .map_err(|e| AccountError::StoreUnavailable(e.to_string()))?;
+            Ok(format!(
+                "baseline-signing key provisioned in {dir}/{}. Save this public key to a file \
+                 on every host that runs baselines and name it with {}:\n{pem}",
+                crate::baseline_signing::BASELINE_SIGNING_DIR,
+                crate::baseline_signing::BASELINE_KEY_ENV
+            ))
+        }
+        Some(other) => Err(usage_err(&format!("no such baseline-key command: {other}"))),
+        None => Err(usage_err("baseline-key needs a command")),
+    }
+}
+
+/// Sign a baseline's signing bytes with the key in `keystore_dir`, the passphrase read
+/// from standard input (GAP-210): the half of `baseline sign` that holds the key. The
+/// binary loads and checks the baseline, which this crate cannot see, and writes the
+/// `.sig` beside it.
+///
+/// # Errors
+///
+/// An empty passphrase, or [`AccountError::StoreUnavailable`] for a key that does not
+/// open or will not sign.
+pub fn sign_baseline_bytes(
+    binary: &str,
+    keystore_dir: &Path,
+    bytes: &[u8],
+) -> Result<crate::baseline_signing::MadeSignature, AccountError> {
+    let passphrase = passphrase_from_stdin(binary)?;
+    crate::baseline_signing::BaselineSigner::unlock(keystore_dir, &passphrase)
+        .and_then(|signer| signer.sign(bytes))
+        .map_err(|e| AccountError::StoreUnavailable(e.to_string()))
+}
+
 /// The inverse of [`role_from_str`], over every [`Role`] variant with no wildcard arm:
 /// a tenth role added to the enum without a line here fails to compile rather than
 /// silently leaving this CLI unable to provision it, which is exactly the defect found

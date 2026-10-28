@@ -874,7 +874,21 @@ impl ConfigEditorState {
         let Some(store) = state.config_store.as_mut() else {
             return Err("no baseline file is configured for this desktop".to_owned());
         };
+        // GAP-210 (DN-22 §15): the candidate is judged by the signature beside its file,
+        // as a start would judge it, so a node's console cannot apply what it would refuse
+        // to start on. A desktop on its own applies it and the entry says what it was.
+        let trust = crate::baseline::trust_of(store.path(), &candidate, &state.baseline_key);
+        let warning = trust
+            .admit(crate::baseline::connected(&state.config))
+            .map_err(|refusal| {
+                format!("this candidate is not applied on the Remote backend: {refusal}")
+            })?;
         store.apply(candidate, now).map_err(|e| e.to_string())?;
+        if let Some(warning) = warning {
+            state
+                .alerts
+                .push(format!("Applied configuration baseline {warning}"));
+        }
         // Through `crate::audit::record`, the path every gated act takes onto the audit
         // trail (GAP-059): the verified operator, or nobody when nobody is signed in (DN-23
         // §5 rule 1), never a fabricated actor. This entry was
@@ -884,7 +898,10 @@ impl ConfigEditorState {
         crate::audit::record(
             state,
             actions::APPLY_CONFIG,
-            format!("baseline version {version} written ({changed}); in force on restart"),
+            format!(
+                "baseline version {version} written ({changed}), {}; in force on restart",
+                trust.describe()
+            ),
         );
         self.discard();
         Ok(())

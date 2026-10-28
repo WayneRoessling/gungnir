@@ -12206,6 +12206,17 @@
     note: >-
       Filed by plan 12. The key purpose has existed since DN-22; nothing produces or
       checks a signature with it.
+  - date: 2026-10-27
+    status: Closed
+    note: >-
+      Built. A baseline is signed over its parsed content, in a `.sig` beside it, with a
+      key made and used by `baseline-key provision` and `baseline sign` in both binaries.
+      Each host checks it against a key pinned outside the baseline. A node, or a desktop
+      on the Remote backend, refuses an unsigned or mis-signed baseline at start and on
+      PN-14's apply. A desktop on its own runs and says so, and `config.apply` names the
+      signer. A node has no apply path, so its check is the one at start. DN-22 §15 records
+      the owner's four choices. See
+      `../../record/2026-10-27/gap-210-configuration-baselines-signed.md`.
 
 - id: GAP-211
   name: Issued identities never expire and nothing revokes them

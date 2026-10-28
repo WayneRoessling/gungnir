@@ -148,6 +148,45 @@ The passphrase protects the key file at rest. Once unlocked, the key is in the r
 desktop's memory, so the node's copy of the heads is the check that does not depend on the
 desktop.
 
+## Signing configuration baselines
+
+A baseline carries the authority rules, the sensor allow-list, the exchange agreements and
+the escrow key. With a deployment key pinned, a node and a desktop on the Remote backend run
+only a baseline that key signed (GAP-210, DN-22 §15).
+
+**Make the key once**, where baselines are authored, not on a host that only runs them. The
+passphrase is read from standard input and needs at least twelve characters. An existing key
+is never replaced:
+
+```bash
+printf '%s' 'the baseline passphrase' | gungnir-node baseline-key provision ./baseline-keys
+```
+
+It prints a public key. Save it to a file on every host that runs baselines, and name that
+file with `GUNGNIR_BASELINE_KEY`. The key is never in the baseline, because whoever rewrote
+the baseline would rewrite the key with it.
+
+**Sign each baseline** after editing it. The command validates the file as the binary would
+load it, and writes `baseline.json.sig` beside it. Ship the two files together:
+
+```bash
+printf '%s' 'the baseline passphrase' | gungnir-node baseline sign baseline.json ./baseline-keys
+```
+
+`gungnir-app` has the same two commands. The signature covers the baseline's content, not
+its layout, so PN-14 writing the file back pretty-printed does not break it. Any change of
+content does.
+
+| | A node, or a desktop on the Remote backend | A desktop on its own |
+|---|---|---|
+| Signed by the pinned key | Runs | Runs |
+| Unsigned, changed since signing, or signed by another key | **Does not start**; PN-14 does not apply it | Runs, and an alert says so |
+| `GUNGNIR_BASELINE_KEY` names a file that is not a key | **Does not start** | Runs, and an alert says so |
+| `GUNGNIR_BASELINE_KEY` unset | Runs, and logs that baselines are unverified | Runs, and an alert says so |
+
+Every `config.apply` audit entry says whether the applied baseline was signed and by which
+key, named by fingerprint and version.
+
 ## Time on a site with no NTP or GNSS
 
 Mission time is the host's clock unless the baseline says otherwise. A laptop with no NTP

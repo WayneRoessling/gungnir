@@ -12,8 +12,10 @@
 pub mod account_store;
 pub mod asymmetric;
 pub mod audit;
+// GAP-210: configuration baselines signed under BaselineSigning, and admitted by the rule.
 pub mod authn;
 pub mod authz;
+pub mod baseline_signing;
 pub mod keys;
 pub mod keystore;
 pub mod managed_service;

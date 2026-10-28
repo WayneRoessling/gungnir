@@ -4712,6 +4712,119 @@ pub fn validate_authority_names(
     Ok(())
 }
 
+/// The label a baseline's signing bytes begin with (GAP-210): a version, so a later
+/// change to what is signed is a new label rather than a silent reinterpretation.
+pub const SIGNING_LABEL: &[u8] = b"gungnir-baseline/1\n";
+
+impl ConfigBaseline {
+    /// What a baseline's signature covers (GAP-210; DN-22 §15): [`SIGNING_LABEL`], then
+    /// the baseline's own compact serialization.
+    ///
+    /// **The parsed baseline, not the file's bytes.** PN-14's apply writes the file back
+    /// pretty-printed, and a signature over the bytes would stop verifying the moment a
+    /// signed baseline was applied. The serialization is deterministic -- every map in
+    /// the schema is a `BTreeMap`, and serde writes fields in declaration order -- so the
+    /// same content always gives the same bytes, and any change of content gives others.
+    ///
+    /// # Errors
+    ///
+    /// [`ConfigError::Encoding`], which a baseline that loaded cannot reach.
+    pub fn signing_bytes(&self) -> Result<Vec<u8>, ConfigError> {
+        let mut bytes = SIGNING_LABEL.to_vec();
+        serde_json::to_writer(&mut bytes, self)
+            .map_err(|e| ConfigError::Encoding(e.to_string()))?;
+        Ok(bytes)
+    }
+}
+
+/// A baseline's signature, as `<baseline>.sig` holds it (GAP-210).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BaselineSignature {
+    pub key_version: u32,
+    /// The signing key's fingerprint: the first sixteen hex digits of the SHA-256 of its
+    /// public half. What an audit entry names the signer by.
+    pub key_fingerprint: String,
+    /// `ecdsa-p256-sha256`.
+    pub scheme: String,
+    /// The DER signature, hex.
+    pub der_hex: String,
+}
+
+impl BaselineSignature {
+    /// Where the signature for the baseline at `path` lives: the same name with `.sig`
+    /// added.
+    #[must_use]
+    pub fn path_for(path: &Path) -> PathBuf {
+        let mut name = path.as_os_str().to_owned();
+        name.push(".sig");
+        PathBuf::from(name)
+    }
+
+    /// The signature beside the baseline at `path`: `Ok(None)` when there is none.
+    ///
+    /// # Errors
+    ///
+    /// A `.sig` that cannot be read or is not a signature. A host reads that as a
+    /// signature that does not verify, never as none: a damaged signature is not an
+    /// absent one.
+    pub fn read_beside(path: &Path) -> Result<Option<Self>, ConfigError> {
+        let sig = Self::path_for(path);
+        if !sig.exists() {
+            return Ok(None);
+        }
+        let text = std::fs::read_to_string(&sig).map_err(|e| ConfigError::Io(e.to_string()))?;
+        serde_json::from_str(&text)
+            .map(Some)
+            .map_err(|e| ConfigError::Encoding(format!("{}: {e}", sig.display())))
+    }
+
+    /// Write this signature beside the baseline at `path`.
+    ///
+    /// # Errors
+    ///
+    /// When the file cannot be written.
+    pub fn write_beside(&self, path: &Path) -> Result<(), ConfigError> {
+        let text =
+            serde_json::to_string_pretty(self).map_err(|e| ConfigError::Encoding(e.to_string()))?;
+        std::fs::write(Self::path_for(path), text + "\n")
+            .map_err(|e| ConfigError::Io(e.to_string()))
+    }
+
+    /// The DER bytes, or `None` for hex that is not.
+    #[must_use]
+    pub fn der(&self) -> Option<Vec<u8>> {
+        let hex = self.der_hex.as_bytes();
+        if !hex.len().is_multiple_of(2) {
+            return None;
+        }
+        hex.chunks(2)
+            .map(|pair| {
+                std::str::from_utf8(pair)
+                    .ok()
+                    .and_then(|p| u8::from_str_radix(p, 16).ok())
+            })
+            .collect()
+    }
+
+    /// From a key version, fingerprint and DER signature.
+    #[must_use]
+    pub fn from_der(key_version: u32, key_fingerprint: String, der: &[u8]) -> Self {
+        let der_hex = der
+            .iter()
+            .fold(String::with_capacity(der.len() * 2), |mut s, b| {
+                let _ = std::fmt::Write::write_fmt(&mut s, format_args!("{b:02x}"));
+                s
+            });
+        Self {
+            key_version,
+            key_fingerprint,
+            scheme: "ecdsa-p256-sha256".into(),
+            der_hex,
+        }
+    }
+}
+
 /// Loads, validates, and (once approved) hot-swaps a `ConfigBaseline` without a
 /// rebuild. Validation is mandatory before a baseline is ever applied.
 pub trait ConfigStore {
@@ -7545,6 +7658,47 @@ MFkw
             Err(ConfigError::Invalid(m)) => assert!(m.contains("not an endpoint of kind"), "{m}"),
             other => panic!("a row behind an http endpoint was accepted: {other:?}"),
         }
+    }
+
+    /// GAP-210: what a signature covers survives the file being written back
+    /// pretty-printed, as PN-14's apply writes it, and any change of content changes it.
+    /// The signature file round-trips beside its baseline.
+    #[test]
+    fn signing_bytes_survive_a_rewrite_and_change_with_the_content() {
+        let dir =
+            std::env::temp_dir().join(format!("gungnir-config-signing-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("baseline.json");
+        let compact = r#"{"version":1,"revision":4,"data_dir":"./j","sapient_node_id":"x"}"#;
+        std::fs::write(&path, compact).expect("written");
+        let store = FileConfigStore::new(&path, test_vocabulary());
+        let loaded = store.load().expect("loads");
+        let signed = loaded.signing_bytes().expect("bytes");
+        // Written back as apply writes it, and read again.
+        std::fs::write(&path, serde_json::to_string_pretty(&loaded).expect("json"))
+            .expect("rewritten");
+        let reread = store.load().expect("loads");
+        assert_eq!(reread.signing_bytes().expect("bytes"), signed);
+        let mut changed = reread.clone();
+        changed.revision = 5;
+        assert_ne!(changed.signing_bytes().expect("bytes"), signed);
+        assert!(signed.starts_with(SIGNING_LABEL));
+
+        let signature =
+            BaselineSignature::from_der(2, "0123456789abcdef".into(), &[0x30, 0x45, 0xab]);
+        signature.write_beside(&path).expect("written");
+        assert_eq!(
+            BaselineSignature::read_beside(&path).expect("read"),
+            Some(signature.clone())
+        );
+        assert_eq!(signature.der(), Some(vec![0x30, 0x45, 0xab]));
+        std::fs::write(BaselineSignature::path_for(&path), "not a signature").expect("damaged");
+        assert!(
+            BaselineSignature::read_beside(&path).is_err(),
+            "a damaged signature is not an absent one"
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// GAP-114: a baseline that says nothing about late data reads as the one-second

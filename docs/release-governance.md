@@ -51,7 +51,8 @@ by hand after the fact.
   Container Registry; push stays disabled until GAP-061 runs the workflows against a
   hosted repository.
 - Whether releases require a signed configuration baseline as well as signed
-  binaries (`gungnir-security` names it; nothing enforces it yet).
+  binaries. A running host enforces one when the deployment pins a key (GAP-210,
+  DN-22 §15); whether a release ships a signed baseline is still open.
 - Vulnerability-response time objective, set on 2026-09-04 (D-10 follow-up): critical
   advisories in dependencies or own code fixed or mitigated within 7 days of
   publication, high within 30 days, lower severities at the next release.

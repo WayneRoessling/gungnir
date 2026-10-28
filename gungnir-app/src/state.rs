@@ -411,6 +411,13 @@ pub struct AppState {
     /// missing file: there is nothing to write back to, and PN-14 says so rather than
     /// offering an apply button that could not do anything.
     pub config_store: Option<FileConfigStore>,
+    /// What the signature beside that baseline said when it was loaded (GAP-210, DN-22
+    /// §15): `BuiltIn` for the default and for a baseline a caller handed in.
+    pub baseline_trust: gungnir_security::baseline_signing::BaselineTrust,
+    /// The baseline-signing key the deployment pins (`GUNGNIR_BASELINE_KEY`), read once
+    /// when this state was built: what PN-14's apply judges a candidate against.
+    pub baseline_key:
+        Result<Option<gungnir_security::baseline_signing::BaselineVerifyingKey>, String>,
 
     /// Configuration and decision actions, append-only (`gungnir-security`). PN-14
     /// shows it, which is what makes an apply visible to the next person.
@@ -566,8 +573,15 @@ impl AppState {
     /// Build the desktop state from the configured baseline
     /// (`GUNGNIR_CONFIG`, or the default when unset).
     pub fn new() -> Result<Self, AppError> {
-        let (config, store) = load_config()?;
-        Self::with_config_and_store(config, store)
+        let (config, store, trust) = load_config()?;
+        let mut state = Self::with_config_and_store(config, store)?;
+        if let Some(warning) = trust.admit(false).ok().flatten() {
+            state
+                .alerts
+                .push(format!("Configuration baseline {warning}"));
+        }
+        state.baseline_trust = trust;
+        Ok(state)
     }
 
     /// Build the desktop state from an explicit baseline.
@@ -879,6 +893,8 @@ impl AppState {
             exchange_report: None,
             retention,
             config_store,
+            baseline_trust: gungnir_security::baseline_signing::BaselineTrust::BuiltIn,
+            baseline_key: gungnir_security::baseline_signing::BaselineVerifyingKey::pinned(),
             audit,
             audit_record: crate::audit_record::AuditRecordState::default(),
             node_audit: crate::node_audit::NodeAuditState::default(),
@@ -1399,19 +1415,47 @@ pub fn known_vocabulary() -> KnownVocabulary {
     )
 }
 
-/// The baseline in force, and the file it came from when it came from one.
-fn load_config() -> Result<(ConfigBaseline, Option<FileConfigStore>), ConfigError> {
+/// The baseline in force, the file it came from when it came from one, and what its
+/// signature says (GAP-210).
+///
+/// A desktop on the Remote backend is a node's console and refuses a baseline the pinned
+/// key did not sign; one on its own runs whatever it was given and says so
+/// (`gungnir_security::baseline_signing`'s table).
+fn load_config() -> Result<
+    (
+        ConfigBaseline,
+        Option<FileConfigStore>,
+        gungnir_security::baseline_signing::BaselineTrust,
+    ),
+    ConfigError,
+> {
     match std::env::var(CONFIG_ENV_VAR) {
         Ok(path) if !path.trim().is_empty() => {
             let store = FileConfigStore::new(&path, known_vocabulary());
             let baseline = store.load()?;
             store.validate(&baseline)?;
-            tracing::info!(%path, "loaded config baseline");
-            Ok((baseline, Some(store)))
+            let key = gungnir_security::baseline_signing::BaselineVerifyingKey::pinned();
+            let trust = crate::baseline::trust_of(std::path::Path::new(&path), &baseline, &key);
+            match trust.admit(crate::baseline::connected(&baseline)) {
+                Ok(None) => {
+                    tracing::info!(%path, trust = %trust.describe(), "loaded config baseline");
+                }
+                Ok(Some(warning)) => tracing::warn!(%path, "loaded config baseline: {warning}"),
+                Err(refusal) => {
+                    return Err(ConfigError::Invalid(format!(
+                        "{path} is not run on the Remote backend: {refusal}"
+                    )))
+                }
+            }
+            Ok((baseline, Some(store), trust))
         }
         _ => {
             tracing::info!("no {CONFIG_ENV_VAR} set; using the default config baseline");
-            Ok((ConfigBaseline::default(), None))
+            Ok((
+                ConfigBaseline::default(),
+                None,
+                gungnir_security::baseline_signing::BaselineTrust::BuiltIn,
+            ))
         }
     }
 }

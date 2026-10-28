@@ -70,6 +70,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+    // GAP-210: the baseline-signing key and `baseline sign`, which start no window.
+    if cli.first().map(String::as_str) == Some("baseline-key") {
+        match gungnir_security::provisioning::run_baseline_key("gungnir-app", &cli[1..]) {
+            Ok(said) => {
+                println!("{said}");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        }
+    }
+    if cli.first().map(String::as_str) == Some("baseline") {
+        match gungnir_app::baseline::sign("gungnir-app", &cli[1..]) {
+            Ok(said) => {
+                println!("{said}");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        }
+    }
 
     let mut state = AppState::new()?;
     // GAP-089: `--rehearsal <seed.json>` seeds the session and marks the record.

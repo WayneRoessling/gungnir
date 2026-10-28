@@ -29,6 +29,8 @@
 
 pub mod approval;
 pub mod audit_record;
+// GAP-210: a baseline the pinned key did not sign does not start the node.
+pub mod baseline;
 pub mod clock_discipline;
 pub mod control_status;
 // GAP-208: the heads of linked desktops' audit logs, held where their operators cannot reach.
