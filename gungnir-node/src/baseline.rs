@@ -102,7 +102,7 @@ pub fn sign(binary: &str, args: &[String]) -> Result<String, String> {
     let baseline = store.load().map_err(|e| format!("{path}: {e}"))?;
     store
         .validate(&baseline)
-        .map_err(|e| format!("{path} does not validate, so it is not signed: {e}"))?;
+        .map_err(|e| format!("{path} does not validate, so no signature was made: {e}"))?;
     let bytes = baseline.signing_bytes().map_err(|e| e.to_string())?;
     let made = gungnir_security::provisioning::sign_baseline_bytes(binary, Path::new(keys), &bytes)
         .map_err(|e| e.to_string())?;
