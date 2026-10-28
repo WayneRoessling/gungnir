@@ -1485,13 +1485,64 @@ fn load_config() -> Result<
         }
         _ => {
             tracing::info!("no {CONFIG_ENV_VAR} set; using the default config baseline");
+            // GAP-215: with no baseline file, the journal goes to this user's profile
+            // rather than wherever the desktop was started from.
+            let data_dir =
+                per_user_data_dir(std::path::Path::new(LEGACY_DATA_DIR).exists(), &|name| {
+                    std::env::var_os(name)
+                });
+            tracing::info!(%data_dir, "the journal and keystores are kept here");
             Ok((
-                ConfigBaseline::default(),
+                ConfigBaseline {
+                    data_dir,
+                    ..ConfigBaseline::default()
+                },
                 None,
                 gungnir_security::baseline_signing::BaselineTrust::BuiltIn,
             ))
         }
     }
+}
+
+/// Where a desktop with no baseline file kept its journal before GAP-215: the directory it
+/// was started from.
+pub const LEGACY_DATA_DIR: &str = "./gungnir-journal";
+
+/// The data directory of a desktop with no baseline file (GAP-215): this user's profile,
+/// `%LOCALAPPDATA%\Gungnir\journal` on Windows and `$XDG_DATA_HOME/gungnir/journal` (or
+/// `~/.local/share/gungnir/journal`) elsewhere, so the journal and its keystores are not
+/// left in a directory other people can read.
+///
+/// **A journal already under [`LEGACY_DATA_DIR`] stays there**, because moving the default
+/// out from under it would look like a lost record. Without a profile to use, the legacy
+/// directory too. A baseline file names its own directory and is not affected: what it
+/// names is the deployment's choice, and rewriting it would read on PN-14 as a change.
+#[must_use]
+pub fn per_user_data_dir(
+    legacy_exists: bool,
+    var: &dyn Fn(&str) -> Option<std::ffi::OsString>,
+) -> String {
+    if legacy_exists {
+        tracing::warn!(
+            "a journal already exists under {LEGACY_DATA_DIR}, so it is kept there; move it \
+             to this user's profile, or name a data_dir in a baseline, to stop it being \
+             readable by whoever can read the working directory"
+        );
+        return LEGACY_DATA_DIR.to_owned();
+    }
+    let present = |name: &str| var(name).filter(|v| !v.is_empty());
+    let base = if cfg!(windows) {
+        present("LOCALAPPDATA").map(|d| std::path::PathBuf::from(d).join("Gungnir"))
+    } else {
+        present("XDG_DATA_HOME")
+            .map(std::path::PathBuf::from)
+            .or_else(|| present("HOME").map(|h| std::path::PathBuf::from(h).join(".local/share")))
+            .map(|d| d.join("gungnir"))
+    };
+    base.map_or_else(
+        || LEGACY_DATA_DIR.to_owned(),
+        |b| b.join("journal").to_string_lossy().into_owned(),
+    )
 }
 
 /// Set up journal encryption from the baseline, and report what happened (GAP-084).

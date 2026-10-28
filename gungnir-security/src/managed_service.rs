@@ -192,9 +192,9 @@ fn decode_wrapped_file(bytes: &[u8]) -> Result<(WrappedSecret, bool), String> {
 /// wrapped secret (the same rule as `keystore.rs::persist`).
 fn write_wrapped_file(path: &Path, wrapped: &WrappedSecret) -> Result<(), SecurityError> {
     let bytes = encode_wrapped_file(wrapped)?;
-    let tmp = path.with_extension("kms-wrapped.tmp");
-    std::fs::write(&tmp, &bytes)
-        .and_then(|()| std::fs::rename(&tmp, path))
+    // Owner-only (GAP-215), written beside and renamed by `owner_only::write`.
+    crate::owner_only::write(path, &bytes)
+        .map(|_| ())
         .map_err(|e| {
             SecurityError::KeyProviderUnavailable(format!("writing {}: {e}", path.display()))
         })

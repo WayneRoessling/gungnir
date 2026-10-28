@@ -187,10 +187,10 @@ impl EncryptedAccountStore {
         let text = serde_json::to_string(&file).map_err(|e| {
             SecurityError::AccountStoreUnavailable(format!("encoding the account store: {e}"))
         })?;
-        // Write beside, then rename: a crash mid-write must not leave half a store.
-        let tmp = self.path.with_extension("sealed.tmp");
-        std::fs::write(&tmp, text)
-            .and_then(|()| std::fs::rename(&tmp, &self.path))
+        // Write beside, then rename: a crash mid-write must not leave half a store. And
+        // owner-only (GAP-215).
+        crate::owner_only::write(&self.path, text.as_bytes())
+            .map(|_| ())
             .map_err(|e| {
                 SecurityError::AccountStoreUnavailable(format!(
                     "writing {}: {e}",

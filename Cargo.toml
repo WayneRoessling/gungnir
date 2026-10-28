@@ -287,6 +287,9 @@ password-hash = { version = "0.5", features = ["getrandom"] }
 hmac = "0.12"
 sha2 = "0.10"
 subtle = "2"
+# Clearing secrets from memory when they are dropped (GAP-215, D-145). Already compiled into
+# every build through aes-gcm, p256 and argon2; named so the code can say so itself.
+zeroize = "1"
 
 # gRPC, the second transport for peer C2 systems (D-21).
 # Deliberately unused: no member depends on these, and none may until a gap builds the

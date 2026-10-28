@@ -35,6 +35,7 @@ rcgen.workspace = true
 # rather than by a string either of them could claim. Already a workspace dependency
 # (`gungnir-security` hashes with it); no new crate enters the workspace here.
 sha2.workspace = true
+zeroize.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde_json.workspace = true

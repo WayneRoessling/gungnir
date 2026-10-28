@@ -3543,3 +3543,22 @@
     path that exists, and the trial radar under GAP-001 the same. Rejected: naming targets
     now (no partner); a mobile unit first (adds a moving frame origin and own-position to
     tranche A, a design question before it is a gap). See the record item.
+
+- id: D-145
+  decision: Admit zeroize to clear secrets from memory
+  question: >-
+    GAP-215 asks for the keystore's wrapping key, the session-token key and the link's
+    passphrase to be cleared from memory when they are dropped. The workspace has no crate
+    that does it. Admit `zeroize`, or write the clearing by hand?
+  raised_in: "GAP-215; `../../review/2026-10-26-comprehensive-review.md` §5 finding 10"
+  decider: Owner
+  unblocks: GAP-215
+  resolved: 2026-10-28
+  outcome: >-
+    **Taken under the owner's delegation of 2026-10-28: admit `zeroize`.** It is already
+    compiled into every build through `aes-gcm`, `p256` and `argon2`, so naming it adds no
+    crate to the build or the SBOM, and its writes are volatile so the compiler cannot
+    remove them, which a hand-written loop does not guarantee without `unsafe`. Rejected:
+    clearing by hand (no guarantee the writes survive optimization); `secrecy` (a second
+    crate for a wrapper `Zeroizing` already gives). Not a signature; the owner reviews it
+    with GAP-215. See the record item.

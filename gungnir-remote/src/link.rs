@@ -1158,6 +1158,15 @@ pub struct Credential {
     pub passphrase: String,
 }
 
+/// The passphrase is cleared from memory when a credential is dropped (GAP-215, D-145).
+/// A `Drop` rather than a `Zeroizing` field, so a credential is still built from a plain
+/// `String` everywhere it is.
+impl Drop for Credential {
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.passphrase);
+    }
+}
+
 impl std::fmt::Debug for Credential {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Credential")

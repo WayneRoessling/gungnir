@@ -85,7 +85,8 @@ struct Claims {
 /// Holds the signing secret, which is why it is constructed by the binary and not by a
 /// library: custody belongs to the host (DN-22 §4).
 pub struct TokenIssuer {
-    key: Vec<u8>,
+    /// Cleared from memory when the issuer is dropped (GAP-215, D-145).
+    key: zeroize::Zeroizing<Vec<u8>>,
     lifetime_s: MissionTimeSeconds,
     idle_s: MissionTimeSeconds,
     clock: Arc<dyn MonotonicClock>,
@@ -137,7 +138,7 @@ impl TokenIssuer {
             )));
         }
         Ok(Self {
-            key,
+            key: zeroize::Zeroizing::new(key),
             lifetime_s,
             idle_s: IDLE_LOCK_S,
             clock: Arc::new(SystemMonotonic::default()),
@@ -319,7 +320,7 @@ impl TokenIssuer {
     /// on a request path, and a panic here would take the transport down with it
     /// (GAP-081).
     fn mac(&self, payload: &[u8]) -> Result<Vec<u8>, hmac::digest::InvalidLength> {
-        let mut mac = <HmacSha256 as Mac>::new_from_slice(&self.key)?;
+        let mut mac = <HmacSha256 as Mac>::new_from_slice(&self.key[..])?;
         mac.update(payload);
         Ok(mac.finalize().into_bytes().to_vec())
     }
@@ -557,10 +558,10 @@ mod tests {
         let secret = b"a-deployment-secret-of-adequate-length-01";
         assert!(TokenIssuer::from_secret(&secret[..31], 60.0).is_err());
         let derived = TokenIssuer::from_secret(secret, 60.0).expect("issuer");
-        assert_ne!(derived.key, secret.to_vec());
+        assert_ne!(*derived.key, secret.to_vec());
         assert_eq!(derived.key.len(), 32);
         let again = TokenIssuer::from_secret(secret, 60.0).expect("issuer");
-        assert_eq!(derived.key, again.key);
+        assert_eq!(*derived.key, *again.key);
         assert!(TokenIssuer::new(vec![1u8; 32], SESSION_MAX_S + 1.0).is_err());
     }
 
