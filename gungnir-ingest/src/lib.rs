@@ -63,8 +63,9 @@ pub trait SourceAuthenticator: Send + Sync {
     }
 }
 
-/// Accepts every sensor. Development and replay only; never configure in a
-/// deployed profile.
+/// Accepts every sensor. Development and replay only: no baseline can select it, and
+/// `gungnir-app/tests/architecture_compliance.rs` refuses shipped code that names it
+/// (GAP-213).
 #[derive(Debug, Default, Clone, Copy)]
 pub struct AllowAllAuthenticator;
 
