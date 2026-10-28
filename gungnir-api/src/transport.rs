@@ -1931,7 +1931,42 @@ pub fn router(api: Arc<NodeApi>) -> Router {
                 RetiredMethod::Post => router.route(&path, post(answer)),
             }
         })
+        // GAP-214: an explicit body limit rather than the framework's default, and a
+        // deadline on every request. The event stream's upgrade answers at once, so the
+        // deadline does not bound the stream; `SUBSCRIBE_DEADLINE` bounds its handshake.
+        .layer(axum::extract::DefaultBodyLimit::max(MAX_BODY_BYTES))
+        .layer(axum::middleware::from_fn(within_request_deadline))
         .with_state(api)
+}
+
+/// The largest request body the node reads (GAP-214): four MiB, twice the framework's own
+/// default, so nothing that was accepted before is refused now. The largest body a route
+/// bounds is an audit-anchor inventory, `v3::MAX_FORWARDED_ANCHORS` heads, about a third
+/// of this.
+pub const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
+
+/// How long a request may take before the node answers `503` instead (GAP-214). A route
+/// that waits on the node's loop waits a tick or two; thirty seconds is a stalled one.
+pub const REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// How long after the upgrade a stream waits for its `SubscribeRequest` (GAP-214).
+pub const SUBSCRIBE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// [`REQUEST_DEADLINE`], on every route.
+async fn within_request_deadline(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    match tokio::time::timeout(REQUEST_DEADLINE, next.run(request)).await {
+        Ok(response) => response,
+        Err(_) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            &format!(
+                "the node did not answer within {} s",
+                REQUEST_DEADLINE.as_secs()
+            ),
+        ),
+    }
 }
 
 /// How a route establishes who is calling, before it does anything else.
@@ -4289,13 +4324,31 @@ fn stream_caller(api: &NodeApi, peer: &Peer, token: &str) -> Result<Option<Strin
 async fn stream_events(mut socket: WebSocket, api: Arc<NodeApi>, peer: Peer) {
     let mut live = api.subscribe();
 
-    let Some(request) = read_subscribe(&mut socket).await else {
-        let _ = socket
-            .send(Message::Text(
-                "expected a SubscribeRequest as the first frame".into(),
-            ))
-            .await;
-        return;
+    // GAP-214: the socket is upgraded before any credential, because the credential is in
+    // the first frame; a caller that never sends it is not left holding the socket.
+    let request = match tokio::time::timeout(SUBSCRIBE_DEADLINE, read_subscribe(&mut socket)).await
+    {
+        Ok(Some(request)) => request,
+        Ok(None) => {
+            let _ = socket
+                .send(Message::Text(
+                    "expected a SubscribeRequest as the first frame".into(),
+                ))
+                .await;
+            return;
+        }
+        Err(_) => {
+            let _ = socket
+                .send(Message::Text(
+                    format!(
+                        "no SubscribeRequest within {} s of the upgrade",
+                        SUBSCRIBE_DEADLINE.as_secs()
+                    )
+                    .into(),
+                ))
+                .await;
+            return;
+        }
     };
 
     // The stream is a read path like any other: an operator's token, or a machine's

@@ -215,14 +215,16 @@ pub fn client_config(tls: &LinkTls) -> Result<rustls::ClientConfig, String> {
                 .map_err(|e| format!("trust root {i} is not usable: {e}"))?;
         }
     }
+    // GAP-214: TLS 1.3 and nothing older, as the node serves (`gungnir_api::tls::server_config`).
+    let versions: &[&rustls::SupportedProtocolVersion] = &[&rustls::version::TLS13];
     let builder = if tls.revoked_keys.is_empty() {
-        rustls::ClientConfig::builder().with_root_certificates(roots)
+        rustls::ClientConfig::builder_with_protocol_versions(versions).with_root_certificates(roots)
     } else {
         // GAP-211: the same roots, with the revoked keys refused first.
         let inner = rustls::client::WebPkiServerVerifier::builder(std::sync::Arc::new(roots))
             .build()
             .map_err(|e| format!("the server verifier is unusable: {e}"))?;
-        rustls::ClientConfig::builder()
+        rustls::ClientConfig::builder_with_protocol_versions(versions)
             .dangerous()
             .with_custom_certificate_verifier(std::sync::Arc::new(RevokingServerVerifier {
                 inner,

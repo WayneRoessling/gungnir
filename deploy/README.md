@@ -53,6 +53,15 @@ keeps tracking and journalling, rather than listening in plaintext
 (`gungnir-node/src/main.rs`, `spawn_transport`). A loopback `bind_addr` is served in
 the clear.
 
+The transport serves TLS 1.3 only, so a client that offers nothing newer than 1.2 is
+refused. Its other limits (GAP-214):
+
+- at most 256 connections open at once; a new one waits until one closes;
+- ten seconds to finish the TLS handshake;
+- ten seconds after the event stream's upgrade to send its subscribe frame;
+- thirty seconds to answer any request, after which the answer is `503`;
+- request bodies of at most 4 MiB.
+
 ## Desktop pointing at a node
 
 Set `backend` in the desktop's config baseline and point `GUNGNIR_CONFIG` at the
