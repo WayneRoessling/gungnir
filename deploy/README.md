@@ -246,6 +246,30 @@ and that certificate is what its peers see.
 its peer-link certificate was made fresh at every start, so no peer could pin it. Re-pin
 each node's serving certificate once, and pin its peer certificate for the first time.
 
+### Expiry and revocation
+
+Every issued certificate is valid for 90 days. A running node or desktop re-issues its own
+on the same key when 30 days are left, with no restart, so nothing has to be re-pinned: a
+pin matches a name and a key, not a date (GAP-211, DN-22 §16). A desktop shows its days
+left on PN-01. An alert is raised under seven days, when the certificate has expired, or
+when re-issue fails. Re-issue starts at 30 days left, so reaching seven means it has been
+failing for three weeks.
+
+To revoke a machine whose key may be compromised, list the sixteen hex digits from its name
+in the baseline of every host that should refuse it, sign the baseline, and restart those
+hosts:
+
+```json
+{ "security": { "tls": { "revoked_keys": ["0123456789abcdef"] } } }
+```
+
+For `desktop-0123456789abcdef`, the entry is `0123456789abcdef`. A node refuses a client
+whose key is listed, and a desktop or a node's peer link refuses a server whose key is
+listed, even where the certificate is pinned. The refusal is logged on the side that made
+it, naming the key. Remove the pin as well; the list is what holds while that change
+reaches every host. A revoked machine needs a new key: start it with an empty
+`tls-identity` directory (`peer-tls-identity` for a node's peer key), and pin the new name.
+
 ## A SAPIENT effector
 
 A resource can hand its engagements to an effector that speaks SAPIENT, through the same

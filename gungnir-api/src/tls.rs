@@ -98,13 +98,6 @@ impl TlsPaths {
     }
 }
 
-/// Build the acceptor a node serves with.
-///
-/// # Errors
-///
-/// When a file cannot be read or does not contain what it should. Every failure is fatal
-/// to serving: a node that fell back to plaintext because a certificate was missing would
-/// be the silent downgrade this whole design refuses.
 /// The client authority alone, when a deployment issues the node's own identity from
 /// its key provider (D-29) and pins only what it must trust.
 #[must_use]
@@ -113,7 +106,8 @@ pub fn client_ca_from_env() -> Option<String> {
 }
 
 /// A mutual-TLS acceptor over a certificate and a signing key that is not a private-key
-/// file: the provider's key, signing through custody (D-29, DN-22 amendment 1).
+/// file: the provider's key, signing through custody (D-29, DN-22 amendment 1). One fixed
+/// certificate and no revoked keys; a node serves through [`acceptor_with_resolver`].
 ///
 /// # Errors
 ///
@@ -123,6 +117,42 @@ pub fn acceptor_with_key(
     key: Arc<dyn rustls::sign::SigningKey>,
     client_ca: &str,
 ) -> Result<TlsAcceptor, ApiError> {
+    let certified =
+        rustls::sign::CertifiedKey::new(vec![CertificateDer::from(certificate_der)], key);
+    acceptor_with_resolver(
+        Arc::new(rustls::sign::SingleCertAndKey::from(certified)),
+        client_ca,
+        &[],
+    )
+}
+
+/// A mutual-TLS acceptor serving whatever certificate `resolver` gives each handshake,
+/// and refusing any client whose key is in `revoked` (GAP-211, DN-22 §16).
+///
+/// The resolver is how a node serves an identity that re-issues itself before it expires
+/// without a restart: `gungnir_remote::identity::IssuedIdentity` is one.
+///
+/// # Errors
+///
+/// As [`acceptor`], for the client authority.
+pub fn acceptor_with_resolver(
+    resolver: Arc<dyn rustls::server::ResolvesServerCert>,
+    client_ca: &str,
+    revoked: &[String],
+) -> Result<TlsAcceptor, ApiError> {
+    let verifier = client_verifier(client_ca, revoked)?;
+    let config = ServerConfig::builder()
+        .with_client_cert_verifier(verifier)
+        .with_cert_resolver(resolver);
+    Ok(TlsAcceptor::from(Arc::new(config)))
+}
+
+/// The authorities in `client_ca`, verified as mutual TLS requires, with `revoked`'s keys
+/// refused first.
+fn client_verifier(
+    client_ca: &str,
+    revoked: &[String],
+) -> Result<Arc<dyn rustls::server::danger::ClientCertVerifier>, ApiError> {
     let mut roots = RootCertStore::empty();
     for authority in read_certificates(Path::new(client_ca))? {
         roots.add(authority).map_err(|e| {
@@ -134,18 +164,128 @@ pub fn acceptor_with_key(
             "{client_ca} contains no client authority, so no client could ever be verified"
         )));
     }
-    let verifier = WebPkiClientVerifier::builder(Arc::new(roots))
+    // `builder` and not `builder_with_certificate_optional`: a client certificate is
+    // required. See the module documentation.
+    let inner = WebPkiClientVerifier::builder(Arc::new(roots))
         .build()
         .map_err(|e| ApiError::Transport(format!("the client verifier is unusable: {e}")))?;
-    let certified =
-        rustls::sign::CertifiedKey::new(vec![CertificateDer::from(certificate_der)], key);
-    let config = ServerConfig::builder()
-        .with_client_cert_verifier(verifier)
-        .with_cert_resolver(Arc::new(rustls::sign::SingleCertAndKey::from(certified)));
-    Ok(TlsAcceptor::from(Arc::new(config)))
+    if revoked.is_empty() {
+        return Ok(inner);
+    }
+    Ok(Arc::new(RevokingClientVerifier {
+        inner,
+        revoked: revoked.to_vec(),
+    }))
 }
 
-pub fn acceptor(paths: &TlsPaths) -> Result<TlsAcceptor, ApiError> {
+/// The fingerprint of the key a certificate carries, as `gungnir_security::key_fingerprint`
+/// names it: what `security.tls.revoked_keys` lists (GAP-211).
+///
+/// # Errors
+///
+/// A certificate that does not parse.
+pub fn certificate_key_fingerprint(
+    certificate: &CertificateDer<'_>,
+) -> Result<String, rustls::Error> {
+    let parsed = rustls::server::ParsedCertificate::try_from(certificate)?;
+    Ok(gungnir_security::key_fingerprint(
+        parsed.subject_public_key_info().as_ref(),
+    ))
+}
+
+/// Whether a presented certificate's key is revoked: `Err` refusing it when it is, or when
+/// it does not parse (GAP-211). `side` says whose certificate it was, for the log line.
+///
+/// # Errors
+///
+/// As above, as the `rustls::Error` the handshake fails with.
+pub fn refuse_revoked(
+    certificate: &CertificateDer<'_>,
+    revoked: &[String],
+    side: &str,
+) -> Result<(), rustls::Error> {
+    let fingerprint = certificate_key_fingerprint(certificate)?;
+    if revoked.contains(&fingerprint) {
+        tracing::warn!(
+            key = %fingerprint,
+            "refused a {side} whose key is in security.tls.revoked_keys"
+        );
+        return Err(rustls::Error::General(format!(
+            "the {side}'s key {fingerprint} is revoked (security.tls.revoked_keys)"
+        )));
+    }
+    Ok(())
+}
+
+/// A client verifier that refuses a revoked key before the pinned authorities are
+/// consulted (GAP-211, DN-22 §16). Every other judgement is the inner verifier's.
+///
+/// **Why a deny list and not certificate revocation lists.** Every identity here is
+/// self-signed and pinned, so each is its own authority, and a CRL for it would have to
+/// be signed by the very key being revoked. The list names keys, so a re-issued
+/// certificate on a revoked key is refused as surely as the one that was pinned.
+#[derive(Debug)]
+struct RevokingClientVerifier {
+    inner: Arc<dyn rustls::server::danger::ClientCertVerifier>,
+    revoked: Vec<String>,
+}
+
+impl rustls::server::danger::ClientCertVerifier for RevokingClientVerifier {
+    fn offer_client_auth(&self) -> bool {
+        self.inner.offer_client_auth()
+    }
+
+    fn client_auth_mandatory(&self) -> bool {
+        self.inner.client_auth_mandatory()
+    }
+
+    fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
+        self.inner.root_hint_subjects()
+    }
+
+    fn verify_client_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        intermediates: &[CertificateDer<'_>],
+        now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::server::danger::ClientCertVerified, rustls::Error> {
+        refuse_revoked(end_entity, &self.revoked, "client")?;
+        self.inner
+            .verify_client_cert(end_entity, intermediates, now)
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        self.inner.verify_tls12_signature(message, cert, dss)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        self.inner.verify_tls13_signature(message, cert, dss)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.inner.supported_verify_schemes()
+    }
+}
+
+/// Build the acceptor a node serves with over the operator's PEM files, refusing any
+/// client whose key is in `revoked` (GAP-211).
+///
+/// # Errors
+///
+/// When a file cannot be read or does not contain what it should. Every failure is fatal
+/// to serving: a node that fell back to plaintext because a certificate was missing would
+/// be the silent downgrade this whole design refuses.
+pub fn acceptor_revoking(paths: &TlsPaths, revoked: &[String]) -> Result<TlsAcceptor, ApiError> {
     let certs = read_certificates(Path::new(&paths.certificate_chain))?;
     if certs.is_empty() {
         return Err(ApiError::Transport(format!(
@@ -154,35 +294,22 @@ pub fn acceptor(paths: &TlsPaths) -> Result<TlsAcceptor, ApiError> {
         )));
     }
     let key = read_private_key(Path::new(&paths.private_key))?;
-
-    let mut roots = RootCertStore::empty();
-    for authority in read_certificates(Path::new(&paths.client_ca))? {
-        roots.add(authority).map_err(|e| {
-            ApiError::Transport(format!(
-                "{} is not a usable authority: {e}",
-                paths.client_ca
-            ))
-        })?;
-    }
-    if roots.is_empty() {
-        return Err(ApiError::Transport(format!(
-            "{} contains no client authority, so no client could ever be verified",
-            paths.client_ca
-        )));
-    }
-
-    // `builder` and not `builder_with_certificate_optional`: a client certificate is
-    // required. See the module documentation.
-    let verifier = WebPkiClientVerifier::builder(Arc::new(roots))
-        .build()
-        .map_err(|e| ApiError::Transport(format!("the client verifier is unusable: {e}")))?;
-
+    let verifier = client_verifier(&paths.client_ca, revoked)?;
     let config = ServerConfig::builder()
         .with_client_cert_verifier(verifier)
         .with_single_cert(certs, key)
         .map_err(|e| ApiError::Transport(format!("the certificate and key do not match: {e}")))?;
-
     Ok(TlsAcceptor::from(Arc::new(config)))
+}
+
+/// Build the acceptor over the operator's PEM files, with no revoked keys: what the
+/// transport's own tests serve with. A node serves through [`acceptor_revoking`].
+///
+/// # Errors
+///
+/// As [`acceptor_revoking`].
+pub fn acceptor(paths: &TlsPaths) -> Result<TlsAcceptor, ApiError> {
+    acceptor_revoking(paths, &[])
 }
 
 fn read_certificates(path: &Path) -> Result<Vec<CertificateDer<'static>>, ApiError> {

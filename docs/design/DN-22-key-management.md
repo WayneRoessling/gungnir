@@ -1,6 +1,6 @@
 # DN-22 Key custody, rotation, and escrow
 
-Closes GAP-084, filed by plan 11 finding F-3. Status: **amendment 1 (§9)**, after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11)**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12)**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. A first-run race was found in the secret-generation helper; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over. A real defect in the code behind it was found and closed: Azure Key Vault's raw ECDSA signature format, handed through unconverted, would have broken every TLS handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127). **Amendment 6 (§15), 2026-10-27**: configuration baselines signed under `BaselineSigning`, a purpose §3 declared and nothing used, verified against a key pinned outside the baseline, and refused unsigned in the connected profiles (GAP-210).
+Closes GAP-084, filed by plan 11 finding F-3. Status: **amendment 1 (§9)**, after GAP-060 found the note unusable as written: no way to obtain a TLS identity, no algorithm behind `seal`, and no way to test either. **Amendment 2 (§11)**: who holds the escrow key, which §10 left open (D-27). **Amendment 3 (§12)**: a passphrase-sealed keystore as the disconnected profile's persistent custody until a §2.9 decision admits an OS-keystore crate. **Amendment 4 (§13), 2026-09-08**: that decision taken (D-39) and the OS keystore built as amendment 3's sibling, unlocked at operator login rather than typed at sign-in. A first-run race was found in the secret-generation helper; §13 records the fix that closed it. **Amendment 5 (§14), 2026-09-08**: `ManagedService`, the third and last row of §5's table, designed at last -- envelope encryption because the journal budget forbids a network round trip per envelope, signing left in the service because it is not on a per-frame path, and the one place `may_destroy` cannot reach said plainly rather than papered over. A real defect in the code behind it was found and closed: Azure Key Vault's raw ECDSA signature format, handed through unconverted, would have broken every TLS handshake a Key-Vault-backed identity signed (`ARCHITECTURE.md` §10 item 127). **Amendment 6 (§15), 2026-10-27**: configuration baselines signed under `BaselineSigning`, a purpose §3 declared and nothing used, verified against a key pinned outside the baseline, and refused unsigned in the connected profiles (GAP-210). **Amendment 7 (§16), 2026-10-28**: issued identities valid for ninety days and re-issued on their own key before they expire, and revoked by key fingerprint in the baseline (GAP-211).
 **Human-owned**: `gungnir-security` is a low-trust crate and this note decides
 who can read what. What the owner has signed of this note is in [`../signatures.md`](../signatures.md).
 
@@ -732,6 +732,74 @@ ships.
 `provisioning.rs`'s `baseline-key` and `baseline sign` halves; the signature file is
 `gungnir_config::BaselineSignature`; each binary's glue is `gungnir-node/src/baseline.rs` and
 `gungnir-app/src/baseline.rs`. Their standing is in `../signatures.md`.
+
+## 16. Amendment 7 (2026-10-28): issued identities expire, renew, and can be revoked
+
+**Amendment 1 (c) made identities and never ended them.** Every certificate
+`gungnir_remote::identity` issued carried rcgen's defaults, valid from 1975 to 4096, and
+nothing refused one. Identities are self-signed and pinned, so a desktop whose key was
+taken stayed trusted until someone edited every client-authority file by hand (GAP-211,
+the comprehensive review's §5 finding 4). The owner's four choices of 2026-10-28:
+
+| Question | Chosen |
+|---|---|
+| The validity window | 90 days for every role, desktop and node alike (the recommendation was 30 for a desktop) |
+| How a key is revoked | A key-fingerprint deny list in the baseline, `security.tls.revoked_keys` |
+| When an identity is re-issued | At every start, as before, and while running once a third of the window is left |
+| What PN-01 shows | This desktop's own identity and its days left, with an alert under seven days |
+
+**The window.** From the start of the UTC day before issue, so a peer whose clock is some
+hours behind still accepts a new certificate, to the start of the day 90 days after. Whole
+days, because rcgen takes dates. rustls checks the window of the certificate a peer
+presents. It does not check the window of a pinned trust anchor, which it reduces to a
+name and a key.
+
+**Re-issue.** What a TLS configuration holds is a `gungnir_remote::identity::IssuedIdentity`.
+It is the client certificate resolver on a desktop's and a node's outbound links, and the
+server certificate resolver a node serves through
+(`gungnir_api::tls::acceptor_with_resolver`). The first handshake that finds 30 days or
+fewer left re-issues the certificate on the same key and swaps it in. No timer runs, and
+nothing restarts. A desktop also asks once a tick, so one that has made no connection for
+weeks still renews on time. Because a pin is a name and a key, the re-issued certificate
+matches the pin a peer took of the first one, and nothing is re-pinned. A re-issue that
+fails is logged, kept for PN-01, and tried again an hour later, while the current
+certificate is still presented.
+
+**What a window does not do.** It bounds what a copied certificate is worth, not a copied
+key: whoever holds the key can issue themselves another certificate under the same name,
+and it verifies against the same pin. Revocation is therefore by key.
+
+**Revocation.** `security.tls.revoked_keys` lists key fingerprints:
+`gungnir_security::key_fingerprint` of the public half, sixteen lower-case hex digits, the
+same digits an identity's name carries. One definition now serves names, revocation and
+amendment 6's baseline signer. Validation refuses any other form, because an entry that
+matches no key reads in the file exactly like a revocation. A node refuses a client whose
+key is listed. A desktop, or a node on its peer links, refuses a server whose key is listed.
+In both cases the deny list is checked before the pinned authorities, so a pin does not
+override it. The refusal is logged on the refusing side, naming the key, and is the
+handshake's error on the other. Certificate revocation lists were not chosen: each
+self-signed identity is its own authority, so a CRL for it would have to be signed by the
+very key being revoked. The list takes effect when a host starts on a baseline carrying it,
+and amendment 6 is what makes that baseline trustworthy.
+
+**PN-01.** The status strip shows this desktop's identity, with the full name as hover
+text:
+- `identity 87 d` in the healthy colour;
+- `identity 5 d left` as a warning under seven days;
+- `identity NOT re-issued` or `identity EXPIRED` in the alert colour.
+
+An alert is raised once for each of the last three conditions, and raised again only after
+it has cleared. A node has no strip: its re-issue failures and refusals are log lines.
+
+**What it does not claim.** A revoked machine needs a new key before it can be pinned
+again, and this build has no command that rotates one; the deployment section says how.
+A list naming a key is effective only on the hosts whose baseline carries it. Nothing here
+changes an operator-configured `GUNGNIR_TLS_CERT` certificate, whose window is its
+authority's, though its key can be listed like any other.
+
+**Human-owned.** `gungnir-remote/src/identity.rs` and `client_config` in its `lib.rs` (the
+TLS identity path), the verifier in `gungnir-api/src/tls.rs`, and `key_fingerprint` in
+`gungnir-security`. Their standing is in `../signatures.md`.
 
 ## Traceability
 

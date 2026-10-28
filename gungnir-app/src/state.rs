@@ -184,6 +184,9 @@ pub struct AppState {
     /// `session::origin_of` reports as an unidentified desktop rather than inventing a
     /// name.
     pub machine_identity: Option<gungnir_remote::identity::DesktopIdentity>,
+    /// The identity condition last raised as an alert (GAP-211): "renewal", "expiring"
+    /// or "expired", so each is raised once and again only after it has cleared.
+    pub identity_alerted: Option<&'static str>,
     /// The node link, while one is up (GAP-050): the tick judges its silence.
     pub link: Option<gungnir_remote::link::NodeLink>,
     /// Whether that link was connected when the last tick looked (GAP-145).
@@ -829,6 +832,7 @@ impl AppState {
             expiry_announced: None,
             pipeline,
             machine_identity,
+            identity_alerted: None,
             link: None,
             link_was_connected: false,
             link_control: std::sync::Arc::new(std::sync::Mutex::new(None)),

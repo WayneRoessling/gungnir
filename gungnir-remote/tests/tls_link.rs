@@ -103,6 +103,7 @@ impl Pki {
             trust_roots_pem: vec![self.ca_pem.clone()],
             issued: None,
             identity_pem: Some(format!("{}\n{}", cert.pem(), key.serialize_pem())),
+            revoked_keys: Vec::new(),
         }
     }
 }
@@ -287,6 +288,7 @@ fn a_machine_link_needs_an_identity() {
             trust_roots_pem: vec!["-----BEGIN CERTIFICATE-----".into()],
             issued: None,
             identity_pem: None,
+            revoked_keys: Vec::new(),
         },
     };
     let err = PeerLink::connect(&endpoint, runtime.handle()).expect_err("refused");
@@ -377,6 +379,7 @@ async fn a_node_links_to_a_peer_under_its_own_pinned_peer_identity() {
             trust_roots_pem: vec![serving_pem],
             issued: Some(own.key),
             identity_pem: None,
+            revoked_keys: Vec::new(),
         },
     };
     let handle = tokio::runtime::Handle::current();
@@ -408,11 +411,14 @@ async fn a_serving_certificate_does_not_authenticate_a_client() {
     let misused =
         gungnir_remote::identity::issue_node_serving_identity(&blocked, vec!["localhost".into()])
             .expect("issued");
-    let serving_only = Arc::new(rustls::sign::CertifiedKey::new(
-        vec![rustls::pki_types::CertificateDer::from(
-            misused.certificate_der.clone(),
-        )],
-        Arc::clone(&misused.key),
+    let serving_only = Arc::new(gungnir_remote::identity::IssuedIdentity::fixed(
+        &misused.common_name,
+        Arc::new(rustls::sign::CertifiedKey::new(
+            vec![rustls::pki_types::CertificateDer::from(
+                misused.certificate_der.clone(),
+            )],
+            Arc::clone(&misused.key),
+        )),
     ));
     let (url, serving_pem) =
         serve_as_a_node(api_for(&misused.common_name), &misused.certificate_pem).await;
@@ -422,6 +428,7 @@ async fn a_serving_certificate_does_not_authenticate_a_client() {
             trust_roots_pem: vec![serving_pem],
             issued: Some(serving_only),
             identity_pem: None,
+            revoked_keys: Vec::new(),
         },
     };
     let handle = tokio::runtime::Handle::current();

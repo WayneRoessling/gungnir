@@ -267,6 +267,24 @@ impl EncryptionState<'_> {
     }
 }
 
+/// This desktop's machine identity, as PN-01 shows it (GAP-211, DN-22 §16).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdentityLine<'a> {
+    /// No identity was issued, so a node sees no party; the backend element already says
+    /// what that does to a link, and this one says nothing.
+    None,
+    Issued {
+        /// The name a node reads as the party, `desktop-<fingerprint>`.
+        name: &'a str,
+        /// Whole days left on the certificate now presented; negative once expired.
+        days_left: Option<i64>,
+        /// Why the last re-issue failed, until one succeeds.
+        renewal_failure: Option<&'a str>,
+        /// Under this many days it is coloured as a warning.
+        warn_days: i64,
+    },
+}
+
 /// Where the baseline in force stands against its own validity window (DN-08 §5).
 ///
 /// Four states rather than a boolean, because **"valid" and "no window was configured"
@@ -337,6 +355,8 @@ pub struct StatusStripView<'a> {
     pub rehearsal: Option<&'a str>,
     /// Who is signed in (GAP-057, DN-23 §7).
     pub operator: OperatorLine<'a>,
+    /// This desktop's machine identity and the days left on it (GAP-211).
+    pub identity: IdentityLine<'a>,
     /// **Whose approval queue is in force** (GAP-133, DN-31 §8): the node's, or this
     /// desktop's while cut off.
     ///
@@ -486,6 +506,37 @@ fn draw_encryption(ui: &mut Ui, palette: &theme::Palette, state: EncryptionState
             }));
         }
     }
+}
+
+/// The machine identity: its days left in the healthy colour, a warning under
+/// `warn_days`, and the alert colour once it has expired or will not re-issue (GAP-211).
+/// The full name is the hover text, since sixteen hex digits on the strip would crowd it.
+fn draw_identity(ui: &mut Ui, palette: &theme::Palette, identity: IdentityLine<'_>) {
+    let IdentityLine::Issued {
+        name,
+        days_left,
+        renewal_failure,
+        warn_days,
+    } = identity
+    else {
+        return;
+    };
+    let (text, color) = match (days_left, renewal_failure) {
+        (Some(d), _) if d < 0 => ("identity EXPIRED".to_owned(), palette.alert_color),
+        (days, Some(_)) => (
+            format!(
+                "identity NOT re-issued{}",
+                days.map_or_else(String::new, |d| format!(", {d} d left"))
+            ),
+            palette.alert_color,
+        ),
+        (Some(d), None) if d < warn_days => (format!("identity {d} d left"), palette.warning_color),
+        (Some(d), None) => (format!("identity {d} d"), palette.healthy_color()),
+        (None, None) => ("identity".to_owned(), palette.healthy_color()),
+    };
+    let hover = renewal_failure.map_or_else(|| name.to_owned(), |why| format!("{name}: {why}"));
+    ui.label(RichText::new(text).color(color))
+        .on_hover_text(hover);
 }
 
 /// The baseline validity state, and **only when there is something to say**.
@@ -809,6 +860,11 @@ pub fn render_status_strip(
         ui.separator();
         draw_encryption(ui, palette, view.encryption);
         ui.separator();
+        // GAP-211: beside encryption, the other thing this desktop holds a key for.
+        if !matches!(view.identity, IdentityLine::None) {
+            draw_identity(ui, palette, view.identity);
+            ui.separator();
+        }
         // Drawn immediately after encryption and before the session, because both answer
         // "is what I am doing being recorded and honoured?" and neither is visible
         // anywhere else on the strip.

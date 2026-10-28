@@ -205,7 +205,7 @@ history, and an entry is never edited once it has merged.
 | GAP-208 | The audit chain is unkeyed and its anchor is sealed under a key the operator unlocks | Technical | CAP-6.3 | 4 | 9 | M | 36 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-209 | Reconciliation arbitration ranks a role string the desktop's own journal asserts | Technical | CAP-5.4, CAP-4.2 | 4 | 6 | M | 24 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-210 | Configuration baselines are not signed | Technical | CAP-5.6, CAP-6.4 | 4 | 2 | M | 8 | I3 | Security engineer (human-owned crate) | Closed |
-| GAP-211 | Issued identities never expire and nothing revokes them | Technical | CAP-6.1, CAP-6.4 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Open |
+| GAP-211 | Issued identities never expire and nothing revokes them | Technical | CAP-6.1, CAP-6.4 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Closed |
 | GAP-212 | Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends | Technical | CAP-6.1, CAP-6.2 | 3 | 10 | M | 30 | I3 | Security engineer (human-owned crate) | Open |
 | GAP-213 | Five of seven ingest parsers have no fuzz target, and a node baseline accepts AllowAll | Technical | CAP-6.7, CAP-1.2 | 3 | 9 | M | 27 | I3 | Services engineer | Open |
 | GAP-214 | The transport has no request timeout, connection cap or pre-credential deadline | Technical | CAP-7.1, CAP-6.4 | 3 | 6 | S | 18 | I3 | Services engineer | Open |
@@ -3012,11 +3012,12 @@ Counts: 224 gaps, 3 mission, 221 technical; 1 already covered by a plan in `../.
 - Capability: CAP-6.1 Authenticate; CAP-6.4 Data protection.
 - History:
   - 2026-10-26, Open: Filed by plan 12. D-135 settled naming and persistence; validity and revocation were not part of it.
+  - 2026-10-28, Closed: Built. Every issued identity is valid for ninety days and re-issues itself on the same key in the handshake that finds thirty or fewer left, so no peer re-pins and no host restarts. `security.tls.revoked_keys` lists keys by fingerprint: a node refuses a listed client and a desktop or peer link refuses a listed server, ahead of any pin. PN-01 shows the desktop's days left, with an alert under seven, on expiry, or when re-issue fails. DN-22 §16 records the owner's four choices. See `../../record/2026-10-28/gap-211-issued-identities-expire-renew-and-can.md`.
 - Evidence: `gungnir-remote/src/identity.rs:356` (`CertificateParams` with no validity window); `gungnir-api/src/tls.rs:137-139,176-178` (no CRLs); `gungnir-node/src/main.rs:1633-1636` (pinned).
 - Severity: 3. Reach: 10 threads. Effort: M. Priority: 30.
 - Impact: A desktop or node identity issued on the persistent key is valid from 1975 to 4096 by rcgen's defaults, the verifier carries no revocation list, and identities are self-signed and pinned, so a compromised desktop key stays trusted until an operator edits the client-authority file by hand.
 - Closing action: A validity window per role, re-issued on the persistent key before expiry; `with_crls` or a pinned-fingerprint deny list in the baseline; PN-01 shows days to expiry.
-- Target: I3. Owner: Security engineer (human-owned crate). Status: Open.
+- Target: I3. Owner: Security engineer (human-owned crate). Status: Closed.
 - Reference: D-135; GAP-060; `../../review/2026-10-26-comprehensive-review.md` §5 finding 4.
 
 **GAP-212 Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends**

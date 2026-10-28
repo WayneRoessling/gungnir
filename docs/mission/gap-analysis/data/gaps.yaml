@@ -12249,6 +12249,16 @@
     note: >-
       Filed by plan 12. D-135 settled naming and persistence; validity and revocation
       were not part of it.
+  - date: 2026-10-28
+    status: Closed
+    note: >-
+      Built. Every issued identity is valid for ninety days and re-issues itself on the
+      same key in the handshake that finds thirty or fewer left, so no peer re-pins and no
+      host restarts. `security.tls.revoked_keys` lists keys by fingerprint: a node refuses
+      a listed client and a desktop or peer link refuses a listed server, ahead of any pin.
+      PN-01 shows the desktop's days left, with an alert under seven, on expiry, or when
+      re-issue fails. DN-22 §16 records the owner's four choices. See
+      `../../record/2026-10-28/gap-211-issued-identities-expire-renew-and-can.md`.
 
 - id: GAP-212
   name: "Session tokens: an environment-string key, a role never re-checked, no revocation, wall-clock expiry, and a desktop session that never ends"

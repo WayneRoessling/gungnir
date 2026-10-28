@@ -269,6 +269,7 @@ fn host_tls_with(
     configured: Option<Result<String, String>>,
 ) -> gungnir_remote::LinkTls {
     let trust_roots_pem = config.security.tls.trust_roots_pem.clone();
+    let revoked_keys = config.security.tls.revoked_keys.clone();
     match configured {
         Some(Ok(pem)) => {
             tracing::info!("presenting the configured certificate on this node's peer links");
@@ -276,6 +277,7 @@ fn host_tls_with(
                 trust_roots_pem,
                 issued: None,
                 identity_pem: Some(pem),
+                revoked_keys,
             };
         }
         Some(Err(err)) => tracing::error!(
@@ -315,6 +317,7 @@ fn host_tls_with(
         trust_roots_pem,
         issued,
         identity_pem: None,
+        revoked_keys,
     }
 }
 
@@ -1567,6 +1570,7 @@ async fn spawn_transport(
     bind_addr: &str,
     api: &Arc<NodeApi>,
     handle: &tokio::runtime::Handle,
+    revoked: &[String],
     identity_dir: &std::path::Path,
 ) {
     let Ok(addr) = bind_addr.parse::<SocketAddr>() else {
@@ -1578,7 +1582,7 @@ async fn spawn_transport(
     // through to the plaintext path, which is the silent downgrade this design refuses.
     match gungnir_api::tls::TlsPaths::from_env() {
         Some(Ok(paths)) => {
-            spawn_tls(addr, &paths, api, handle).await;
+            spawn_tls(addr, &paths, api, handle, revoked).await;
             return;
         }
         Some(Err(err)) => {
@@ -1588,7 +1592,8 @@ async fn spawn_transport(
                 if std::env::var("GUNGNIR_TLS_CERT").is_err()
                     && std::env::var("GUNGNIR_TLS_KEY").is_err()
                 {
-                    spawn_tls_from_provider(addr, &client_ca, api, handle, identity_dir).await;
+                    spawn_tls_from_provider(addr, &client_ca, api, handle, revoked, identity_dir)
+                        .await;
                     return;
                 }
             }
@@ -1640,6 +1645,7 @@ async fn spawn_tls_from_provider(
     client_ca: &str,
     api: &Arc<NodeApi>,
     handle: &tokio::runtime::Handle,
+    revoked: &[String],
     identity_dir: &std::path::Path,
 ) {
     let names = vec![addr.ip().to_string(), "localhost".to_string()];
@@ -1663,11 +1669,11 @@ async fn spawn_tls_from_provider(
             tracing::warn!(%err, "the node identity could not be written; clients must pin it another way");
         }
     }
-    let acceptor = match gungnir_api::tls::acceptor_with_key(
-        identity.certificate_der,
-        identity.key,
-        client_ca,
-    ) {
+    // GAP-211: served through the identity itself, which re-issues its certificate on
+    // the same key before it expires, so a node that never restarts never serves an
+    // expired one; and a client whose key is revoked is refused.
+    let identity = Arc::new(gungnir_remote::identity::IssuedIdentity::from(identity));
+    let acceptor = match gungnir_api::tls::acceptor_with_resolver(identity, client_ca, revoked) {
         Ok(acceptor) => acceptor,
         Err(err) => {
             tracing::error!(%err, "the client authority could not be loaded; not serving");
@@ -1713,8 +1719,9 @@ async fn spawn_tls(
     paths: &gungnir_api::tls::TlsPaths,
     api: &Arc<NodeApi>,
     handle: &tokio::runtime::Handle,
+    revoked: &[String],
 ) {
-    let acceptor = match gungnir_api::tls::acceptor(paths) {
+    let acceptor = match gungnir_api::tls::acceptor_revoking(paths, revoked) {
         Ok(acceptor) => acceptor,
         // Fatal to serving, deliberately: a node that fell back to plaintext because a
         // certificate was unreadable would be the downgrade nobody would notice.
@@ -2086,6 +2093,7 @@ async fn run(
         &node_cfg.bind_addr,
         &api,
         &handle,
+        &config.security.tls.revoked_keys,
         std::path::Path::new(&node_cfg.data_dir),
     )
     .await;
@@ -3253,6 +3261,7 @@ mod tests {
                     trust_roots_pem: vec![
                         "-----BEGIN CERTIFICATE-----fake-----END CERTIFICATE-----".into(),
                     ],
+                    revoked_keys: Vec::new(),
                 },
                 ..gungnir_config::SecurityConfig::default()
             },
@@ -3265,8 +3274,8 @@ mod tests {
             .issued
             .as_ref()
             .expect("an ephemeral provider always issues");
-        let name =
-            gungnir_api::tls::subject_common_name(issued.cert[0].as_ref()).expect("a common name");
+        let name = gungnir_api::tls::subject_common_name(&issued.certificate_der())
+            .expect("a common name");
         assert!(name.starts_with("node-peer-ephemeral-"), "{name}");
         assert!(own.identity_pem.is_none());
         assert_eq!(own.trust_roots_pem, config.security.tls.trust_roots_pem);

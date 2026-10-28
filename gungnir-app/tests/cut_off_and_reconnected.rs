@@ -1989,7 +1989,7 @@ fn pem(der: &[u8]) -> String {
 /// each pinned by the other side, as a deployment pins its partners.
 struct Partnership {
     node: Arc<tokio_rustls::rustls::sign::CertifiedKey>,
-    partner: Arc<tokio_rustls::rustls::sign::CertifiedKey>,
+    partner: Arc<gungnir_remote::identity::IssuedIdentity>,
     client_ca: std::path::PathBuf,
 }
 
@@ -2001,7 +2001,7 @@ impl Partnership {
             gungnir_remote::identity::issue_for_client(PARTNER).expect("the partner's identity");
         std::fs::create_dir_all(dir).expect("dir");
         let client_ca = dir.join("partners.pem");
-        std::fs::write(&client_ca, pem(partner.cert[0].as_ref())).expect("written");
+        std::fs::write(&client_ca, pem(&partner.certificate_der())).expect("written");
         Self {
             node,
             partner,
@@ -2068,6 +2068,7 @@ fn partner_reads_reports_as_sent(
         trust_roots_pem: vec![pem(partnership.node.cert[0].as_ref())],
         issued: Some(Arc::clone(&partnership.partner)),
         identity_pem: None,
+        revoked_keys: Vec::new(),
     };
     let config = gungnir_remote::client_config(&tls).expect("the partner's client");
     let (status, body) = runtime.block_on(async move {

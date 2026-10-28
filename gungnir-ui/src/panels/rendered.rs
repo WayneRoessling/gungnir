@@ -883,6 +883,7 @@ fn the_status_strip_draws_an_unclassified_alert_total() {
 
     let vocab = vocabulary();
     let view = StatusStripView {
+        identity: crate::panels::status_strip::IdentityLine::None,
         encryption: EncryptionState::NotConfigured,
         validity: BaselineValidity::NoWindowConfigured,
         profile: None,
@@ -1220,6 +1221,7 @@ fn the_status_strip_draws_the_joint_control_status_terms() {
     ];
     let vocab = Vocabulary::default();
     let view = StatusStripView {
+        identity: crate::panels::status_strip::IdentityLine::None,
         encryption: EncryptionState::NotConfigured,
         validity: BaselineValidity::NoWindowConfigured,
         profile: None,
@@ -1679,6 +1681,7 @@ fn the_status_strip_says_when_the_journal_is_not_encrypted() {
 
     let vocabulary = vocabulary();
     let base = || StatusStripView {
+        identity: crate::panels::status_strip::IdentityLine::None,
         backend: BackendStatus::Embedded,
         session: None,
         mission_time: gungnir_model::MissionTime(0.0),
@@ -1738,6 +1741,7 @@ fn the_strip_says_who_is_signed_in_and_when_nobody_is() {
     };
     let vocabulary = gungnir_model::Vocabulary::default();
     let base = |operator| StatusStripView {
+        identity: crate::panels::status_strip::IdentityLine::None,
         backend: BackendStatus::Embedded,
         session: None,
         mission_time: gungnir_model::MissionTime(0.0),
@@ -1787,6 +1791,56 @@ fn the_strip_says_who_is_signed_in_and_when_nobody_is() {
     assert!(text.contains("expired"), "{text}");
     let text = draw(OperatorLine::StoreUnavailable);
     assert!(text.contains("nobody can sign in"), "{text}");
+}
+
+/// PN-01's identity element (GAP-211): the days left on this desktop's certificate, and
+/// each way it can be in trouble in its own words; nothing at all with no identity.
+#[test]
+fn the_strip_says_how_long_this_desktops_identity_has_left() {
+    use crate::panels::status_strip::{
+        render_status_strip, AlertSummary, BackendStatus, BaselineValidity, ClockSource,
+        CoverageStatus, EncryptionState, IdentityLine, OperatorLine, StatusStripView,
+    };
+    let vocabulary = gungnir_model::Vocabulary::default();
+    let base = |identity| StatusStripView {
+        identity,
+        backend: BackendStatus::Embedded,
+        session: None,
+        mission_time: gungnir_model::MissionTime(0.0),
+        clock_source: ClockSource::Wall,
+        clock_skew_s: None,
+        health: gungnir_model::SystemHealth::default(),
+        control_status: &[],
+        delegations: &[],
+        alerts: AlertSummary::Unclassified { total: 0 },
+        role: "Operator",
+        vocabulary: &vocabulary,
+        coverage: CoverageStatus::NoApproaches,
+        encryption: EncryptionState::NotConfigured,
+        validity: BaselineValidity::NoWindowConfigured,
+        profile: None,
+        rehearsal: None,
+        operator: OperatorLine::NobodySignedIn,
+        queue: crate::panels::approval_queue::QueueAuthority::ThisDesktop,
+    };
+    let probe = RenderProbe::new();
+    let draw = |line| {
+        let (_, frame) =
+            probe.draw(|ui| render_status_strip(ui, &theme::Palette::day(), &base(line)));
+        frame.joined()
+    };
+    let issued = |days_left, renewal_failure| IdentityLine::Issued {
+        name: "desktop-0123456789abcdef",
+        days_left,
+        renewal_failure,
+        warn_days: 7,
+    };
+    assert!(draw(issued(Some(87), None)).contains("identity 87 d"));
+    assert!(draw(issued(Some(5), None)).contains("identity 5 d left"));
+    let text = draw(issued(Some(12), Some("the keystore is locked")));
+    assert!(text.contains("identity NOT re-issued, 12 d left"), "{text}");
+    assert!(draw(issued(Some(-1), None)).contains("identity EXPIRED"));
+    assert!(!draw(IdentityLine::None).contains("identity"));
 }
 
 /// PN-09's geoid lines (GAP-108, GAP-197) as a deployment with no grid installed draws it; the
@@ -2538,6 +2592,7 @@ fn the_status_strip_says_how_long_since_the_node_was_heard() {
     };
     let vocabulary = vocabulary();
     let base = |backend| StatusStripView {
+        identity: crate::panels::status_strip::IdentityLine::None,
         backend,
         session: None,
         mission_time: gungnir_model::MissionTime(0.0),
@@ -3427,6 +3482,7 @@ fn the_status_strip_says_when_the_baseline_is_not_in_force() {
 
     let vocabulary = vocabulary();
     let base = || StatusStripView {
+        identity: crate::panels::status_strip::IdentityLine::None,
         backend: BackendStatus::Embedded,
         session: None,
         mission_time: gungnir_model::MissionTime(0.0),
@@ -4383,6 +4439,7 @@ fn strip_with<'a>(
         AlertSummary, BackendStatus, ClockSource, CoverageStatus, StatusStripView,
     };
     StatusStripView {
+        identity: crate::panels::status_strip::IdentityLine::None,
         backend: BackendStatus::Embedded,
         session: None,
         mission_time: gungnir_model::MissionTime(0.0),

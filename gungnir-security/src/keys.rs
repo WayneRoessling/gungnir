@@ -165,6 +165,25 @@ pub enum SignatureScheme {
     RsaPssSha256,
 }
 
+/// A public key's fingerprint: the first sixteen hex digits of the SHA-256 of its SPKI
+/// DER.
+///
+/// One definition for every place a key is named by its public half: an issued
+/// identity's name (`desktop-<fingerprint>`, `node-<fingerprint>`), a revoked key in
+/// `security.tls.revoked_keys` (GAP-211), and a baseline signer (GAP-210). Two definitions
+/// would let a deny list and the name it is read beside disagree about the same key.
+#[must_use]
+pub fn key_fingerprint(spki_der: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(spki_der)
+        .iter()
+        .take(8)
+        .fold(String::with_capacity(16), |mut s, b| {
+            let _ = std::fmt::Write::write_fmt(&mut s, format_args!("{b:02x}"));
+            s
+        })
+}
+
 /// A recorded decision to destroy a key that still protects data.
 ///
 /// Required because destruction is irreversible: it names what becomes unreadable

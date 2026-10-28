@@ -22,6 +22,8 @@ use gungnir_store::EventJournal;
 
 pub fn tick(state: &mut AppState) {
     let now = state.clock.now();
+    // GAP-211: the machine identity re-issued when due, and an alert when it cannot be.
+    crate::session::keep_identity_current(state);
     // GAP-205: the offset this tick's receipts are stamped under, read beside the `now`
     // that stamps them, so the discipline forms its estimate in host time.
     let applied = state

@@ -301,6 +301,7 @@ async fn a_released_track_crosses_to_the_partner_and_an_internal_one_does_not() 
                 trust_roots_pem: vec![serving_pem],
                 issued: Some(b_identity.key),
                 identity_pem: None,
+                revoked_keys: Vec::new(),
             },
         },
         &handle,
