@@ -148,11 +148,16 @@ jobs:
       # the debug test build alone is large; this removes toolchains the image preinstalls
       # and these jobs never use, which frees well over twenty gigabytes and touches
       # nothing cargo built.
+      #
+      # It runs in the background (2026-10-28). In the foreground it took from 34 seconds
+      # to over three minutes depending on the runner, and every step after it waited. The
+      # runner starts with 86 GB free and the build uses little of it in its first minutes,
+      # so the deletion is done well before the space is needed. `disk at the end` prints
+      # what the build left.
       - name: free disk the build does not use
         run: |
           df -h /
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
+          sudo nohup rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL > /dev/null 2>&1 &
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -187,6 +192,9 @@ jobs:
       - name: doctests
         if: matrix.shard == 1
         run: cargo test --workspace --doc --locked
+      - name: disk at the end
+        if: always()
+        run: df -h /
 
   release-gates:
     name: budget gates and benches, release
@@ -195,11 +203,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      # In the background, as in `test` above.
       - name: free disk the build does not use
         run: |
           df -h /
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
+          sudo nohup rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL > /dev/null 2>&1 &
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -226,6 +234,9 @@ jobs:
       # why it sits after it.
       - name: benches compile
         run: cargo bench --workspace --no-run --locked
+      - name: disk at the end
+        if: always()
+        run: df -h /
 
   # A pull request that changes documents alone still runs the Rust tests that read
   # documents, because a document can break them: the citation and stack-table checks in

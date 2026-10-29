@@ -40,8 +40,29 @@ compiling three times. It was not chosen: the archive of about 150 debug test bi
 would have to be uploaded and downloaded, and the compiling would still come before any
 shard could start.
 
+## What the first sharded run showed
+
+The pull request's first run passed, and the shards' 956, 862 and 776 tests add up to the
+workspace's 2,594, so every test ran exactly once. The running part fell as expected, to
+1.3 to 2.3 minutes per shard. The job did not fall to 9.5 minutes:
+
+| Shard | Free disk | Compile | Run | Job |
+|---|---|---|---|---|
+| 1 | 1.8 min | 8.6 min | 2.3 min | 14.1 min |
+| 2 | 3.2 min | 7.8 min | 1.3 min | 13.7 min |
+| 3 | 0.6 min | 5.6 min | 1.8 min | 8.8 min |
+
+- **Compiling varies by runner**, from 5.6 to 8.6 minutes for the same build from the same
+  cache. Three shards wait on the slowest of three runners, so this is the cost of the
+  sharding, and nothing in the workflow controls it.
+- **Freeing disk varies more**, from 34 seconds to over three minutes, and every later
+  step waited for it. Every runner started with 86 GB free and the deletion added 18 GB.
+  It now runs in the background in both this job and the release job, overlapping the
+  setup and the build. A `disk at the end` step prints what each build left, so whether
+  the deletion is needed at all can be read from the runs rather than guessed.
+
 ## How it was checked
 
 - The workflow parses.
-- This pull request's own run is the first sharded run. Its three shards' test counts
-  should add up to the whole workspace's.
+- The first run's figures are above. The second run, with the deletion in the
+  background, is this pull request's last.
