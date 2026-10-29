@@ -123,7 +123,11 @@ checks (`oracle-diff`, `miri`, `loom`, `fuzz-nightly`, `bench-regression`,
 profile, but every test binary is scheduled at once instead of one after another)
 followed by `cargo test --workspace --doc` for the doctests nextest does not run.
 `cargo test --workspace` locally remains exactly right; nextest is optional there
-(`cargo install cargo-nextest --locked`). In `ci.yml` the formatting and lint checks,
+(`cargo install cargo-nextest --locked`). CI runs nextest under the `ci` profile in
+`.config/nextest.toml`, which terminates a test still running after five minutes and
+writes a JUnit file each shard uploads; a local `cargo nextest run` uses the untouched
+`default` profile, and `NEXTEST_PROFILE=ci` gives the CI behaviour. The document checks
+are one job, `documents`, running `check_documents.sh all`. In `ci.yml` the formatting and lint checks,
 the tests, and the release-profile gates are three jobs that run side by side, the tests
 are split across three runners by nextest's `--partition count:N/3`, and a pull request
 that changes only documents runs just the Rust tests that read documents. The Linux

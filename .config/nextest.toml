@@ -1,0 +1,36 @@
+# Copyright (C) 2026 Roessling Digital Solutions LLC
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Additional terms under AGPL section 7 apply: see LICENSE-ADDITIONAL-TERMS.md
+#
+# cargo-nextest's configuration. `ci.yml` selects the `ci` profile with
+# NEXTEST_PROFILE=ci; the `default` profile, which a local `cargo nextest run` uses, is
+# left as nextest ships it, so nothing here changes a developer's run.
+
+[profile.ci]
+# Every failure in a shard is reported, not only the first. ci.yml also passes
+# `--no-fail-fast`; this says the same thing where the profile is defined.
+fail-fast = false
+
+# A hung test fails in five minutes, by name (2026-10-29). Before this, a test that
+# stopped making progress held its shard until the job's 60-minute timeout, and the log
+# said only that the job was cancelled; ARCHITECTURE.md §10 records one test that
+# looked exactly like a hang. nextest marks a test SLOW at each 60-second period and
+# terminates it after the fifth, reporting it as TIMEOUT with its name, while the other
+# tests in the shard run on.
+#
+# Five minutes is about four times the slowest test measured on CI with this build:
+# `gungnir-filters::particle_diff`, 39 to 75 seconds per test depending on how busy the
+# runner's cores were (main's runs for #246 and #247). A test that legitimately grows
+# past it should get faster or move to a gate of its own; the limit is not raised to
+# fit it.
+#
+# No `retries`. A test that fails once and passes on retry has a defect the retry hides,
+# and in this repository the one "flake" investigated turned out to be a real
+# async-read defect (GAP-136).
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+[profile.ci.junit]
+# One JUnit file per run, at target/nextest/ci/junit.xml, which ci.yml uploads from
+# each shard as an artifact: the per-test name, time and outcome of every test the run
+# executed, kept with the run, instead of only scrolling past in its log.
+path = "junit.xml"

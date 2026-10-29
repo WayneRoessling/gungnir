@@ -76,26 +76,44 @@ jobs:
   # what those paths hold. The job was 4.5 minutes and 2.2 GB of the 10 GB cache on
   # every code pull request, most of which touched none of this. Every push, schedule
   # and merge-queue run still runs it.
+  #
+  # **The list of changed files comes from GitHub's API, not from a clone** (2026-10-29).
+  # Every Rust job waits for this one, and its full-history checkout was 6 to 15 of its
+  # 10 to 20 seconds. The pull request's files endpoint is the same diff against the
+  # merge base that `git diff base...HEAD` gave, a renamed file listed under its old
+  # name as well as its new one. It returns at most 3,000 files; a pull request at that
+  # limit is treated as touching everything.
   changes:
     name: what changed
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # The files endpoint needs read access to pull requests, and nothing more.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       code: ${{ steps.scan.outputs.code }}
       crs: ${{ steps.scan.outputs.crs }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - id: scan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "crs=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          changed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)')
           echo "$changed"
+          if [ "$(echo "$changed" | grep -c .)" -ge 3000 ]; then
+            echo "at the files endpoint's limit: treating the change as touching everything"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "crs=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           documents='^(docs/.*|[^/]+\.md|deploy/.*\.md)$'
           if echo "$changed" | grep -q '^docs/test-tracks/' \
             || echo "$changed" | grep -vE "$documents" | grep -q .; then
@@ -240,10 +258,26 @@ jobs:
       # `count:` deals the workspace's tests out in turn, so every test runs in exactly
       # one shard and each shard gets a third of them. nextest prints how many it skipped
       # as belonging to the other shards.
+      #
+      # The `ci` profile in .config/nextest.toml (2026-10-29): a test that hangs is
+      # terminated after five minutes and reported by name, rather than holding the
+      # shard to the job's timeout, and the run writes a JUnit file uploaded below.
       - name: test
+        env:
+          NEXTEST_PROFILE: ci
         run: >-
           cargo nextest run --workspace --no-fail-fast --locked
           --partition count:${{ matrix.shard }}/3
+      # Every test's name, time and outcome, kept with the run. Uploaded whether the
+      # tests passed or not, since a failing run is when it is read.
+      - name: test results (JUnit)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-shard-${{ matrix.shard }}
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: warn
+          retention-days: 30
       # nextest does not run doctests; `cargo test --doc` is the only runner for them.
       # Seven seconds, so one shard runs them all.
       - name: doctests
@@ -309,9 +343,10 @@ jobs:
     if: needs.changes.outputs.code == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # As in `test`, whose cache this reads.
+    # As in `test`, whose cache this reads, and whose nextest profile bounds a hung test.
     env:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      NEXTEST_PROFILE: ci
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -331,39 +366,43 @@ jobs:
       - name: the role matrix against roles-and-stakeholders.md
         run: cargo nextest run --locked -p gungnir-security --test role_matrix
 
-  # The four document jobs below run .github/scripts/check_documents.sh, which regenerates
-  # what is generated and fails on any difference from what is committed.
-  # cross-document-recheck.yml runs the same script for every open pull request after
-  # each push to main, because these checks read documents other pull requests change.
-  uaf-registry:
-    name: UAF registry and generated views are consistent with the code
+  # Every generated document and cross-document check, through
+  # .github/scripts/check_documents.sh, which regenerates what is generated and fails on
+  # any difference from what is committed. cross-document-recheck.yml runs the same
+  # script for every open pull request after each push to main, because these checks
+  # read documents other pull requests change. Four groups, each in its own collapsible
+  # block in the log, and a failure names its group in the job's error line:
+  #
+  #   * `uaf`: the UAF registry check, then the Sparx EA exports. The exports live under
+  #     docs/architecture/uaf/exports and so were inside the diff path while never being
+  #     regenerated, which meant a registry change left them stale with no signal. Both
+  #     are deterministic and write LF on every platform, so they belong in this gate.
+  #   * `gaps`: the gap register, decision ledger and roadmap against their data. The
+  #     omission it checks for happened twice: D-34's rows were dropped by a commit whose
+  #     copy of the generator predated the decision, and GAP-092/GAP-093 were restored
+  #     from git history after the same thing happened to them. On a pull request it also
+  #     refuses an edit to history merged on the base, since a gap's status is the status
+  #     of its last history entry.
+  #   * `tracks`: the test-track documents re-rendered from their YAML, the committed
+  #     sample sets regenerated and validated.
+  #   * `records`: docs/record/ items are never edited once merged, every "§10 item N"
+  #     citation names one, docs/unbuilt.md is what the code's NotImplemented errors say,
+  #     every signature in docs/signatures.md names paths that existed at its commit, and
+  #     no document outside the history says something still waits for the owner.
+  #
+  # **One job since 2026-10-29**, where it was four. Each of the four spent 10 to 20
+  # seconds on a runner, a checkout and Python for 3 to 5 seconds of checking, and held
+  # four of the twenty concurrent jobs a public repository gets; two pushes close
+  # together queued. The script already runs every group and reports every failure, so
+  # one job loses nothing a reader needs.
+  documents:
+    name: generated documents and cross-document checks
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: pip install pyyaml
-      # The registry check, then the Sparx EA exports. The exports live under
-      # docs/architecture/uaf/exports and so were inside the diff path while never being
-      # regenerated, which meant a registry change left them stale with no signal. Both
-      # are deterministic and write LF on every platform, so they belong in this gate.
-      - name: regenerate and check
-        run: bash .github/scripts/check_documents.sh uaf
-
-  gap-register:
-    name: The gap register, decision ledger, and roadmap match their data
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # This job exists because the omission it checks for happened twice: D-34's rows were
-    # dropped by a commit whose copy of the generator predated the decision, and
-    # GAP-092/GAP-093 were restored from git history after the same thing happened to
-    # them. On a pull request it also refuses an edit to history merged on the base,
-    # since a gap's status is the status of its last history entry.
-    steps:
-      - uses: actions/checkout@v4
-        with:
+          # `gaps` and `records` hold the base's history against the branch.
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -372,43 +411,7 @@ jobs:
       - name: regenerate and check
         env:
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.merge_group.base_sha || '' }}
-        run: bash .github/scripts/check_documents.sh gaps
-
-  test-tracks:
-    name: Test-track suite renders, generates, and validates
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install pyyaml
-      # Re-render the documents from the YAML sources, regenerate the committed sample
-      # sets and validate them; fail if either differs from what is committed.
-      - name: render, regenerate, and validate
-        run: bash .github/scripts/check_documents.sh tracks
-
-  records:
-    name: The record, the unbuilt list, and the signature ledger are consistent
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # docs/record/ items are never edited once merged, every "§10 item N" citation names
-    # one, docs/unbuilt.md is what the code's NotImplemented errors say, every signature in
-    # docs/signatures.md names paths that existed at its commit, and no document outside
-    # the history says something still waits for the owner.
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install pyyaml
-      - name: regenerate and check
-        env:
-          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.merge_group.base_sha || '' }}
-        run: bash .github/scripts/check_documents.sh records
+        run: bash .github/scripts/check_documents.sh all
 
   # GAP-102 (D-41): the point-cloud CRS conversion, which is the one thing in this
   # workspace that a default `cargo test` cannot run.
