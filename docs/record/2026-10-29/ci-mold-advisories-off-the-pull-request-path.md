@@ -36,16 +36,23 @@ chose these three changes as the first batch.
 Compared with main's run for #248, the first warm run with line-tables-only debug
 information, on the same cache:
 
-| Shard, `test` step | main for #248, GNU ld | this change, mold |
+| Shard, `test` step | main for #248, GNU ld | this change, mold 3.0.0 |
 |---|---|---|
-| 1 | 6.7 min | (filled in from the run) |
-| 2 | 7.7 min | |
-| 3 | 7.5 min | |
-| `release-gates`, budget gates then benches | 2.5 + 2.6 min | |
+| 1 | 6.7 min | 6.1 min |
+| 2 | 7.7 min | 4.9 min |
+| 3 | 7.5 min | 5.1 min |
+| whole `test` job, per shard | 7.7 to 8.6 min | 5.9 to 7.0 min |
+| `release-gates`, budget gates then benches | 2.5 + 2.6 min | 2.6 + 2.7 min |
 
 Both are single runs on hosted runners, which vary by a minute or more between
 instances for the same work (`../2026-10-28/ci-the-tests-in-three-shards.md`), so a
-difference inside that band is not a result.
+difference inside that band is not a result. Two of the three shards fell by 2.4 to
+2.8 minutes, which is outside it; the third fell by 0.6, inside it. The release job
+did not move: it links a few release test binaries and the bench binaries, not 252,
+so there was little for a faster linker to take. The pull-request critical path, the
+slowest shard, went from 8.6 to 7.0 minutes on these two runs. Every other check was
+green; `advisories.yml` ran on the pull request because its own file is in the paths
+filter, and `miri` detected no `unsafe` and ran no crate.
 
 ## What was checked without a run
 
