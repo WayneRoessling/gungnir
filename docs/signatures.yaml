@@ -3568,3 +3568,87 @@
   commit: f3b221c8210748f168d0dead4488e595b6bd1bde
   pre_repository: false
   record: "GAP-211; DN-22 §16; docs/record/2026-10-28/gap-211-issued-identities-expire-renew-and-can.md; PR #239"
+
+- date: 2026-10-29
+  signer: Owner
+  subject: >-
+    GAP-212's human-owned code. In `gungnir-security`: sessions on a monotonic clock
+    (`MonotonicClock`, `SystemMonotonic`, `ManualMonotonic`), ending at twelve hours and
+    locking after fifteen idle minutes (`SESSION_MAX_S`, `IDLE_LOCK_S`, `at_most`), the
+    `Locked` state and `touch`, and `ClockStepWatch` for a clock that steps back
+    (`session.rs`, `lib.rs`); the `clock.stepped_back` audit event (`audit.rs`); and
+    tokens that carry a random id held in a registry, a key derived by HKDF, `revoke` and
+    `revoke_operator`, and no lifetime over twelve hours (`token.rs`). In the `gungnir-api`
+    write path: a role re-read from the store on every verified call, failures counted by
+    address and operator and by address alone, `DELETE /v3/session` and
+    `POST /v3/session/revoke` under `ASSIGN_ROLE` (`transport.rs`, `v3/mod.rs`, `lib.rs`).
+  kind: code
+  paths:
+  - gungnir-security/src/session.rs
+  - gungnir-security/src/token.rs
+  - gungnir-security/src/audit.rs
+  - gungnir-security/src/lib.rs
+  - gungnir-api/src/transport.rs
+  - gungnir-api/src/v3/mod.rs
+  - gungnir-api/src/lib.rs
+  commit: 24c5f4fee55beebaf26321e74a09893d8cc115b0
+  pre_repository: false
+  record: "GAP-212; D-143; DN-23 §17; docs/record/2026-10-28/gap-212-sessions-end-follow-the-store-and.md; PR #241"
+
+- date: 2026-10-29
+  signer: Owner
+  subject: >-
+    GAP-213's human-owned change to the `gungnir-ingest` gateway: the doc comment on
+    `AllowAllAuthenticator`, saying no baseline can select it and that the architecture
+    compliance test refuses shipped code that names it (`lib.rs`).
+  kind: code
+  paths:
+  - gungnir-ingest/src/lib.rs
+  commit: 46a10829acf9be6b2c4911a29e2155ab70560b4b
+  pre_repository: false
+  record: "GAP-213; docs/record/2026-10-28/gap-213-every-feed-adapter-is-fuzzed.md; PR #242"
+
+- date: 2026-10-29
+  signer: Owner
+  subject: >-
+    GAP-214's human-owned code. In `gungnir-api`: TLS 1.3 alone in `server_config`, and
+    `TlsListener` holding at most `MAX_CONNECTIONS` (256) connections and dropping a
+    handshake not finished within `HANDSHAKE_DEADLINE` (ten seconds) (`tls.rs`); a 4 MiB
+    `MAX_BODY_BYTES`, a thirty-second `REQUEST_DEADLINE` and a ten-second
+    `SUBSCRIBE_DEADLINE` (`transport.rs`). In the `gungnir-remote` TLS identity path:
+    `client_config` offering TLS 1.3 alone (`lib.rs`).
+  kind: code
+  paths:
+  - gungnir-api/src/tls.rs
+  - gungnir-api/src/transport.rs
+  - gungnir-remote/src/lib.rs
+  commit: 5c338de1097db979d49c9002389e4a619ee2ac38
+  pre_repository: false
+  record: "GAP-214; docs/record/2026-10-28/gap-214-the-transport-bounds-what-a-caller.md; PR #243"
+
+- date: 2026-10-29
+  signer: Owner
+  subject: >-
+    GAP-215's human-owned code in `gungnir-security`: `owner_only::write`, writing beside
+    the target, restricting the copy to its owner (mode 0600 on Unix; on Windows an access
+    list naming the current user alone, inheritance removed, by `icacls.exe`) and renaming
+    it into place, a failed restriction logged and returned rather than a refused write
+    (`owner_only.rs`, `lib.rs`); the keystore, the sealed account store, the cloud-wrapped
+    secret, the account file and the provisioning command's account file written through
+    it (`keystore.rs`, `account_store.rs`, `managed_service.rs`, `session.rs`,
+    `provisioning.rs`); and the wrapping key and the token key held in `Zeroizing`
+    (`keystore.rs`, `token.rs`, `Cargo.toml`).
+  kind: code
+  paths:
+  - gungnir-security/src/owner_only.rs
+  - gungnir-security/src/lib.rs
+  - gungnir-security/src/keystore.rs
+  - gungnir-security/src/account_store.rs
+  - gungnir-security/src/managed_service.rs
+  - gungnir-security/src/session.rs
+  - gungnir-security/src/provisioning.rs
+  - gungnir-security/src/token.rs
+  - gungnir-security/Cargo.toml
+  commit: 7ad06cfd7d7876e3bfac6be98e50a8ae1aa72c01
+  pre_repository: false
+  record: "GAP-215; D-145; DN-22 §17; docs/record/2026-10-28/gap-215-sealed-files-are-their-owner-s.md; PR #244"
