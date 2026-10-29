@@ -75,7 +75,8 @@ jobs:
 
   # The Rust gates as three jobs that run side by side (2026-10-28), where they were one
   # job of eight steps in series: 21 minutes warm and up to 40 cold, the critical path of
-  # every pull request. Apart, the wait is the slowest of the three, the tests. Each keeps
+  # every pull request. Apart, the wait is the slowest of the three, the tests, which are
+  # themselves split across three runners (see `test` below). Each keeps
   # its own cargo cache, written from main only, and the debug and release builds no
   # longer share one runner's disk.
   #
@@ -123,48 +124,77 @@ jobs:
       - name: clippy (all targets; gate 2 property tests compile here too)
         run: cargo clippy --workspace --all-targets
 
+  # The tests in three shards on three runners (2026-10-28). Unsharded, the job was the
+  # wait on every pull request: on main's run for #246, 5.6 minutes compiling and 7.2
+  # running 2,594 tests, whose 1,716 test-seconds kept all four cores busy to the end.
+  # The running part is CPU-bound, not held up by one slow test, so it divides by the
+  # number of runners; the compiling part does not, since each shard builds the whole
+  # workspace. Three shards put the job near the release job's seven minutes; a fourth
+  # would save about a minute more. The repository is public, so the runners cost nothing.
   test:
-    name: test
+    name: test (shard ${{ matrix.shard }} of 3)
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      # Every shard reports, so one failing shard does not hide another's failures.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       # The runner ran out of disk twice in a day (pull requests #232 and #234, both on
       # 2026-10-27) when the debug and release builds shared it. They no longer do, but
       # the debug test build alone is large; this removes toolchains the image preinstalls
       # and these jobs never use, which frees well over twenty gigabytes and touches
       # nothing cargo built.
+      #
+      # It runs in the background (2026-10-28). In the foreground it took from 34 seconds
+      # to over three minutes depending on the runner, and every step after it waited. The
+      # runner starts with 86 GB free and the build uses little of it in its first minutes,
+      # so the deletion is done well before the space is needed. `disk at the end` prints
+      # what the build left.
       - name: free disk the build does not use
         run: |
           df -h /
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
+          sudo nohup rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL > /dev/null 2>&1 &
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.98"
-      # Shared with `docs-tests` below, which reads it and never writes it.
+      # Shared by the three shards, which build the same thing, and with `docs-tests`
+      # below, which reads it and never writes it. The first shard alone writes it, so
+      # main's run does not try to save one cache three times.
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: debug-tests
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 1 }}
           cache-on-failure: true
       # nextest as the test runner (installed as a prebuilt binary, not compiled).
       # `cargo test` runs the workspace's test binaries one after another, and with
       # ~150 of them the run is serialised behind the slow few: particle_diff (52 s for
       # three tests), sqrt_diff (27 s), gungnir-filters' unit tests (26 s), adsb_fixtures
-      # (23 s). nextest schedules every test across every binary at once, so the run is
-      # bounded by the slowest test rather than the sum. Same tests, same profile, same
-      # `cargo test` invocation locally (CONTRIBUTING.md); only the scheduler differs.
+      # (23 s). nextest schedules every test across every binary at once. Same tests, same
+      # profile, same `cargo test` invocation locally (CONTRIBUTING.md); only the
+      # scheduler differs.
       - uses: taiki-e/install-action@nextest
       - name: System libraries for eframe/glow
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libgl1-mesa-dev
+      # `count:` deals the workspace's tests out in turn, so every test runs in exactly
+      # one shard and each shard gets a third of them. nextest prints how many it skipped
+      # as belonging to the other shards.
       - name: test
-        run: cargo nextest run --workspace --no-fail-fast --locked
+        run: >-
+          cargo nextest run --workspace --no-fail-fast --locked
+          --partition count:${{ matrix.shard }}/3
       # nextest does not run doctests; `cargo test --doc` is the only runner for them.
+      # Seven seconds, so one shard runs them all.
       - name: doctests
+        if: matrix.shard == 1
         run: cargo test --workspace --doc --locked
+      - name: disk at the end
+        if: always()
+        run: df -h /
 
   release-gates:
     name: budget gates and benches, release
@@ -173,11 +203,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      # In the background, as in `test` above.
       - name: free disk the build does not use
         run: |
           df -h /
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
+          sudo nohup rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL > /dev/null 2>&1 &
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -204,6 +234,9 @@ jobs:
       # why it sits after it.
       - name: benches compile
         run: cargo bench --workspace --no-run --locked
+      - name: disk at the end
+        if: always()
+        run: df -h /
 
   # A pull request that changes documents alone still runs the Rust tests that read
   # documents, because a document can break them: the citation and stack-table checks in
