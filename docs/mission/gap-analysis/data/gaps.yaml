@@ -13433,6 +13433,12 @@
     note: >-
       Filed with DN-34 from the owner's request of 2026-10-29 for terrain dead spots on
       the 3D map. Design only; three owner decisions open.
+  - date: 2026-10-29
+    status: Open
+    note: >-
+      D-146 to D-148 taken by the owner the same day, each to the recommended default
+      (`../../record/2026-10-29/the-owner-s-walk-of-2026-10-29.md`). Buildable once
+      GAP-247 is closed; no code yet.
 
 - id: GAP-247
   name: Terrain line of sight scans every DEM vertex per sample, on a report computed every frame

@@ -7,9 +7,10 @@ darkened area on the map an operator reads at a glance, and say what other three
 elements should follow it. What the owner has signed of this note is in
 [`../signatures.md`](../signatures.md).
 
-Three decisions are raised for the owner, D-146 to D-148 (§4, §9 and §12), each with a
-recommended default. §13 is the analysis of the other 3D elements, in the order the
-existing code lets them be built.
+Three decisions were raised for the owner, D-146 to D-148 (§4, §9 and §12), each with a
+recommended default; the owner took all three to the default on 2026-10-29
+(`../mission/gap-analysis/data/decisions.yaml`). §13 is the analysis of the other 3D
+elements, in the order the existing code lets them be built.
 
 ## 1. The gap and the thread step it blocks
 
@@ -137,10 +138,10 @@ Rules:
    not a fusible track (DN-12 §5 rule 2), and the same stretch of air that is watched by
    one radar fails on the first loss.
 
-**D-146** asks the owner to confirm rule 3, the one choice in this table that changes the
+**D-146** asked the owner to confirm rule 3, the one choice in this table that changes the
 operator's reading: dark means *claimed and hidden by terrain*. The alternative, dark
-means *seen by nobody for any reason*, is simpler to state and recommended against for
-the reason in the rule.
+means *seen by nobody for any reason*, is simpler to state and was recommended against for
+the reason in the rule. **Taken by the owner, 2026-10-29: rule 3 stands as written.**
 
 ## 5. Types
 
@@ -380,12 +381,13 @@ DN-12 §7's reason) and the selected height.
 
 No route, no event, no schema change; `SCHEMA_VERSION` stands.
 
-**D-147** asks the owner for the default heights. The recommendation is one height,
+**D-147** asked the owner for the default heights. The recommendation was one height,
 100 m above ground, which is the band the threat table in
 `../mission/air-defense-and-counter-uas.md` puts small UAS and terrain-following cruise
 missiles in, with 30 m and 300 m as the entries a deployment adds when it wants the
 low and the high case. A list of three by default would triple the first recompute for a
-deployment that never looks at two of them.
+deployment that never looks at two of them. **Taken by the owner, 2026-10-29: the default
+is `[100.0]`.**
 
 ## 10. User-interface delta
 
@@ -428,9 +430,10 @@ Draft rows for `../verification-capability-table.md` §2, not agreed:
 - **No node computation (D-148).** The node loads no terrain (D-130) and answers coverage
   flat. Computing the field on the node means the node loading a DEM, a baseline change
   on every node and a second place the height field has to agree, for a layer only a
-  desktop draws. **Recommended: desktop only**, the layer saying so when linked, as
+  desktop draws. Recommended desktop only, the layer saying so when linked, as
   DN-33 amendment 1's masked-versus-flat distinction already does; the node's turn comes
   if and when a headless consumer, DN-13's recommender on the node, wants shadow area.
+  **Taken by the owner, 2026-10-29: desktop only.**
 - **No scoring of re-tasking candidates by shadow area.** Named for DN-13 as a follow-on;
   it is a change to a scorer with its own verification row.
 

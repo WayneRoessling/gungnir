@@ -3573,7 +3573,13 @@
   raised_in: "`../../design/DN-34-sensor-dead-spots.md` §4"
   decider: Owner
   unblocks: GAP-246
-  outcome: ""
+  resolved: 2026-10-29
+  outcome: >-
+    **Taken by the owner, 2026-10-29, to the recommended default: dark means claimed and
+    unseen.** A cell is a dead spot when at least one searching or tracking sensor claims
+    it by range, sector and band and none can see it past the terrain. Rejected: dark
+    wherever nobody sees for any reason, which darkens every place beyond every ring and
+    hides the terrain finding the layer exists for. See the record item.
 
 - id: D-147
   decision: The default heights above ground a dead-spot field is computed at
@@ -3587,7 +3593,12 @@
   raised_in: "`../../design/DN-34-sensor-dead-spots.md` §9"
   decider: Owner
   unblocks: GAP-246
-  outcome: ""
+  resolved: 2026-10-29
+  outcome: >-
+    **Taken by the owner, 2026-10-29, to the recommended default: one height, 100 m above
+    ground.** `analytics.dead_spot_heights_agl_m` defaults to `[100.0]`; 30 m and 300 m are
+    entries a deployment adds. Rejected: three heights by default, which triples every
+    recompute for a deployment that looks at one. See the record item.
 
 - id: D-148
   decision: Whether the node computes a dead-spot field
@@ -3600,4 +3611,11 @@
   raised_in: "`../../design/DN-34-sensor-dead-spots.md` §12"
   decider: Owner
   unblocks: GAP-246
-  outcome: ""
+  resolved: 2026-10-29
+  outcome: >-
+    **Taken by the owner, 2026-10-29, to the recommended default: desktop only.** The node
+    computes no field and `GET /v3/coverage` is unchanged; the layer says so when the
+    desktop is linked, as DN-33 amendment 1's masked-versus-flat distinction already does.
+    Rejected: a field on the node, which needs a DEM on every node's baseline and a second
+    place the height field must agree, for a layer only a desktop draws. The node's turn
+    comes if a headless consumer wants shadow area. See the record item.

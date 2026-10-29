@@ -3496,6 +3496,7 @@ Counts: 229 gaps, 4 mission, 225 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.4 Coverage and gaps; CAP-2.11 Geometric questions; CAP-5.9 Role workspaces and workflow.
 - History:
   - 2026-10-29, Open: Filed with DN-34 from the owner's request of 2026-10-29 for terrain dead spots on the 3D map. Design only; three owner decisions open.
+  - 2026-10-29, Open: D-146 to D-148 taken by the owner the same day, each to the recommended default (`../../record/2026-10-29/the-owner-s-walk-of-2026-10-29.md`). Buildable once GAP-247 is closed; no code yet.
 - Evidence: `gungnir-analytics/src/coverage.rs` (`combined_coverage` samples approaches only); `gungnir-viewport3d/src/layers.rs` (rings, wedges and gap polylines, no area layer); `gungnir-analytics/src/lib.rs` (`viewshed` has no caller outside its tests); `../../design/DN-34-sensor-dead-spots.md` §2.
 - Severity: 3. Reach: 10 threads. Effort: L. Priority: 30.
 - Impact: Terrain masking is applied only along the declared approach polylines, so between them a sensor's ring claims coverage a ridge denies and nothing on the picture says so. A sensor manager or planner reads the ring as watched; a low flyer routes down the valley the ring covers on paper. MT-09 step 2 and MT-07 step 3 ask for coverage over terrain, and the system computes it along lines only.
