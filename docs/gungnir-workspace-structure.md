@@ -55,7 +55,7 @@ gungnir-workspace/
 ├── benches/README.md               # index of the criterion groups (they live per crate)
 │
 ├── .github/workflows/
-│   ├── ci.yml                      # fmt and clippy, tests (nextest), release budget gates and benches as parallel jobs; a docs-only PR runs only the tests that read documents; document checks; node container build
+│   ├── ci.yml                      # fmt and clippy, tests (nextest, three shards), release budget gates and benches as parallel jobs; a docs-only PR runs only the tests that read documents; document checks; node container build
 │   ├── pr-rules.yml                # a dependency change's Decision and Duplicate linkage lines; commit message length
 │   ├── cross-document-recheck.yml  # after each merge, every open PR's document checks against the new main
 │   ├── oracle-diff.yml             # gate 1
