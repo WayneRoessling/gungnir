@@ -61,8 +61,19 @@ workspace's 2,594, so every test ran exactly once. The running part fell as expe
   setup and the build. A `disk at the end` step prints what each build left, so whether
   the deletion is needed at all can be read from the runs rather than guessed.
 
+## What the second run showed
+
+With the deletion in the background, the shards took 13.0, 11.2 and 8.5 minutes, against
+the unsharded job's 16.4 on #246. Compiling still varied by runner.
+
+**The deletion is needed.** Each shard ended with 129 GB of the 145 GB disk used and 17 GB
+free. The debug test build takes about 88 GB, more than the 86 GB a runner starts with.
+The release job ended at 46 GB used. Most of the debug build is debug information; building
+the tests with `line-tables-only` would cut both the disk and the link time, but it changes
+the cache and what a failing test's debugger can see, so it is left for a decision of its
+own.
+
 ## How it was checked
 
 - The workflow parses.
-- The first run's figures are above. The second run, with the deletion in the
-  background, is this pull request's last.
+- Both runs' figures are above, read from the jobs' step times and logs.
