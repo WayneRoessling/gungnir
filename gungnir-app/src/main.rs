@@ -553,6 +553,8 @@ impl App {
                         });
                 let point_clouds =
                     gungnir_app::pointcloud::layers(&self.state.point_cloud, &self.state.data);
+                let shown = gungnir_app::dead_spots::shown_label(&self.state);
+                let dead_spots = gungnir_app::dead_spots::layer(&self.state.dead_spots, &shown);
                 gungnir_viewport3d::render(
                     ui,
                     &self.state.palette,
@@ -570,6 +572,7 @@ impl App {
                         point_clouds: &point_clouds,
                         laydown_preview,
                         dense_group: self.state.tracking.dense_group(),
+                        dead_spots,
                     },
                 );
                 None
@@ -807,6 +810,10 @@ impl App {
         // GAP-098: the configured point-cloud pair, on whichever renderer is running.
         let point_clouds =
             gungnir_app::pointcloud::layers(&self.state.point_cloud, &self.state.data);
+        // GAP-246: the terrain dead spots, or why there are none, on whichever renderer
+        // is running.
+        let shown = gungnir_app::dead_spots::shown_label(&self.state);
+        let dead_spots = gungnir_app::dead_spots::layer(&self.state.dead_spots, &shown);
 
         let layers = gungnir_viewport3d::layers::LayerInputs {
             coverage,
@@ -818,6 +825,7 @@ impl App {
             point_clouds: &point_clouds,
             laydown_preview,
             dense_group: self.state.tracking.dense_group(),
+            dead_spots,
         };
         let Some(scene) = self.scene.clone().filter(|_| self.state.viewport.use_3d) else {
             gungnir_viewport3d::render(
@@ -930,15 +938,8 @@ impl App {
                     }
                 }
             }
-            PanelAction::CoverageLayer(a) => {
-                use gungnir_ui::panels::coverage_layers::LayerAction;
-                match a {
-                    LayerAction::ShowRings(on) => self.state.viewport.layers.rings = on,
-                    LayerAction::ShowGaps(on) => self.state.viewport.layers.gaps = on,
-                    LayerAction::ShowHazards(on) => self.state.viewport.layers.hazards = on,
-                    LayerAction::ShowGeofences(on) => self.state.viewport.layers.geofences = on,
-                }
-            }
+            // GAP-007's toggles and GAP-246's dead-spot controls, applied in one place.
+            PanelAction::CoverageLayer(a) => gungnir_app::dead_spots::apply(&mut self.state, a),
             // GAP-106: recorded with the signed-in commander's name and the reason, or
             // refused and said why; either way the draft is the window's to keep or clear.
             PanelAction::AcceptGap(a) => {

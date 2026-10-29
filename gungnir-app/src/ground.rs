@@ -25,15 +25,16 @@
 //! A cell with no data is a hole, and a position under one, or off the mesh, has no ground
 //! height: an error, never a zero.
 //!
-//! **Finding the triangle.** The mesh's vertices keep their grid order, and a placed grid
-//! is still a grid locally, only bent by the projection. So a coarse subsample, every
-//! `stride`-th vertex in each direction with at most [`COARSE_SAMPLES`] of them, finds the
-//! nearest grid neighbourhood, and only the cells within a stride of it are searched. The
-//! lookup holds its own copy of the vertex positions, because the feed's adapter holds the
-//! model on the gateway's side and the desktop's copy belongs to the viewport.
+//! **Finding the triangle** is `gungnir_analytics::MeshSurface`'s, since GAP-247 moved the
+//! lookup down so the coverage analytics and the feeds read one surface
+//! (`docs/design/DN-34-sensor-dead-spots.md` §3): a coarse subsample of the grid finds the
+//! neighbourhood, and only the cells within a stride of it are searched. The model holds
+//! its own copy of the surface, because the feed's adapter holds it on the gateway's side
+//! and the desktop's copy belongs to the viewport.
 
 use std::sync::Arc;
 
+use gungnir_analytics::{MeshSurface, SurfaceMiss};
 use gungnir_data::geospatial::TerrainMesh;
 use gungnir_ingest::terrain::{GroundElevation, GroundHeight};
 use gungnir_model::{Geodetic, LocalFrame};
@@ -42,7 +43,7 @@ use crate::state::AppState;
 use crate::terrain::TerrainStatus;
 
 /// The most vertices the coarse search scans for each report.
-pub const COARSE_SAMPLES: usize = 65_536;
+pub const COARSE_SAMPLES: usize = gungnir_analytics::terrain::COARSE_SAMPLES;
 
 /// What every bound feed's handle says before the terrain has been read at all.
 pub const NOT_YET_LENT: &str = "the terrain has not been read yet";
@@ -52,16 +53,7 @@ pub struct PlacedGround {
     name: String,
     frame: LocalFrame,
     sigma_m: f64,
-    /// Every vertex's local ENU position, metres, grid order, north row first.
-    positions: Vec<[f32; 3]>,
-    /// What `positions`' east and north are relative to.
-    origin: [f64; 2],
-    rows: usize,
-    columns: usize,
-    stride: usize,
-    /// `(row, column, east, north)` of every `stride`-th vertex, and of the last row and
-    /// column.
-    coarse: Vec<(usize, usize, f64, f64)>,
+    surface: MeshSurface,
 }
 
 impl PlacedGround {
@@ -77,58 +69,18 @@ impl PlacedGround {
         sigma_m: f64,
     ) -> Result<Self, String> {
         let name = name.into();
-        let (rows, columns) = (mesh.rows as usize, mesh.columns as usize);
-        if rows < 2 || columns < 2 || mesh.positions.len() != rows * columns {
-            return Err(format!(
+        let surface = MeshSurface::new(mesh).map_err(|_| {
+            format!(
                 "{name} is not a grid of at least two rows and two columns, so it has no \
                  surface to read a ground height from"
-            ));
-        }
-        let cells = rows * columns;
-        let mut stride = 1;
-        while cells.div_ceil(stride * stride) > COARSE_SAMPLES {
-            stride += 1;
-        }
-        let along = |len: usize| {
-            let mut at: Vec<usize> = (0..len).step_by(stride).collect();
-            if at.last() != Some(&(len - 1)) {
-                at.push(len - 1);
-            }
-            at
-        };
-        let origin = mesh.origin;
-        let mut coarse = Vec::new();
-        for row in along(rows) {
-            for column in along(columns) {
-                let p = mesh.positions[row * columns + column];
-                coarse.push((
-                    row,
-                    column,
-                    origin[0] + f64::from(p[0]),
-                    origin[1] + f64::from(p[1]),
-                ));
-            }
-        }
+            )
+        })?;
         Ok(PlacedGround {
             name,
             frame,
             sigma_m,
-            positions: mesh.positions.clone(),
-            origin,
-            rows,
-            columns,
-            stride,
-            coarse,
+            surface,
         })
-    }
-
-    fn vertex(&self, row: usize, column: usize) -> [f64; 3] {
-        let p = self.positions[row * self.columns + column];
-        [
-            self.origin[0] + f64::from(p[0]),
-            self.origin[1] + f64::from(p[1]),
-            f64::from(p[2]),
-        ]
     }
 
     /// The mesh's up at a frame east and north, interpolated across the triangle under it.
@@ -138,57 +90,14 @@ impl PlacedGround {
     /// When no triangle lies under the point, or the one that does touches a cell with no
     /// data.
     pub fn up_at(&self, east: f64, north: f64) -> Result<f64, String> {
-        let Some(&(row, column, _, _)) = self.coarse.iter().min_by(|a, b| {
-            let da = (a.2 - east).powi(2) + (a.3 - north).powi(2);
-            let db = (b.2 - east).powi(2) + (b.3 - north).powi(2);
-            da.total_cmp(&db)
-        }) else {
-            return Err(format!("{} has no vertices", self.name));
-        };
-        let reach = self.stride + 1;
-        let rows = row.saturating_sub(reach)..=(row + reach).min(self.rows - 2);
-        for r in rows {
-            for c in column.saturating_sub(reach)..=(column + reach).min(self.columns - 2) {
-                let (nw, ne, sw, se) = (
-                    self.vertex(r, c),
-                    self.vertex(r, c + 1),
-                    self.vertex(r + 1, c),
-                    self.vertex(r + 1, c + 1),
-                );
-                // The same two triangles per cell `TerrainMesh::from_grid` draws.
-                for triangle in [[nw, sw, ne], [ne, sw, se]] {
-                    let Some(weights) = barycentric(triangle, east, north) else {
-                        continue;
-                    };
-                    let up: f64 = triangle.iter().zip(weights).map(|(v, w)| v[2] * w).sum();
-                    if !up.is_finite() {
-                        return Err(format!(
-                            "the position falls in a cell of {} with no height",
-                            self.name
-                        ));
-                    }
-                    return Ok(up);
-                }
-            }
-        }
-        Err(format!("the position lies off {}", self.name))
+        self.surface.up_at(east, north).map_err(|miss| match miss {
+            SurfaceMiss::NoHeight => format!(
+                "the position falls in a cell of {} with no height",
+                self.name
+            ),
+            SurfaceMiss::Off => format!("the position lies off {}", self.name),
+        })
     }
-}
-
-/// The weights that place `(east, north)` in `triangle`'s east-north projection, or `None`
-/// when it lies outside. A point on an edge is inside, so a point on the line two cells
-/// share is not lost between them.
-fn barycentric(triangle: [[f64; 3]; 3], east: f64, north: f64) -> Option<[f64; 3]> {
-    const EDGE: f64 = -1e-9;
-    let [a, b, c] = triangle;
-    let det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
-    if det.abs() < f64::EPSILON || !det.is_finite() {
-        return None;
-    }
-    let wa = ((b[1] - c[1]) * (east - c[0]) + (c[0] - b[0]) * (north - c[1])) / det;
-    let wb = ((c[1] - a[1]) * (east - c[0]) + (a[0] - c[0]) * (north - c[1])) / det;
-    let wc = 1.0 - wa - wb;
-    (wa >= EDGE && wb >= EDGE && wc >= EDGE).then_some([wa, wb, wc])
 }
 
 impl GroundElevation for PlacedGround {

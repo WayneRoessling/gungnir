@@ -91,6 +91,16 @@ pub struct AppState {
     /// The terrain standing last lent to the feeds, so the lookup is built once per load
     /// rather than once per tick.
     pub terrain_lent: Option<crate::terrain::TerrainStatus>,
+    /// The placed terrain resampled once per load, which every line of sight on this
+    /// desktop reads (GAP-247, [`crate::terrain::height_field_of`]). `Some` exactly when the
+    /// terrain is loaded; shared with the dead-spot worker without a copy.
+    pub height_field: Option<std::sync::Arc<gungnir_analytics::HeightField>>,
+    /// The coverage reports computed so far, by their inputs, so the several callers a
+    /// frame has share one computation (GAP-247, [`crate::sustainment::CoverageCache`]).
+    pub coverage_cache: crate::sustainment::CoverageCache,
+    /// The terrain dead spots: the field, the worker computing the next one, and the
+    /// operator's choice of height and sensor (GAP-246, [`crate::dead_spots`]).
+    pub dead_spots: crate::dead_spots::DeadSpots,
     /// The EGM2008 grid status last lent to the feeds, so a lookup service starts once
     /// per change rather than once per tick.
     pub geoid_lent: Option<crate::geoid::GeoidStatus>,
@@ -803,6 +813,9 @@ impl AppState {
             geoid_lent: None,
             terrain_feeds: feeds.terrain.clone(),
             terrain_lent: None,
+            height_field: None,
+            coverage_cache: crate::sustainment::CoverageCache::default(),
+            dead_spots: crate::dead_spots::DeadSpots::default(),
             registration: crate::pointcloud::RegistrationOutcome::NoPair,
             registration_engine: None,
             service_sinks: feeds.observations,

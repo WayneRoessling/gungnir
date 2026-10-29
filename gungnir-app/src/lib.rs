@@ -26,6 +26,7 @@ pub mod bearings;
 pub mod clock_discipline;
 pub mod control_status;
 pub mod cooperative;
+pub mod dead_spots;
 pub mod decisions;
 pub mod deliveries;
 pub mod dense_group;

@@ -20,6 +20,8 @@
 //! | egui pass, p99 under 8 ms at Scenario 4 counts | measured since 2026-09-15, **not asserted** | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured here now; the owner gates it after reading a figure, which is the same rule the two rows above were held to. |
 //! | `tracks()`/`is_healthy()`, p99 under 1 ms | **yes** since 2026-09-15 | Gated in the same walk. Both calls measure p99 100 ns against a 1 ms budget -- four orders of magnitude -- so this one is asserted in **both** profiles; see its own documentation for why the usual release-only rule is not what protects it. |
 //!
+//! | MOP-14, coverage recompute over terrain under 10 s | measured since 2026-10-29, **not asserted** | GAP-246's dead-spot field, the first coverage computed over terrain as an area (`docs/design/DN-34-sensor-dead-spots.md` §11's last row, a Draft). Measured on a 1 000 by 1 000 DEM; gating it is the owner's confirmation, the rule the rows above were held to. |
+//!
 //! **What changed on 2026-09-15 was not the code.** Both rows were measured and printed
 //! for over a week and deliberately not asserted, because promoting a Draft row to a gate
 //! is the owner's confirmation under D-16 and not a test's to take. The walk took it
@@ -588,4 +590,138 @@ fn journal_append_meets_its_budget() {
             "journaling 50 envelopes took a median of {median:?} over {JOURNAL_RUNS} runs, over the {BUDGET_JOURNAL_50:?} budget"
         );
     }
+}
+
+/// A 1 000 by 1 000 ESRI ASCII DEM of 30 m cells in the local frame, centred on the
+/// origin: two superposed swells of rolling hills between 0 and 900 m.
+fn write_hills_dem(path: &Path) {
+    const SIDE: u32 = 1_000;
+    const CELL_M: f64 = 30.0;
+    let mut f = std::io::BufWriter::new(std::fs::File::create(path).expect("writable"));
+    let half = f64::from(SIDE) * CELL_M / 2.0;
+    writeln!(
+        f,
+        "ncols {SIDE}\nnrows {SIDE}\nxllcorner {}\nyllcorner {}\ncellsize {CELL_M}\nNODATA_value -9999",
+        -half, -half
+    )
+    .expect("header");
+    for row in 0..SIDE {
+        let north = half - (f64::from(row) + 0.5) * CELL_M;
+        let line: Vec<String> = (0..SIDE)
+            .map(|c| {
+                let east = -half + (f64::from(c) + 0.5) * CELL_M;
+                let h = 300.0 * ((east / 2_000.0).sin() * (north / 2_700.0).cos())
+                    + 150.0 * (east / 700.0 + north / 900.0).sin()
+                    + 450.0;
+                format!("{h:.1}")
+            })
+            .collect();
+        writeln!(f, "{}", line.join(" ")).expect("a row");
+    }
+}
+
+/// **Measured, not asserted** (GAP-246, MOP-14: "time to recompute coverage over terrain
+/// for the sector after a sensor change, under 10 s"). The dead-spot field over a
+/// 1 000 by 1 000 synthetic DEM at 30 m, three radars switched from standby to search:
+/// the time from the tick that saw the change to the tick that holds a field computed
+/// under it, and the slowest tick in between, which is the "no frame waits on it" half of
+/// DN-34 §11's draft row. Release only, because the budget is a release figure; printed
+/// for the owner to read before gating, as every row above was.
+#[test]
+fn the_dead_spot_recompute_is_measured_against_mop_14() {
+    if cfg!(debug_assertions) {
+        println!("dead-spot recompute: not measured in debug; the budget is a release figure");
+        return;
+    }
+    let dir = scratch("dead-spots");
+    let dem = dir.join("hills.asc");
+    write_hills_dem(&dem);
+    let origin = [0.959_931, 0.209_44, 0.0];
+    let frame = gungnir_model::LocalFrame::new(gungnir_model::Geodetic {
+        lat_rad: origin[0],
+        lon_rad: origin[1],
+        alt_m: origin[2],
+    });
+    let at = |e: f64, n: f64| {
+        let g = frame.to_geodetic([e, n, 1_200.0]);
+        [g.lat_rad, g.lon_rad, g.alt_m]
+    };
+    let sensors: Vec<SensorConfig> = [(-8_000.0, -5_000.0), (7_000.0, -3_000.0), (0.0, 9_000.0)]
+        .iter()
+        .zip(1u32..)
+        .map(|(&(e, n), id)| SensorConfig {
+            id,
+            modality: "radar".into(),
+            position: at(e, n),
+            max_range_m: 12_000.0,
+            control_endpoint: None,
+            maintenance: Vec::new(),
+            detection_model: None,
+            azimuth_sector: None,
+            elevation_band: None,
+        })
+        .collect();
+    let config = ConfigBaseline {
+        data_dir: dir.join("data").to_string_lossy().into_owned(),
+        origin: Some(origin),
+        sensors,
+        terrain: Some(gungnir_config::TerrainConfig {
+            path: dem.to_string_lossy().into_owned(),
+            frame: "local-enu".into(),
+            vertical: None,
+            nad83_realisation: None,
+            vertical_sigma_m: None,
+        }),
+        geoid_grid_dir: Some(dir.join("no-grid-here").to_string_lossy().into_owned()),
+        ..ConfigBaseline::default()
+    };
+    gungnir_config::validate(&config).expect("valid");
+    let mut state = AppState::with_config(config).expect("starts");
+    let wait = |state: &mut AppState, done: &dyn Fn(&AppState) -> bool| -> Duration {
+        let mut slowest = Duration::ZERO;
+        for _ in 0..12_000 {
+            let tick = Instant::now();
+            update::tick(state);
+            slowest = slowest.max(tick.elapsed());
+            if done(state) {
+                return slowest;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!(
+            "never settled: {}",
+            gungnir_app::dead_spots::health_line(state)
+        );
+    };
+    wait(&mut state, &|s| {
+        s.height_field.is_some() && s.dead_spots.computed.is_some()
+    });
+    for id in 1..=3 {
+        gungnir_app::sustainment::record_observed_mode(
+            &mut state,
+            id,
+            gungnir_model::SensorMode::Search,
+        )
+        .expect("searching");
+    }
+    let started = Instant::now();
+    let slowest = wait(&mut state, &|s| {
+        s.dead_spots
+            .computed
+            .as_ref()
+            .is_some_and(|c| c.inputs.sensors.len() == 3)
+            && !s.dead_spots.stale
+    });
+    let recompute = started.elapsed();
+    let computed = state.dead_spots.computed.as_ref().expect("a field");
+    println!(
+        "dead-spot recompute: {recompute:?} from the change to the field ({} by {} cells of \
+         {:.0} m, the worker took {:?}); slowest tick meanwhile {slowest:?} (MOP-14 budget 10 s, \
+         release profile, not asserted)",
+        computed.field.columns,
+        computed.field.rows,
+        computed.field.parameters.cell_m,
+        computed.took
+    );
+    let _ = std::fs::remove_dir_all(dir);
 }

@@ -2564,7 +2564,7 @@ const KNOWN_PANELS: [&str; 21] = [
 ];
 
 /// Coverage analysis settings (DN-12 §6).
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AnalyticsConfig {
     /// Distance between coverage samples along an approach, metres.
     ///
@@ -2595,10 +2595,29 @@ pub struct AnalyticsConfig {
     /// covers a small sector, and a large one raises it knowingly.
     #[serde(default = "default_max_sensor_plan_candidates")]
     pub max_sensor_plan_candidates: usize,
+    /// The heights above ground a dead-spot field may be computed at, metres (GAP-246,
+    /// `docs/design/DN-34-sensor-dead-spots.md` §9, D-147). Each finite and positive, the
+    /// list non-empty and strictly increasing. The first is the one shown at start; PN-11
+    /// chooses among the rest, one at a time.
+    ///
+    /// **Default one height, 100 m** (D-147): the band small UAS and terrain-following
+    /// cruise missiles fly in. A deployment that wants the low and the high case adds 30 m
+    /// and 300 m; every height is a full recompute.
+    #[serde(default = "default_dead_spot_heights_agl_m")]
+    pub dead_spot_heights_agl_m: Vec<f64>,
+    /// The side of a dead-spot field's cell, metres (DN-34 §9). **Absent means the DEM's
+    /// own cell**, made coarser when a field over the sensors' reach would hold more than
+    /// `gungnir_analytics::DEAD_SPOT_CELL_BUDGET` cells, which PN-11 says when it does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dead_spot_cell_m: Option<f64>,
 }
 
 fn default_max_sensor_plan_candidates() -> usize {
     16
+}
+
+fn default_dead_spot_heights_agl_m() -> Vec<f64> {
+    vec![100.0]
 }
 
 /// Seconds a sensor task waits for an acknowledgement before it is reported
@@ -2622,6 +2641,8 @@ impl Default for AnalyticsConfig {
             coverage_min_elevation_rad: default_coverage_min_elevation_rad(),
             anomaly: gungnir_model::anomaly_settings::AnomalySettings::default(),
             max_sensor_plan_candidates: default_max_sensor_plan_candidates(),
+            dead_spot_heights_agl_m: default_dead_spot_heights_agl_m(),
+            dead_spot_cell_m: None,
         }
     }
 }
@@ -3613,6 +3634,38 @@ fn validate_hazards(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     Ok(())
 }
 
+/// GAP-246 (DN-34 §9): the dead-spot heights and cell, refused naming the entry.
+fn validate_dead_spots(analytics: &AnalyticsConfig) -> Result<(), ConfigError> {
+    let heights = &analytics.dead_spot_heights_agl_m;
+    if heights.is_empty() {
+        return Err(ConfigError::Invalid(
+            "analytics.dead_spot_heights_agl_m must name at least one height".into(),
+        ));
+    }
+    for (i, h) in heights.iter().enumerate() {
+        if !(h.is_finite() && *h > 0.0) {
+            return Err(ConfigError::Invalid(format!(
+                "analytics.dead_spot_heights_agl_m[{i}] must be finite and positive, not {h}"
+            )));
+        }
+        if i > 0 && *h <= heights[i - 1] {
+            return Err(ConfigError::Invalid(format!(
+                "analytics.dead_spot_heights_agl_m must be strictly increasing: entry {i}, \
+                 {h}, does not exceed {}",
+                heights[i - 1]
+            )));
+        }
+    }
+    if let Some(cell) = analytics.dead_spot_cell_m {
+        if !(cell.is_finite() && cell > 0.0) {
+            return Err(ConfigError::Invalid(format!(
+                "analytics.dead_spot_cell_m must be finite and positive, not {cell}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn validate_approaches(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     if !baseline.analytics.coverage_sample_spacing_m.is_finite()
         || baseline.analytics.coverage_sample_spacing_m <= 0.0
@@ -3632,6 +3685,7 @@ fn validate_approaches(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             "coverage_min_elevation_rad must be finite and within [-π/2, π/2], not {elevation}"
         )));
     }
+    validate_dead_spots(&baseline.analytics)?;
     let mut names: Vec<&str> = baseline
         .approaches
         .iter()
@@ -9096,6 +9150,41 @@ mod sector_and_urgency_tests {
             ceiling_rad: 0.5,
         });
         validate(&b).expect("a legal placement band");
+    }
+
+    /// GAP-246 (DN-34 §9, D-147): one height, 100 m, by default and from a baseline that
+    /// says nothing; a list that is empty, not increasing or holds a height that is not
+    /// one is refused naming the entry, and so is a cell that is not a length.
+    #[test]
+    fn the_dead_spot_heights_default_to_100_m_and_bad_ones_are_refused() {
+        let b = ConfigBaseline::default();
+        assert_eq!(b.analytics.dead_spot_heights_agl_m, vec![100.0]);
+        assert_eq!(b.analytics.dead_spot_cell_m, None);
+        let silent: AnalyticsConfig = serde_json::from_str("{}").expect("parses");
+        assert_eq!(silent.dead_spot_heights_agl_m, vec![100.0]);
+        validate(&b).expect("the default is valid");
+        for (heights, names) in [
+            (vec![], "at least one"),
+            (vec![30.0, f64::NAN], "[1]"),
+            (vec![0.0], "[0]"),
+            (vec![100.0, 30.0], "strictly increasing"),
+            (vec![100.0, 100.0], "strictly increasing"),
+        ] {
+            let mut bad = ConfigBaseline::default();
+            bad.analytics.dead_spot_heights_agl_m = heights;
+            let err = validate(&bad).expect_err("refused").to_string();
+            assert!(
+                err.contains("dead_spot_heights_agl_m") && err.contains(names),
+                "{err}"
+            );
+        }
+        let mut ok = ConfigBaseline::default();
+        ok.analytics.dead_spot_heights_agl_m = vec![30.0, 100.0, 300.0];
+        ok.analytics.dead_spot_cell_m = Some(50.0);
+        validate(&ok).expect("three heights and a cell");
+        ok.analytics.dead_spot_cell_m = Some(-1.0);
+        let err = validate(&ok).expect_err("refused").to_string();
+        assert!(err.contains("dead_spot_cell_m"), "{err}");
     }
 
     #[test]

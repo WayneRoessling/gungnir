@@ -77,6 +77,9 @@ pub struct CoverageLayers {
     pub hazards: bool,
     /// Geofences (GAP-088): rules about where we may act, drawn apart from hazards.
     pub geofences: bool,
+    /// Where the terrain blinds the sensors (GAP-246, DN-34 §7). On by default for DN-12
+    /// §7's reason: a hidden shadow layer and a sector with no shadow look the same.
+    pub dead_spots: bool,
 }
 
 impl Default for CoverageLayers {
@@ -86,6 +89,7 @@ impl Default for CoverageLayers {
             gaps: true,
             hazards: true,
             geofences: true,
+            dead_spots: true,
         }
     }
 }
@@ -97,7 +101,7 @@ impl CoverageLayers {
     /// only one of them is the map telling you something.
     #[must_use]
     pub fn anything_hidden(self) -> bool {
-        !self.rings || !self.gaps || !self.hazards || !self.geofences
+        !self.rings || !self.gaps || !self.hazards || !self.geofences || !self.dead_spots
     }
 
     /// The hidden layers by name, for the line the viewport draws.
@@ -108,6 +112,7 @@ impl CoverageLayers {
             (self.gaps, "gaps"),
             (self.hazards, "hazards"),
             (self.geofences, "geofences"),
+            (self.dead_spots, "dead spots"),
         ]
         .into_iter()
         .filter_map(|(shown, name)| (!shown).then_some(name))
@@ -133,6 +138,9 @@ pub struct ViewportState {
     pub use_3d: bool,
     /// Which coverage layers to draw (PN-11, GAP-007).
     pub layers: CoverageLayers,
+    /// The dead-spot field's texture, built when the field changes and never per frame
+    /// (GAP-246, `docs/design/DN-34-sensor-dead-spots.md` §8.1).
+    pub dead_spot_texture: Option<layers::DeadSpotTexture>,
 }
 
 impl ViewportState {
@@ -154,6 +162,7 @@ impl ViewportState {
             gl_ready: false,
             use_3d: false,
             layers: CoverageLayers::default(),
+            dead_spot_texture: None,
         }
     }
 }
@@ -182,7 +191,7 @@ fn draw_layers(
     palette: &theme::Palette,
     rect: egui::Rect,
     state: &ViewportState,
-    layers: layers::LayerInputs<'_>,
+    layers: &layers::LayerInputs<'_>,
 ) {
     // Terrain goes under everything: it is the ground the rest is drawn on (GAP-023).
     layers::draw_terrain_2d(painter, palette, rect, &state.view, layers.terrain);
@@ -190,6 +199,18 @@ fn draw_layers(
     // preview below do not: an empty slice already draws nothing, and there is no
     // separate "hidden" state to distinguish from that (GAP-098).
     layers::draw_point_clouds_2d(painter, palette, rect, &state.view, layers.point_clouds);
+    // GAP-246: the dead spots are about the ground, so they lie on it and under every rule,
+    // ring and gap drawn over them (DN-34 §7 item 2).
+    if state.layers.dead_spots {
+        layers::draw_dead_spots_2d(
+            painter,
+            palette,
+            rect,
+            &state.view,
+            state.dead_spot_texture.as_ref(),
+            layers.dead_spots,
+        );
+    }
     if state.layers.geofences {
         layers::draw_geofences_2d(painter, palette, rect, &state.view, layers.geofences);
     }
@@ -295,9 +316,17 @@ pub fn prepare_3d(
     // does -- the same reason the status line is here (GAP-022 item 53). Bearing rays
     // join it for the same reason: there is no GL geometry for anything yet, tracks
     // included (GAP-022's own open item), so this overlay is where a ray is drawn until
-    // there is.
+    // there is. The dead spots join it too (GAP-246, DN-34 §8.2): the same texture, the
+    // same toggle, on whichever renderer is in front.
+    layers::sync_dead_spot_texture(
+        ui.ctx(),
+        palette,
+        &state.view,
+        &mut state.dead_spot_texture,
+        layers.dead_spots,
+    );
     let painter = ui.painter_at(rect);
-    draw_layers(&painter, palette, rect, state, layers);
+    draw_layers(&painter, palette, rect, state, &layers);
     tracks::draw_bearing_rays_2d(&painter, palette, rect, &state.view, &state.bearing_rays);
 
     // The status line is drawn by egui over the callback's output, so it says what the
@@ -341,6 +370,13 @@ pub fn render(
         state.bearing_rays = tracks::update_bearing_ray_glyphs(bearing_rays);
     }
 
+    layers::sync_dead_spot_texture(
+        ui.ctx(),
+        palette,
+        &state.view,
+        &mut state.dead_spot_texture,
+        layers.dead_spots,
+    );
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, palette.viewport_background);
     interaction::draw_grid(&painter, palette, rect, &state.view);
@@ -348,7 +384,7 @@ pub fn render(
     // the symbol an operator is looking at (GAP-007). A bearing ray is context in the
     // same sense -- a direction with no measured position -- so it is drawn here too,
     // under the tracks it has not (yet) been folded into (DN-27 §7).
-    draw_layers(&painter, palette, rect, state, layers);
+    draw_layers(&painter, palette, rect, state, &layers);
     tracks::draw_bearing_rays_2d(&painter, palette, rect, &state.view, &state.bearing_rays);
     tracks::draw_glyphs_2d(&painter, palette, rect, &state.view, &state.glyphs);
     tracks::draw_plan_2d(&painter, palette, rect, &state.view, &state.glyphs, plan);

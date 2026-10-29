@@ -787,7 +787,15 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
                 },
             )
             .collect();
-    let terrain_line = state.terrain.line();
+    // GAP-247, GAP-246 (DN-34 §10): the resampled surface every line of sight reads, and
+    // the dead-spot worker's state, on the terrain's own line.
+    let mut terrain_line = state.terrain.line();
+    if let Some(field) = crate::terrain::height_field_line(state.height_field.as_deref()) {
+        terrain_line.push_str("; ");
+        terrain_line.push_str(&field);
+    }
+    terrain_line.push_str("; ");
+    terrain_line.push_str(&crate::dead_spots::health_line(state));
     let geoid_owned = state.geoid.lines();
     let geoid_lines: Vec<gungnir_ui::panels::sensor_health::GeoidLine<'_>> = geoid_owned
         .iter()
@@ -968,7 +976,8 @@ pub fn render_coverage_layers(
     draft: &mut gungnir_ui::panels::coverage_layers::AcceptanceDraft,
 ) -> Option<PanelAction> {
     use gungnir_ui::panels::coverage_layers::{
-        CoverageLayersView, LaydownComparison, LayerCounts, NothingToDraw,
+        CoverageLayersView, DeadSpotStatus, DeadSpotsView, LaydownComparison, LayerCounts,
+        NothingToDraw,
     };
     use gungnir_viewport3d::layers::CoverageLayer;
 
@@ -1004,7 +1013,43 @@ pub fn render_coverage_layers(
             NothingToDraw::Because { reason: &reason }
         }
     };
+
+    // GAP-246: the dead-spot controls (DN-34 §7 item 1).
+    let dead = &state.dead_spots;
+    let labels: Vec<(u32, String)> = dead
+        .computed
+        .as_ref()
+        .map(|c| {
+            c.inputs
+                .sensors
+                .iter()
+                .map(|(id, _)| (id.0, crate::dead_spots::sensor_label(state, *id)))
+                .collect()
+        })
+        .unwrap_or_default();
+    let sensor_choices: Vec<(u32, &str)> = labels.iter().map(|(id, l)| (*id, l.as_str())).collect();
+    let measure = crate::dead_spots::measure_sentence(state);
+    let dead_status = match (&dead.not_computed, &dead.computed, measure.as_deref()) {
+        (Some(reason), _, _) => DeadSpotStatus::NotComputed { reason },
+        (None, Some(c), Some(measure)) => DeadSpotStatus::Computed {
+            measure,
+            age_s: c.at.elapsed().as_secs_f64(),
+            cell_m: c.field.parameters.cell_m,
+            stale: dead.stale,
+            clamped_from_m: c.field.clamped_from_m,
+            linked: dead.linked,
+        },
+        _ => DeadSpotStatus::Computing,
+    };
     let view = CoverageLayersView {
+        dead_spots: DeadSpotsView {
+            visible: state.viewport.layers.dead_spots,
+            heights_agl_m: &state.config.analytics.dead_spot_heights_agl_m,
+            selected_height: dead.selected_height,
+            sensors: &sensor_choices,
+            for_sensor: dead.for_sensor.map(|s| s.0),
+            status: dead_status,
+        },
         rings_visible: state.viewport.layers.rings,
         gaps_visible: state.viewport.layers.gaps,
         hazards_visible: state.viewport.layers.hazards,

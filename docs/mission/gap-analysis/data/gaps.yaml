@@ -13439,6 +13439,18 @@
       D-146 to D-148 taken by the owner the same day, each to the recommended default
       (`../../record/2026-10-29/the-owner-s-walk-of-2026-10-29.md`). Buildable once
       GAP-247 is closed; no code yet.
+  - date: 2026-10-29
+    status: Closed
+    note: >-
+      Built on the desktop (D-148), in `gungnir-analytics::shadow` (the field, a radial
+      horizon sweep that hands the cells inside its own error bound to the sampled
+      reference), `gungnir-app::dead_spots` (the worker off the tick, stale while it
+      recomputes) and the viewport's textured layer in both renderers, with PN-11's toggle,
+      height, one-sensor choice, measure, age and recompute. Not built: PN-16's per-option
+      column, now GAP-248. DN-34 §11's six rows stay drafts, criteria being human-owned;
+      the tests are `gungnir-analytics/tests/shadow_geometry.rs`,
+      `gungnir-app/tests/dead_spots.rs` and the MOP-14 measurement in `frame_budgets.rs`
+      (`../../record/2026-10-29/gap-246-and-gap-247-terrain-dead-spots.md`).
 
 - id: GAP-247
   name: Terrain line of sight scans every DEM vertex per sample, on a report computed every frame
@@ -13478,3 +13490,45 @@
     note: >-
       Found while writing DN-34. A bound computed from the code, not a measurement; the
       first thing GAP-246's build does, and worth doing before it.
+  - date: 2026-10-29
+    status: Closed
+    note: >-
+      The placed mesh is resampled once per load into a `HeightField` whose cells sit on
+      the DEM's vertices, `PlacedGround`'s interpolation moved down as `MeshSurface`, and
+      the approach report and PN-16's per-laydown reports read `HeightFieldLineOfSight`
+      through a cache keyed on their inputs. PN-11 does not single out the one-time
+      re-opening: the desktop cannot tell a shape change this caused from any other, so
+      each re-opened acceptance is listed as a shape change, and the record item says why
+      (`../../record/2026-10-29/gap-246-and-gap-247-terrain-dead-spots.md`).
+
+- id: GAP-248
+  name: A laydown option's dead spots are not computed on PN-16
+  type: Mission
+  caps: [CAP-1.4, CAP-2.11]
+  layer: "Productization: picture and identity"
+  sev: 2
+  effort: M
+  target: I4
+  owner: Services engineer
+  deps: [GAP-246]
+  impact: >-
+    A planner comparing laydown options on PN-16 sees each option's gaps along the
+    approaches but not the area its terrain would hide, so two options with the same
+    approach coverage and very different blind valleys read the same.
+  evidence: >-
+    `gungnir-app/src/dead_spots.rs` computes the field from the live registry's searching
+    and tracking sensors only; `gungnir-app/src/sustainment.rs::planning_rows` has no
+    shadow column; `../../design/DN-34-sensor-dead-spots.md` §7 item 5
+  action: >-
+    Per DN-34 §7 item 5: on selecting an option, compute its field on the same worker from
+    `laydown_coverage_volumes`, and show the shadow area in a column beside its coverage
+    cell, filled on selection rather than for every row, since every row is a full
+    recompute.
+  ref: >-
+    `../../design/DN-34-sensor-dead-spots.md` §7 item 5 and its amendment 1; GAP-087 (the
+    laydown preview)
+  history:
+  - date: 2026-10-29
+    status: Open
+    note: >-
+      Split from GAP-246 when it was built: the only item of DN-34 §7 the build left out.

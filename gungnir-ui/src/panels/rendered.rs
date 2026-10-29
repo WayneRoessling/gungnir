@@ -46,6 +46,20 @@ const REQUIREMENT_PERSISTENCE: Unavailable<'static> = Unavailable {
 const LAYDOWN_COMPARISON: crate::panels::coverage_layers::LaydownComparison<'static> =
     crate::panels::coverage_layers::LaydownComparison::NothingSelected;
 
+/// The dead-spot controls these tests give PN-11 when they are not exercising them
+/// (GAP-246): shown, one height, no DEM.
+const DEAD_SPOTS: crate::panels::coverage_layers::DeadSpotsView<'static> =
+    crate::panels::coverage_layers::DeadSpotsView {
+        visible: true,
+        heights_agl_m: &[100.0],
+        selected_height: 0,
+        sensors: &[],
+        for_sensor: None,
+        status: crate::panels::coverage_layers::DeadSpotStatus::NotComputed {
+            reason: "no DEM is configured in this baseline (terrain)",
+        },
+    };
+
 /// PN-06's whole reason for existing: an empty queue that says *why*. The reason has to
 /// be on screen, not merely in the view struct.
 #[test]
@@ -3575,6 +3589,7 @@ fn hiding_a_layer_says_the_map_is_not_showing_everything() {
         },
         coverage: NothingToDraw::Available,
         comparison: LAYDOWN_COMPARISON,
+        dead_spots: DEAD_SPOTS,
         geofences_visible: true,
     };
     let probe = RenderProbe::new();
@@ -3623,6 +3638,7 @@ fn the_hazard_layer_states_its_currency() {
         },
         coverage: NothingToDraw::Available,
         comparison: LAYDOWN_COMPARISON,
+        dead_spots: DEAD_SPOTS,
         geofences_visible: true,
     };
     let probe = RenderProbe::new();
@@ -3672,6 +3688,7 @@ fn an_empty_layer_and_a_hidden_one_read_differently() {
             reason: "this deployment has declared no local frame origin",
         },
         comparison: LAYDOWN_COMPARISON,
+        dead_spots: DEAD_SPOTS,
         geofences_visible: true,
     };
     let probe = RenderProbe::new();
@@ -3709,6 +3726,7 @@ fn the_comparison_status_says_nothing_is_selected_when_nothing_is() {
         },
         coverage: NothingToDraw::Available,
         comparison: LAYDOWN_COMPARISON,
+        dead_spots: DEAD_SPOTS,
         geofences_visible: true,
     };
     let probe = RenderProbe::new();
@@ -3747,6 +3765,7 @@ fn the_comparison_status_names_the_selected_options_intent_and_counts() {
             sensors: 3,
             resources: 1,
         },
+        dead_spots: DEAD_SPOTS,
         geofences_visible: true,
     };
     let probe = RenderProbe::new();
@@ -3754,6 +3773,91 @@ fn the_comparison_status_names_the_selected_options_intent_and_counts() {
     assert!(frame.says("weight the western flank"), "{}", frame.joined());
     assert!(frame.says("3 sensor"), "{}", frame.joined());
     assert!(frame.says("1 resource"), "{}", frame.joined());
+}
+
+/// GAP-246 (DN-34 §7 item 1): with no DEM, PN-11 says the dead spots are unknown, not
+/// absent; with a field it says the measure, its age, its cell and that it is geometric
+/// line of sight, a coarsened cell and a recompute in flight; and a hidden dead-spot layer
+/// raises the hidden-layer sentence like any other.
+#[test]
+fn the_dead_spot_controls_say_what_the_field_is_or_why_there_is_none() {
+    use crate::panels::coverage_layers::{
+        render_coverage_layers, CoverageLayersView, DeadSpotStatus, DeadSpotsView, HazardCurrency,
+        LayerCounts, NothingToDraw,
+    };
+    let view = CoverageLayersView {
+        rings_visible: true,
+        gaps_visible: true,
+        hazards_visible: true,
+        counts: LayerCounts {
+            rings: 2,
+            gaps: 0,
+            hazards: 0,
+            geofences: 0,
+            accepted_gaps: 0,
+        },
+        hazards: HazardCurrency {
+            declared: 0,
+            baseline_version: 1,
+        },
+        coverage: NothingToDraw::Available,
+        comparison: LAYDOWN_COMPARISON,
+        dead_spots: DEAD_SPOTS,
+        geofences_visible: true,
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &view));
+    assert!(frame.says("not computed"), "{}", frame.joined());
+    assert!(frame.says("no DEM is configured"), "{}", frame.joined());
+    assert!(frame.says("unknown"), "{}", frame.joined());
+    assert!(!frame.says("A hidden layer is not"), "{}", frame.joined());
+
+    let computed = CoverageLayersView {
+        dead_spots: DeadSpotsView {
+            heights_agl_m: &[30.0, 100.0, 300.0],
+            selected_height: 1,
+            sensors: &[(1, "S1 north radar"), (2, "S2 RF")],
+            status: DeadSpotStatus::Computed {
+                measure:
+                    "dead spots at 100 m above ground: 12.3 km\u{b2} of 310.0 km\u{b2} claimed",
+                age_s: 6.0,
+                cell_m: 45.0,
+                stale: true,
+                clamped_from_m: Some(30.0),
+                linked: false,
+            },
+            ..DEAD_SPOTS
+        },
+        ..view
+    };
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &computed));
+    for want in [
+        "12.3 km",
+        "6 s ago",
+        "45 m cells",
+        "geometric line of sight",
+        "30 m asked",
+        "Recomputing",
+        "300 m",
+        "every active sensor",
+        "Recompute dead spots",
+    ] {
+        assert!(frame.says(want), "{want}: {}", frame.joined());
+    }
+
+    let hidden = CoverageLayersView {
+        dead_spots: DeadSpotsView {
+            visible: false,
+            ..DEAD_SPOTS
+        },
+        ..view
+    };
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &hidden));
+    assert!(
+        frame.says("A hidden layer is not an empty one"),
+        "{}",
+        frame.joined()
+    );
 }
 
 /// PN-21 has to paint all four elements of AGPL section 0, not merely hold them.

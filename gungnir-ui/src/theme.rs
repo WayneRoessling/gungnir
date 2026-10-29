@@ -177,6 +177,15 @@ pub struct Palette {
     pub coverage_max_alpha: u8,
     /// Opacity of the shaded terrain under the picture (GAP-023).
     pub terrain_alpha: u8,
+    /// A sensor dead spot on the map (GAP-246, `docs/design/DN-34-sensor-dead-spots.md`
+    /// §8.1): a solid dark fill over the terrain where a sensor claims and the ground hides.
+    /// Opaque, with the transparency in [`Palette::shadow_alpha`] beside it, as
+    /// [`Palette::coverage_color`] is. Not a text colour, so the contrast rule does not
+    /// apply; what it must do is darken the ground under it, which a test holds.
+    pub shadow_color: Color32,
+    /// Opacity of a dead spot's fill: dark enough to read at a glance, translucent enough
+    /// that the terrain's shading still shows the ridge that causes it.
+    pub shadow_alpha: u8,
     /// Static hazards and barriers (DN-14, GAP-017).
     pub hazard_color: Color32,
     /// The selection halo around a glyph: white, per DS-04.
@@ -254,6 +263,8 @@ impl Palette {
             coverage_color: Color32::from_rgb(73, 132, 172),
             coverage_max_alpha: 80,
             terrain_alpha: 110,
+            shadow_color: Color32::from_rgb(4, 2, 12),
+            shadow_alpha: 170,
             hazard_color: Color32::from_rgb(190, 120, 220),
             selection_halo_color: Color32::from_rgb(240, 240, 240),
             laydown_preview_color: Color32::from_rgb(230, 100, 200),
@@ -915,6 +926,38 @@ mod surface_tests {
             assert!(palette.terrain_alpha < 160);
         }
     }
+
+    /// GAP-246: a dead spot darkens the ground it is drawn over, and visibly -- the owner
+    /// asked for "a darkened area clearly showing the operator where the sensors are
+    /// blind" -- while staying translucent enough that the ridge causing it still shows.
+    /// The terrain colours are `gungnir_viewport3d::layers::terrain_color`'s ends, blended
+    /// over the viewport background the way egui blends them.
+    #[test]
+    fn a_dead_spot_darkens_the_terrain_under_it_but_does_not_hide_it() {
+        let over = |top: [f64; 3], alpha: f64, under: [f64; 3]| {
+            [0, 1, 2].map(|i| top[i] * alpha + under[i] * (1.0 - alpha))
+        };
+        let rgb = |c: Color32| [f64::from(c.r()), f64::from(c.g()), f64::from(c.b())];
+        let luma = |c: [f64; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        for palette in [Palette::day(), Palette::night()] {
+            let terrain_alpha = f64::from(palette.terrain_alpha) / 255.0;
+            let shadow_alpha = f64::from(palette.shadow_alpha) / 255.0;
+            assert!(
+                palette.shadow_alpha < 230,
+                "the ground must still show through"
+            );
+            for ground in [[46.0, 92.0, 52.0], [176.0, 150.0, 110.0]] {
+                let lit = over(ground, terrain_alpha, rgb(palette.viewport_background));
+                let dark = over(rgb(palette.shadow_color), shadow_alpha, lit);
+                assert!(
+                    luma(dark) < 0.5 * luma(lit),
+                    "a dead spot over {ground:?} must at least halve its brightness: {} to {}",
+                    luma(lit),
+                    luma(dark)
+                );
+            }
+        }
+    }
 }
 
 /// D-35, DS-07, GAP-095: what the night variant actually changes, and what it must
@@ -1034,6 +1077,8 @@ mod palette_variant_tests {
         assert_eq!(day.coverage_color, night.coverage_color);
         assert_eq!(day.coverage_max_alpha, night.coverage_max_alpha);
         assert_eq!(day.terrain_alpha, night.terrain_alpha);
+        assert_eq!(day.shadow_color, night.shadow_color);
+        assert_eq!(day.shadow_alpha, night.shadow_alpha);
         assert_eq!(day.hazard_color, night.hazard_color);
         assert_eq!(day.selection_halo_color, night.selection_halo_color);
         assert_eq!(day.laydown_preview_color, night.laydown_preview_color);

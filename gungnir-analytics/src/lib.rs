@@ -13,6 +13,17 @@
 
 pub mod anomaly;
 pub mod coverage;
+pub mod shadow;
+pub mod terrain;
+
+pub use shadow::{
+    dead_spot_cell_m, measure_cells, shadow_field, shadow_field_reference, CellSight, ShadowField,
+    ShadowMeasure, ShadowParameters, Sight, DEAD_SPOT_CELL_BUDGET,
+};
+pub use terrain::{
+    HeightField, HeightFieldError, HeightFieldLineOfSight, MeshSurface, SurfaceMiss,
+    HEIGHT_FIELD_CELL_BUDGET,
+};
 
 pub use coverage::{
     accepted_gap, band_or_default, combined_coverage, coverage_from_registry, same_gap, standing,
@@ -50,6 +61,10 @@ impl LineOfSight for FlatTerrainLineOfSight {
 /// height at each sample (nearest vertex in the E,N plane). A reference
 /// implementation: correct, O(vertices) per sample, and the baseline any spatially
 /// indexed version must agree with.
+///
+/// **Not for anything that runs per frame** (GAP-247): a 1 000 by 1 000 DEM costs a
+/// million distance computations a sample. The desktop reads
+/// [`terrain::HeightFieldLineOfSight`], which samples the same surface resampled once.
 pub struct TerrainMaskLineOfSight<'a> {
     pub terrain: &'a TerrainMesh,
     pub sample_spacing_m: f64,

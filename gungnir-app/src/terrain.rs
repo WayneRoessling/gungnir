@@ -174,8 +174,14 @@ pub fn poll(state: &mut AppState) {
                     nad83_realisation: t.nad83_realisation.as_deref(),
                 });
             let epoch = crate::geoid::frame_epoch(&state.config);
-            match place(mesh, declared, state.config.origin, epoch, &state.geoid) {
-                Ok(placed) => {
+            let placed = place(mesh, declared, state.config.origin, epoch, &state.geoid).and_then(
+                |placed| {
+                    let field = height_field_of(&placed)?;
+                    Ok((placed, field))
+                },
+            );
+            match placed {
+                Ok((placed, field)) => {
                     state.terrain = TerrainStatus::Loaded {
                         path,
                         vertices: placed.positions.len(),
@@ -183,8 +189,10 @@ pub fn poll(state: &mut AppState) {
                     };
                     state.data.terrains.clear();
                     state.data.terrains.push(placed);
+                    state.height_field = Some(std::sync::Arc::new(field));
                 }
                 Err(reason) => {
+                    state.height_field = None;
                     state.terrain = TerrainStatus::Failed {
                         path: path.clone(),
                         reason: reason.clone(),
@@ -197,6 +205,7 @@ pub fn poll(state: &mut AppState) {
         }
         Err(err) => {
             let reason = err.to_string();
+            state.height_field = None;
             state.terrain = TerrainStatus::Failed {
                 path: path.clone(),
                 reason: reason.clone(),
@@ -207,6 +216,41 @@ pub fn poll(state: &mut AppState) {
         }
     }
     state.loader = None;
+}
+
+/// The placed surface resampled once for line of sight (GAP-247,
+/// `docs/design/DN-34-sensor-dead-spots.md` §6.1): at the DEM's own spacing, made coarser
+/// only when the raster would be over its budget. A surface that cannot be resampled is
+/// refused with the terrain, by name: drawing a DEM the coverage analytics cannot mask
+/// against would show ground the line of sight ignores.
+///
+/// # Errors
+///
+/// When the placed mesh is not a grid, or its surface cannot be resampled.
+pub fn height_field_of(placed: &TerrainMesh) -> Result<gungnir_analytics::HeightField, String> {
+    let refused =
+        |why: String| format!("its surface could not be resampled for line of sight: {why}");
+    let native = gungnir_analytics::HeightField::native_cell_m(placed)
+        .ok_or_else(|| refused("it is not a grid of at least two rows and columns".into()))?;
+    let (cell, _) = gungnir_analytics::HeightField::fitting_cell_m(
+        placed,
+        native,
+        gungnir_analytics::HEIGHT_FIELD_CELL_BUDGET,
+    );
+    gungnir_analytics::HeightField::resample(placed, cell).map_err(|e| refused(e.to_string()))
+}
+
+/// One line for PN-09 about the resampled surface, or `None` while there is none.
+#[must_use]
+pub fn height_field_line(field: Option<&gungnir_analytics::HeightField>) -> Option<String> {
+    let field = field?;
+    Some(format!(
+        "line of sight reads the surface resampled to {:.0} m cells, {} by {} ({} cells)",
+        field.cell_m,
+        field.columns,
+        field.rows,
+        field.up_m.len()
+    ))
 }
 
 /// WGS84 geographic, EPSG:4326 -- `gungnir_data::geospatial::crs::WGS84_EPSG` restated

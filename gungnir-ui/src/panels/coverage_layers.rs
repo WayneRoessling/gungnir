@@ -83,8 +83,45 @@ pub enum LaydownComparison<'a> {
     },
 }
 
+/// Where the dead-spot field stands (GAP-246, `docs/design/DN-34-sensor-dead-spots.md` §7).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DeadSpotStatus<'a> {
+    /// Not computed, and why: no DEM, no local frame, a refused surface. The dead spots
+    /// are unknown, not absent, and the panel says which.
+    NotComputed { reason: &'a str },
+    /// The first field is being computed.
+    Computing,
+    Computed {
+        /// The measure in words (`gungnir_analytics::ShadowMeasure::sentence`).
+        measure: &'a str,
+        age_s: f64,
+        cell_m: f64,
+        /// The inputs changed and a newer field is on its way.
+        stale: bool,
+        /// The cell asked for, when the budget made it coarser.
+        clamped_from_m: Option<f64>,
+        /// The desktop is linked: the field is its own, from the node's sensors (D-148).
+        linked: bool,
+    },
+}
+
+/// PN-11's dead-spot controls (DN-34 §7 item 1).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DeadSpotsView<'a> {
+    pub visible: bool,
+    /// The baseline's heights above ground, metres (`analytics.dead_spot_heights_agl_m`).
+    pub heights_agl_m: &'a [f64],
+    /// Which of them is shown.
+    pub selected_height: usize,
+    /// The active sensors by identifier and label, for showing one sensor's shadow alone.
+    pub sensors: &'a [(u32, &'a str)],
+    /// The sensor whose shadow alone is shown, or `None` for every active sensor's.
+    pub for_sensor: Option<u32>,
+    pub status: DeadSpotStatus<'a>,
+}
+
 /// Everything PN-11 draws.
-// Four independent toggles are four bools; see `gungnir_viewport3d::CoverageLayers`.
+// Five independent toggles are five bools; see `gungnir_viewport3d::CoverageLayers`.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CoverageLayersView<'a> {
@@ -97,6 +134,8 @@ pub struct CoverageLayersView<'a> {
     pub coverage: NothingToDraw<'a>,
     /// The before-and-after preview PN-16's selection is driving on the map.
     pub comparison: LaydownComparison<'a>,
+    /// The terrain dead spots (GAP-246).
+    pub dead_spots: DeadSpotsView<'a>,
 }
 
 /// What the operator toggled this frame.
@@ -106,6 +145,14 @@ pub enum LayerAction {
     ShowGaps(bool),
     ShowHazards(bool),
     ShowGeofences(bool),
+    /// GAP-246: the dead-spot layer on or off.
+    ShowDeadSpots(bool),
+    /// Show the field at the baseline's height with this index.
+    DeadSpotHeight(usize),
+    /// Show one sensor's shadow alone, or every active sensor's.
+    DeadSpotsFor(Option<u32>),
+    /// Compute the field again now.
+    RecomputeDeadSpots,
 }
 
 /// Render the coverage layer controls.
@@ -171,10 +218,19 @@ pub fn render_coverage_layers(
         action = Some(LayerAction::ShowGeofences(geofences));
     }
 
+    ui.separator();
+    if let Some(a) = draw_dead_spots(ui, palette, &view.dead_spots) {
+        action = Some(a);
+    }
+
     // **The sentence this panel exists to make impossible to miss.** A hidden layer and
     // an empty one look identical on the map, and only one of them is the map telling
     // you something about the sector.
-    if !view.rings_visible || !view.gaps_visible || !view.hazards_visible || !view.geofences_visible
+    if !view.rings_visible
+        || !view.gaps_visible
+        || !view.hazards_visible
+        || !view.geofences_visible
+        || !view.dead_spots.visible
     {
         ui.separator();
         ui.label(
@@ -189,6 +245,137 @@ pub fn render_coverage_layers(
     ui.separator();
     draw_laydown_comparison(ui, palette, view.comparison);
     action
+}
+
+/// The dead-spot controls (GAP-246, DN-34 §7 item 1): the toggle, the height, whose shadow,
+/// what the field measures, how old it is, and the control to compute it again.
+fn draw_dead_spots(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &DeadSpotsView<'_>,
+) -> Option<LayerAction> {
+    let mut action = None;
+    let mut visible = view.visible;
+    let label = match view.status {
+        DeadSpotStatus::NotComputed { .. } => "Terrain dead spots (not computed)",
+        DeadSpotStatus::Computing => "Terrain dead spots (computing)",
+        DeadSpotStatus::Computed { .. } => "Terrain dead spots",
+    };
+    if ui.checkbox(&mut visible, label).changed() {
+        action = Some(LayerAction::ShowDeadSpots(visible));
+    }
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Height above ground:").small());
+        if view.heights_agl_m.len() > 1 {
+            for (i, h) in view.heights_agl_m.iter().enumerate() {
+                if ui
+                    .selectable_label(i == view.selected_height, format!("{h:.0} m"))
+                    .clicked()
+                    && i != view.selected_height
+                {
+                    action = Some(LayerAction::DeadSpotHeight(i));
+                }
+            }
+        } else if let Some(h) = view.heights_agl_m.first() {
+            ui.label(RichText::new(format!("{h:.0} m")).small());
+        }
+    });
+    if !view.sensors.is_empty() {
+        let shown = view
+            .for_sensor
+            .and_then(|id| view.sensors.iter().find(|(s, _)| *s == id))
+            .map_or("every active sensor", |(_, name)| *name);
+        egui::ComboBox::from_id_salt("dead_spots_for")
+            .selected_text(shown)
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_label(view.for_sensor.is_none(), "every active sensor")
+                    .clicked()
+                {
+                    action = Some(LayerAction::DeadSpotsFor(None));
+                }
+                for (id, name) in view.sensors {
+                    if ui
+                        .selectable_label(view.for_sensor == Some(*id), *name)
+                        .clicked()
+                    {
+                        action = Some(LayerAction::DeadSpotsFor(Some(*id)));
+                    }
+                }
+            });
+    }
+    draw_dead_spot_status(ui, palette, view.status);
+    if ui.small_button("Recompute dead spots").clicked() {
+        action = Some(LayerAction::RecomputeDeadSpots);
+    }
+    action
+}
+
+/// What the dead-spot field is, or why there is none.
+fn draw_dead_spot_status(ui: &mut Ui, palette: &theme::Palette, status: DeadSpotStatus<'_>) {
+    match status {
+        DeadSpotStatus::NotComputed { reason } => {
+            ui.label(
+                RichText::new(format!(
+                    "Not computed: {reason}. The dead spots are not absent, they are unknown."
+                ))
+                .small()
+                .color(palette.warning_color),
+            );
+        }
+        DeadSpotStatus::Computing => {
+            ui.label(
+                RichText::new("Computing the first field off the picture's thread.")
+                    .small()
+                    .color(palette.muted_text_color()),
+            );
+        }
+        DeadSpotStatus::Computed {
+            measure,
+            age_s,
+            cell_m,
+            stale,
+            clamped_from_m,
+            linked,
+        } => {
+            ui.label(RichText::new(measure).small());
+            ui.label(
+                RichText::new(format!(
+                    "Computed {age_s:.0} s ago on {cell_m:.0} m cells; geometric line of sight \
+                     over the DEM, no refraction, so a radar sees a little more than this."
+                ))
+                .small()
+                .color(palette.muted_text_color()),
+            );
+            if let Some(asked) = clamped_from_m {
+                ui.label(
+                    RichText::new(format!(
+                        "The cell was made coarser to stay within the field's budget: \
+                         {asked:.0} m asked, {cell_m:.0} m used."
+                    ))
+                    .small()
+                    .color(palette.warning_color),
+                );
+            }
+            if linked {
+                ui.label(
+                    RichText::new(
+                        "This desktop's own field, from the node's sensors and this desktop's \
+                         DEM: the node computes none.",
+                    )
+                    .small()
+                    .color(palette.muted_text_color()),
+                );
+            }
+            if stale {
+                ui.label(
+                    RichText::new("Recomputing: the sensors, the terrain or the height changed.")
+                        .small()
+                        .color(palette.warning_color),
+                );
+            }
+        }
+    }
 }
 
 /// The before-and-after preview's status: what PN-16 has selected, or that nothing is.
