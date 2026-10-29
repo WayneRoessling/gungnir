@@ -1,5 +1,13 @@
 # Gate 3: cargo miri on any PR whose diff contains `unsafe`
 # (docs/agentic-workflow.md, docs/agentic-coding-standards.md §4).
+#
+# **On the crates that gained the `unsafe`, since 2026-10-29.** Until then the matrix
+# was a fixed list of twelve tracking crates, run in full whenever `unsafe` was added
+# anywhere: two hours of runner time, and never the crate the `unsafe` went into unless
+# it was one of the twelve. `.github/scripts/miri_matrix.py` now reads the diff and
+# emits the matrix, with the per-crate targets and skips that used to be written here
+# kept in its table, beside the reasons each long test is left out. A dispatch runs
+# every crate in that table, as it always did.
 name: miri
 
 on:
@@ -27,92 +35,37 @@ jobs:
     timeout-minutes: 5
     outputs:
       has_unsafe: ${{ steps.scan.outputs.has_unsafe }}
+      matrix: ${{ steps.scan.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # `unsafe` in added code, not in added comments (2026-10-28). The scan read every
-      # added line, so a comment explaining why something is *not* unsafe ran two hours of
-      # miri: GAP-215's pull request did, three times. Added lines only (not the `+++`
-      # file header), with everything from `//` to the end of the line removed, which
-      # covers line and doc comments. Not `grep -q`: under `pipefail` its early exit would
-      # fail `sed` upstream and read as no match.
+      # `unsafe` in added code, not in added comments (2026-10-28): added lines only, with
+      # everything from `//` to the end of the line removed, which covers line and doc
+      # comments. The scan read every added line before that, so a comment explaining why
+      # something is *not* unsafe ran two hours of miri: GAP-215's pull request did, three
+      # times. The script maps each hit to its crate and writes the matrix; it fails the
+      # job if `unsafe` was added outside a workspace crate, where it cannot run miri, so
+      # that a person decides rather than the gate passing on nothing. A dispatch asks
+      # for every crate in the script's table.
       - id: scan
         run: |
-          if git diff --unified=0 origin/${{ github.base_ref }}...HEAD -- '*.rs' \
-            | grep -E '^\+[^+]' | sed -E 's#//.*$##' | grep -E '\bunsafe\b' ; then
-            echo "has_unsafe=true" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python3 .github/scripts/miri_matrix.py --all >> "$GITHUB_OUTPUT"
           else
-            echo "has_unsafe=false" >> "$GITHUB_OUTPUT"
+            python3 .github/scripts/miri_matrix.py "origin/${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
           fi
 
   miri:
     needs: detect-unsafe
-    if: github.event_name == 'workflow_dispatch' || needs.detect-unsafe.outputs.has_unsafe == 'true'
+    if: needs.detect-unsafe.outputs.has_unsafe == 'true'
     runs-on: ubuntu-latest
-    # One job per crate, in parallel, none cancelling another (GAP-164). miri interprets
-    # about a thousand times slower than native code, so the gate runs what finishes: each
-    # crate's unit tests and the integration suites that finish, with the long-run tests
-    # named below left out (D-92). Every code path those tests reach is still reached by
-    # the unit tests beside them; what is left out is the length of the run, not the
-    # code. Times are measured under miri (CI, or locally with 16 at once where marked).
-    #
-    # Left out, with why:
-    # - gungnir-metrics motmetrics_diff: 2 h 3 min on CI.
-    # - gungnir-allocation one_step_oracle: over 90 min on CI on 2026-10-28, when the job
-    #   reached its 120 min limit and was cancelled with every suite before it passed.
-    # - gungnir-tracking-service sample_set_replay, scenario_truth_replay,
-    #   whole_pipeline_replay: hours each; they fail their own 60 s deadlock guard. And the
-    #   lib test named in `skip`, which runs the dense-group pipeline and waits ten seconds
-    #   for its group: added on 2026-10-26 (GAP-015), it first ran under miri on 2026-10-28
-    #   and failed at that wait, the same pipeline as fusion-async's dense_group below.
-    # - gungnir-fusion-async dense_group: over 5 h on CI.
-    # - gungnir-filters imm_diff, linear_kalman_diff, particle_diff, sqrt_diff: over 10 min
-    #   each (local), and the lib tests named in `skip` below, over 10 min each (local).
-    # - gungnir-rfs cphd_diff, lmb_diff, lmb_label_continuity: over 10 min each (local),
-    #   and the lib tests named in `skip`.
-    # A test is added back here when it is measured to finish.
+    # One job per crate, in parallel, none cancelling another (GAP-164). What each crate
+    # runs, and which long tests are left out and why, is the table in
+    # .github/scripts/miri_matrix.py.
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - crate: gungnir-core
-            targets: --lib --tests
-          - crate: gungnir-coord
-            targets: --lib --tests
-          - crate: gungnir-association
-            targets: --lib --tests
-          - crate: gungnir-track
-            targets: --lib --tests
-          - crate: gungnir-track-fusion
-            targets: --lib --tests
-          - crate: gungnir-allocation
-            targets: --lib --test bellman_diff --test horizon_first_step
-          - crate: gungnir-intercept-service
-            targets: --lib --tests
-          - crate: gungnir-metrics
-            targets: --lib
-          - crate: gungnir-tracking-service
-            targets: --lib --test sensor_position_resolver
-            skip: >-
-              --skip tests::a_dense_scan_puts_a_group_on_the_view_and_it_ages_stale_with_nothing_arriving
-          - crate: gungnir-fusion-async
-            targets: --lib --test bearing --test oos_convergence
-          - crate: gungnir-filters
-            targets: --lib --test rts_diff --test nonlinear_diff
-            skip: >-
-              --skip imm::tests::mode_probabilities_stay_a_distribution_over_a_long_run
-              --skip imm::tests::probability_moves_to_the_mode_that_explains_the_motion
-              --skip kalman::tests::covariance_stays_psd_over_a_long_run
-              --skip particle::tests::a_bimodal_cloud_keeps_both_plausible_lumps_and_drops_the_impossible_one
-              --skip particle::tests::an_update_pulls_the_cloud_toward_the_measurement_and_shrinks_it
-              --skip sqrt::tests::the_square_root_form_tracks_the_standard_form
-              --skip sqrt::tests::zero_psd_violations_over_a_hundred_thousand_cycles
-          - crate: gungnir-rfs
-            targets: --lib --test phd_diff
-            skip: >-
-              --skip tests::cphd_shows_less_cardinality_swing_than_phd_under_frequent_missed_detections
-              --skip tests::the_mixture_stays_bounded_over_a_long_dense_run
+      matrix: ${{ fromJSON(needs.detect-unsafe.outputs.matrix) }}
     name: miri (${{ matrix.crate }})
     # The slowest job is gungnir-fusion-async at 55 minutes (dispatched run 36253724048,
     # 2026-09-26); the bound leaves room without letting a hang run for hours.

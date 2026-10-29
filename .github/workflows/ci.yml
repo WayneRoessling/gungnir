@@ -26,20 +26,28 @@ env:
 jobs:
   # deny.toml is the distributability control for an AGPL workspace (docs/release-
   # governance.md); a dependency under a license outside its allow-list has to fail the
-  # pull request that adds it, not the tag months later. Advisories run here too: a new
-  # CVE reaching main between tags is worth knowing about the pull request that
-  # introduced or already carried it, not only at the next release, and deny.toml's own
-  # `ignore` list is what keeps a dev-only or unreachable advisory from blocking one.
-  # release.yml still runs `cargo deny check` on every tag as the release gate proper.
+  # pull request that adds it, not the tag months later. These three checks read the
+  # lockfile and deny.toml and nothing else, so a pull request that changes neither
+  # cannot fail them, and a documents-only pull request skips the job.
+  #
+  # **Advisories are not here** (2026-10-29). They were, and in the 30 days to this date
+  # four of the twelve red `ci` runs were an advisory published that morning failing a
+  # pull request that touched no dependency, one of them documents-only (#240's
+  # follow-up). An advisory is about the lockfile main already carries, so it is
+  # checked where that is the subject: advisories.yml runs on every push to main, daily,
+  # and on a pull request that changes a manifest, the lockfile or deny.toml. release.yml
+  # still runs the whole of `cargo deny check` on every tag as the release gate proper.
   deny:
-    name: cargo-deny (licenses, bans, sources, advisories)
+    name: cargo-deny (licenses, bans, sources)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check licenses bans sources advisories
+          command: check licenses bans sources
 
   # What a pull request changes, so a change to documents alone does not build and test
   # the whole workspace (2026-10-28). A pull request whose every file is a document under
@@ -170,6 +178,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.98"
+      # mold as the linker (2026-10-29). A shard compiles the workspace and then links
+      # 252 test binaries, each against the whole dependency graph, and the restored
+      # cache holds the dependencies' artifacts but never the workspace's (rust-cache
+      # removes those before saving), so every run links all 252. GNU ld does that one
+      # section at a time on one core; mold does it in parallel. The action puts mold
+      # where `cc` finds it as `ld`, so no `.cargo/config.toml` or `RUSTFLAGS` changes
+      # and a local build links as it always did. Measured on this change's own pull
+      # request against main's run for #248 (the record item of this date has the
+      # figures); `release-gates` below links the release tests and benches the same way.
+      - uses: rui314/setup-mold@v1
       # Shared by the three shards, which build the same thing, and with `docs-tests`
       # below, which reads it and never writes it. The first shard alone writes it, so
       # main's run does not try to save one cache three times.
@@ -220,6 +238,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.98"
+      # As in `test` above: the release tests and every bench binary are linked here.
+      - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}

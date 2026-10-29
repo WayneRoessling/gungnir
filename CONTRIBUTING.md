@@ -47,7 +47,9 @@ make the commercial edition undistributable.
   `docs/agentic-coding-standards.md` §2 and §2.9. Propose additions in the PR
   description with the problem they solve. `ci.yml` runs `cargo deny check licenses
   bans sources` on every pull request, so a crate under a license outside
-  `deny.toml`'s allow-list fails the PR that adds it.
+  `deny.toml`'s allow-list fails the PR that adds it; `advisories.yml` runs
+  `cargo deny check advisories` on every push to `main`, daily, and on a pull request
+  that changes a manifest, the lockfile or `deny.toml`.
 - **A new workspace crate has three manifest obligations.** Its `Cargo.toml` opens
   with the same three-line licence header as every source file (cargo-about reads the
   licence from that line, since an inherited `license.workspace = true` has no text of
@@ -124,7 +126,12 @@ followed by `cargo test --workspace --doc` for the doctests nextest does not run
 (`cargo install cargo-nextest --locked`). In `ci.yml` the formatting and lint checks,
 the tests, and the release-profile gates are three jobs that run side by side, the tests
 are split across three runners by nextest's `--partition count:N/3`, and a pull request
-that changes only documents runs just the Rust tests that read documents.
+that changes only documents runs just the Rust tests that read documents. The Linux
+jobs that link test binaries do so with mold, through `rui314/setup-mold`; nothing in
+the repository names a linker, so a local build links as it always did.
+`miri.yml` runs on the crates whose added code holds `unsafe`, from the table in
+`.github/scripts/miri_matrix.py`. `advisories.yml` is the advisory check, off the
+pull-request path since 2026-10-29; its header says why.
 `bench-regression.yml` runs by dispatch only, since 2026-10-28; its header says why.
 `cross-document-recheck.yml` re-runs the document checks of every open pull request after
 each merge to `main` and posts the result on it, and `pr-rules.yml` checks the description
