@@ -44,11 +44,11 @@ the summary can be checked against its home.
 
 | Generated | By | Check |
 |---|---|---|
-| The registry's resource section and `uses` edges | `../../uaf/tools/build_uaf.py` from the crate manifests | Continuous integration job `uaf-registry` |
+| The registry's resource section and `uses` edges | `../../uaf/tools/build_uaf.py` from the crate manifests | Continuous integration job `documents`, group `uaf` |
 | Eight UAF views and five traceability matrices | The same tool | The same job |
 | Ten operational process views and ten scenario views | The same tool from the mission documents | The same job |
 | The gap register, coverage matrix, technical gap map, closure roadmap | The gap generator | Cycle and increment-ordering checks inside the generator |
-| Test-track catalogue, scenarios, and sample data | `../../../test-tracks/tools/` | Continuous integration job `test-tracks` |
+| Test-track catalogue, scenarios, and sample data | `../../../test-tracks/tools/` | Continuous integration job `documents`, group `tracks` |
 | The financial model | The workbook builder | A formula evaluator that recomputes all 196 formulas |
 
 Everything else is written. The distinction matters because a generated document must
