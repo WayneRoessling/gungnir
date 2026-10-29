@@ -102,7 +102,7 @@ written once, in a `record/` item, the commit or the pull request, and is not ed
   from `test-tracks/tools/build_catalogue.py`. Each generator is deterministic, so
   re-running it on an unmodified tree rewrites its outputs byte for byte; that is also
   the check that no hand edit has crept in. Change the source and re-run;
-  `bash .github/scripts/check_documents.sh all`, from the repository root, runs all of
+  `python .github/scripts/check_documents.py all`, from any directory, runs all of
   them and the cross-document checks the way CI does.
 - **History is append-only.** A merged `record/` item, a merged gap history entry, and a
   merged signature entry are not edited; a correction is a new entry that names what it

@@ -76,7 +76,7 @@ activity; every activity is realized by a service or performed by a human and
 performed by someone; every service is implemented by a resource and its `code`
 path exists in the source; every id in a diagram source exists. `--check` runs the
 check without writing. CI runs the check (`.github/workflows/ci.yml`, job
-`documents`, group `uaf` of `.github/scripts/check_documents.sh`), which runs from the
+`documents`, group `uaf` of `.github/scripts/check_documents.py`), which runs from the
 moment GAP-061 hosts the repository on GitHub.
 
 ```bash

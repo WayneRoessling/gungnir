@@ -48,7 +48,7 @@ while read -r number head; do
   if ! git "${identity[@]}" -C "$dir" merge -q --no-edit "$head"; then
     state=error
     description="does not merge cleanly with main ${main_sha:0:7}"
-  elif (cd "$dir" && BASE_REF="$main_sha" bash .github/scripts/check_documents.sh cross); then
+  elif (cd "$dir" && python .github/scripts/check_documents.py --base "$main_sha" cross); then
     state=success
     description="document checks pass merged with main ${main_sha:0:7}"
   else
