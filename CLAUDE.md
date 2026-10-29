@@ -85,10 +85,10 @@ cargo clippy --workspace --all-targets
 ```
 
 Every generated document and cross-document check, as CI runs them (needs Python 3 with
-PyYAML):
+PyYAML; runs from PowerShell as well as bash):
 
 ```bash
-BASE_REF=origin/main bash .github/scripts/check_documents.sh all
+python .github/scripts/check_documents.py --base origin/main all
 ```
 
 The generated documents carry a line saying so. Edit their source -- the YAML under
