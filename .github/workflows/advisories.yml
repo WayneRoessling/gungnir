@@ -1,0 +1,60 @@
+# The advisory database against the lockfile main carries (deny.toml's `[advisories]`,
+# docs/release-governance.md).
+#
+# **Out of ci.yml since 2026-10-29.** `cargo deny check advisories` ran there on every
+# pull request, and an advisory is published whenever its reporter publishes it, not
+# when a pull request is opened. In the 30 days to this date four of the twelve red
+# `ci` runs were an advisory that had landed that morning failing a pull request that
+# touched no dependency, one of them documents-only: the author then had to bump a
+# crate they had never heard of to get unrelated work green, and until they did every
+# other open pull request went red on its next push too. What the advisory is about is
+# the lockfile on main, so this is where it is checked:
+#
+#   * on every push to main, so the lockfile main carries is checked as it changes;
+#   * daily, so an advisory published on a quiet day is still seen that day and not at
+#     the next tag; and
+#   * on a pull request that changes a manifest, the lockfile or deny.toml, since that
+#     is the pull request that can introduce one, or accept one in the `ignore` list.
+#
+# A red run here is a fact about main, not about anyone's branch. What to do with it is
+# unchanged: a minimal `cargo update -p <crate> --precise <version>` recorded against
+# D-34, or an `ignore` entry in deny.toml with a reason, which is the one list both this
+# check and release.yml's `cargo audit` read (.github/scripts/deny_advisory_ignores.py).
+# release.yml still runs the whole of `cargo deny check` on every tag.
+name: advisories
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 6 * * *"
+  pull_request:
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "**/Cargo.toml"
+      - "deny.toml"
+      # A change to the gate's own definition re-runs the gate; see loom.yml.
+      - ".github/workflows/advisories.yml"
+  workflow_dispatch:
+
+# Nothing here writes to the repository, and the repository is public.
+permissions:
+  contents: read
+
+# A push to a pull-request branch supersedes the run in flight for the previous push.
+# Runs on main are not cancelled: one is the record that main's lockfile was checked.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  advisories:
+    name: cargo-deny (advisories)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories
