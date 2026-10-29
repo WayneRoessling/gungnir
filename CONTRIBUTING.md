@@ -113,7 +113,11 @@ cargo bench --workspace --no-run
 ```
 
 ```bash
-BASE_REF=origin/main bash .github/scripts/check_documents.sh all
+python .github/scripts/check_documents.py --base origin/main all
+```
+
+```bash
+cargo deny check licenses bans sources advisories
 ```
 
 The CI workflows under `.github/workflows/` run the same commands plus the gated
@@ -126,8 +130,10 @@ followed by `cargo test --workspace --doc` for the doctests nextest does not run
 (`cargo install cargo-nextest --locked`). CI runs nextest under the `ci` profile in
 `.config/nextest.toml`, which terminates a test still running after five minutes and
 writes a JUnit file each shard uploads; a local `cargo nextest run` uses the untouched
-`default` profile, and `NEXTEST_PROFILE=ci` gives the CI behaviour. The document checks
-are one job, `documents`, running `check_documents.sh all`. In `ci.yml` the formatting and lint checks,
+`default` profile, and `NEXTEST_PROFILE=ci` gives the CI behaviour. cargo-deny is
+`cargo install cargo-deny --locked --version 0.20.2`, the version `release.yml` pins. The
+document checks are one job, `documents`, running `check_documents.py all`; the script
+is Python so that it runs the same on Windows. In `ci.yml` the formatting and lint checks,
 the tests, and the release-profile gates are three jobs that run side by side, the tests
 are split across three runners by nextest's `--partition count:N/3`, and a pull request
 that changes only documents runs just the Rust tests that read documents. The Linux

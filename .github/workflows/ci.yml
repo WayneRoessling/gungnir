@@ -367,7 +367,7 @@ jobs:
         run: cargo nextest run --locked -p gungnir-security --test role_matrix
 
   # Every generated document and cross-document check, through
-  # .github/scripts/check_documents.sh, which regenerates what is generated and fails on
+  # .github/scripts/check_documents.py, which regenerates what is generated and fails on
   # any difference from what is committed. cross-document-recheck.yml runs the same
   # script for every open pull request after each push to main, because these checks
   # read documents other pull requests change. Four groups, each in its own collapsible
@@ -411,7 +411,7 @@ jobs:
       - name: regenerate and check
         env:
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.merge_group.base_sha || '' }}
-        run: bash .github/scripts/check_documents.sh all
+        run: python .github/scripts/check_documents.py all
 
   # GAP-102 (D-41): the point-cloud CRS conversion, which is the one thing in this
   # workspace that a default `cargo test` cannot run.
