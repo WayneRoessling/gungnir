@@ -132,6 +132,11 @@ the repository names a linker, so a local build links as it always did.
 `miri.yml` runs on the crates whose added code holds `unsafe`, from the table in
 `.github/scripts/miri_matrix.py`. `advisories.yml` is the advisory check, off the
 pull-request path since 2026-10-29; its header says why.
+The libproj job runs on a pull request only when the change can reach its
+feature-gated code, fixtures or grids, and the container image is built from source
+only when the change touches what that build reads; every push to main runs the
+libproj job, and a weekly scheduled run on main runs everything, which also keeps
+main's caches from expiring through a quiet fortnight.
 `bench-regression.yml` runs by dispatch only, since 2026-10-28; its header says why.
 `cross-document-recheck.yml` re-runs the document checks of every open pull request after
 each merge to `main` and posts the result on it, and `pr-rules.yml` checks the description
