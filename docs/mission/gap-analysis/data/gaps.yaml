@@ -13396,3 +13396,79 @@
       `BerLengthMalformed` and an item past it `LocalSetTruncated`, and an AVR body is
       counted in characters. `gungnir-ingest/tests/fuzz_regressions.rs` replays both crash
       inputs and failed with the nightly's own panics before the fix.
+
+- id: GAP-246
+  name: Sensor dead spots are not computed or drawn
+  type: Mission
+  caps: [CAP-1.4, CAP-2.11, CAP-5.9]
+  layer: "Productization: picture and identity"
+  sev: 3
+  effort: L
+  target: I4
+  owner: Services engineer
+  deps: [GAP-247, D-146, D-147, D-148]
+  impact: >-
+    Terrain masking is applied only along the declared approach polylines, so between
+    them a sensor's ring claims coverage a ridge denies and nothing on the picture says
+    so. A sensor manager or planner reads the ring as watched; a low flyer routes down
+    the valley the ring covers on paper. MT-09 step 2 and MT-07 step 3 ask for coverage
+    over terrain, and the system computes it along lines only.
+  evidence: >-
+    `gungnir-analytics/src/coverage.rs` (`combined_coverage` samples approaches only);
+    `gungnir-viewport3d/src/layers.rs` (rings, wedges and gap polylines, no area layer);
+    `gungnir-analytics/src/lib.rs` (`viewshed` has no caller outside its tests);
+    `../../design/DN-34-sensor-dead-spots.md` §2
+  action: >-
+    Per DN-34: a regular height field resampled once from the placed DEM, a shadow field
+    at a stated height above ground (claimed by an active sensor, seen by none) by a
+    radial horizon sweep held to a sampled reference, computed off the tick under
+    MOP-14, drawn as one textured layer in the overlay both renderers share, with its
+    height, age and measure on PN-11 and the not-computed sentence when there is no DEM.
+  ref: >-
+    `../../design/DN-34-sensor-dead-spots.md`; D-146 (what dark means), D-147 (the
+    default heights), D-148 (desktop only); GAP-226 gates the GL drape (DN-34 §13)
+  history:
+  - date: 2026-10-29
+    status: Open
+    note: >-
+      Filed with DN-34 from the owner's request of 2026-10-29 for terrain dead spots on
+      the 3D map. Design only; three owner decisions open.
+
+- id: GAP-247
+  name: Terrain line of sight scans every DEM vertex per sample, on a report computed every frame
+  type: Technical
+  caps: [CAP-2.11, CAP-1.4]
+  layer: "Productization: picture and identity"
+  sev: 3
+  effort: S
+  target: I4
+  owner: Services engineer
+  deps: []
+  impact: >-
+    `TerrainMaskLineOfSight::height_at` takes the nearest vertex by scanning the whole
+    mesh, for every sample of every ray, and the desktop computes the approach report on
+    the tick several times a frame. A realistic DEM (a million vertices) with two 40 km
+    approaches and three active sensors is of the order of ten to the tenth vertex visits
+    per report. The tests pass on grids of a few hundred vertices. Read from the code on
+    2026-10-29, not measured.
+  evidence: >-
+    `gungnir-analytics/src/lib.rs` (`TerrainMaskLineOfSight`, O(vertices) per sample by
+    its own comment); `gungnir-app/src/sustainment.rs::coverage_report`, called from
+    `main.rs`, `workspace.rs`, `status.rs` and `gap_acceptance.rs` each frame;
+    `gungnir-app/tests/terrain.rs` fixture sizes
+  action: >-
+    DN-34 §5 and §6.1: resample the placed mesh once per load into a regular height field
+    with an index lookup and a bilinear surface (`HeightField`, taking
+    `PlacedGround::up_at`'s interpolation down into `gungnir-analytics`), a
+    `HeightFieldLineOfSight` the approach report uses, and the report cached per inputs
+    rather than recomputed per call. Say on PN-11 that every standing acceptance re-opens
+    once on the first bilinear report (DN-33 §5, a shape change).
+  ref: >-
+    `../../design/DN-34-sensor-dead-spots.md` §2.2 item 2 and §6.1; GAP-023 (the DEM);
+    GAP-199 (`PlacedGround`); GAP-106 (the re-opening)
+  history:
+  - date: 2026-10-29
+    status: Open
+    note: >-
+      Found while writing DN-34. A bound computed from the code, not a measurement; the
+      first thing GAP-246's build does, and worth doing before it.

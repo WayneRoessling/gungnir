@@ -3562,3 +3562,42 @@
     clearing by hand (no guarantee the writes survive optimization); `secrecy` (a second
     crate for a wrapper `Zeroizing` already gives). Not a signature; the owner reviews it
     with GAP-215. See the record item.
+- id: D-146
+  decision: What the dead-spot layer's dark area means
+  question: >-
+    DN-34 §4 draws dark where at least one searching or tracking sensor claims a cell by
+    range, sector and band and none can see it past the terrain: a claim the map makes
+    and the ridge denies. The alternative is dark wherever nobody sees, for any reason,
+    which also darkens every place beyond every ring. Recommended: the first, because the
+    rings already read the second correctly and the layer exists for what they get wrong.
+  raised_in: "`../../design/DN-34-sensor-dead-spots.md` §4"
+  decider: Owner
+  unblocks: GAP-246
+  outcome: ""
+
+- id: D-147
+  decision: The default heights above ground a dead-spot field is computed at
+  question: >-
+    A terrain shadow depends on the target's height, so DN-34 §9 computes the field at
+    stated heights above ground, `analytics.dead_spot_heights_agl_m`, one shown at a time.
+    Recommended default: one height, 100 m, the band the threat table puts small UAS and
+    terrain-following cruise missiles in, with 30 m and 300 m as entries a deployment adds.
+    The alternative, three heights by default, triples every recompute for a deployment
+    that looks at one.
+  raised_in: "`../../design/DN-34-sensor-dead-spots.md` §9"
+  decider: Owner
+  unblocks: GAP-246
+  outcome: ""
+
+- id: D-148
+  decision: Whether the node computes a dead-spot field
+  question: >-
+    The node loads no terrain (D-130) and answers coverage flat. A field on the node means
+    a DEM on every node's baseline and a second place the height field must agree, for a
+    layer only a desktop draws. Recommended: desktop only, the layer saying so when
+    linked, as DN-33 amendment 1 already distinguishes the desktop's masked gaps from the
+    node's flat answer; the node's turn comes when a headless consumer wants shadow area.
+  raised_in: "`../../design/DN-34-sensor-dead-spots.md` §12"
+  decider: Owner
+  unblocks: GAP-246
+  outcome: ""
