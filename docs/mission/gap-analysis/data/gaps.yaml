@@ -13355,3 +13355,44 @@
       naming the allocator's reason. A probe at a 0.05 ms budget reproduced both shapes
       (three options, and one). The two new tests fail on the old code, one with CI's own
       four against three.
+
+- id: GAP-245
+  name: Two feed parsers panicked on input the fuzzer found on its first night
+  type: Technical
+  caps: [CAP-1.2]
+  layer: "Productization: sensing and time"
+  sev: 2
+  effort: S
+  target: I3
+  owner: Services engineer
+  deps: [GAP-213]
+  impact: >-
+    A sensor feed could crash its adapter. A MISB ST 0601 frame declaring a length near
+    the largest address overflowed the frame's end, a panic in debug and a panic on the
+    slice in release. An ADS-B AVR line whose body was even in bytes but odd in characters
+    left no octets and panicked reading the first.
+  evidence: >-
+    `gungnir-interop/src/misb0601/mod.rs` (`decode_frame`'s unchecked `header_len +
+    value_len`, and `decode_local_set`'s `pos + len`); `gungnir-interop/src/adsb/mod.rs`
+    (`parse_avr` counting bytes and pairing characters); fuzz-nightly run on 083e39fa,
+    jobs `misb_feed` and `adsb_feed`, artifacts `crash-51b7487a` and `crash-886d01e0`
+  action: >-
+    Check both length sums and refuse what overflows; count the AVR body in characters;
+    keep the crash inputs and replay them in the workspace's tests the way the fuzz
+    targets drive the adapters.
+  ref: >-
+    Found by GAP-213's fuzz targets on their first nightly
+    (`../../record/2026-10-29/gap-245-two-feed-parsers-no-longer-crash.md`)
+  history:
+  - date: 2026-10-29
+    status: Open
+    note: >-
+      Found by the fuzz nightly of 2026-10-29, the first to run the `misb_feed` and
+      `adsb_feed` targets.
+  - date: 2026-10-29
+    status: Closed
+    note: >-
+      Fixed. Both sums are checked, a MISB frame past the last address is
+      `BerLengthMalformed` and an item past it `LocalSetTruncated`, and an AVR body is
+      counted in characters. `gungnir-ingest/tests/fuzz_regressions.rs` replays both crash
+      inputs and failed with the nightly's own panics before the fix.

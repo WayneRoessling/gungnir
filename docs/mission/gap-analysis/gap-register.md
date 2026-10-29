@@ -239,8 +239,9 @@ history, and an entry is never edited once it has merged.
 | GAP-242 | No NFFI bearer for friendly-force positions | Technical | CAP-1.6, CAP-4.5, CAP-7.4 | 3 | 5 | L | 15 | I4 | Services engineer | Open |
 | GAP-243 | The session-token MAC key is derived in the node, not held by a key provider | Technical | CAP-6.1, CAP-6.4 | 2 | 10 | M | 20 | I4 | Security engineer (human-owned crate) | Open |
 | GAP-244 | An alternative whose solve overran its budget vanished, timed on a clock of its own | Technical | CAP-3.5 | 3 | 4 | S | 12 | I3 | Services engineer | Closed |
+| GAP-245 | Two feed parsers panicked on input the fuzzer found on its first night | Technical | CAP-1.2 | 2 | 9 | S | 18 | I3 | Services engineer | Closed |
 
-Counts: 226 gaps, 3 mission, 223 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 227 gaps, 3 mission, 224 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3471,4 +3472,19 @@ Counts: 226 gaps, 3 mission, 223 technical; 1 already covered by a plan in `../.
 - Target: I3. Owner: Services engineer. Status: Closed.
 - Reference: Found from main's CI after GAP-213 merged (`../../record/2026-10-28/gap-244-an-alternative-is-timed-on-the.md`).
 - Depends on: GAP-032, GAP-119.
+
+**GAP-245 Two feed parsers panicked on input the fuzzer found on its first night**
+
+- Type: Technical.
+- Capability: CAP-1.2 Validate and quarantine.
+- History:
+  - 2026-10-29, Open: Found by the fuzz nightly of 2026-10-29, the first to run the `misb_feed` and `adsb_feed` targets.
+  - 2026-10-29, Closed: Fixed. Both sums are checked, a MISB frame past the last address is `BerLengthMalformed` and an item past it `LocalSetTruncated`, and an AVR body is counted in characters. `gungnir-ingest/tests/fuzz_regressions.rs` replays both crash inputs and failed with the nightly's own panics before the fix.
+- Evidence: `gungnir-interop/src/misb0601/mod.rs` (`decode_frame`'s unchecked `header_len + value_len`, and `decode_local_set`'s `pos + len`); `gungnir-interop/src/adsb/mod.rs` (`parse_avr` counting bytes and pairing characters); fuzz-nightly run on 083e39fa, jobs `misb_feed` and `adsb_feed`, artifacts `crash-51b7487a` and `crash-886d01e0`.
+- Severity: 2. Reach: 9 threads. Effort: S. Priority: 18.
+- Impact: A sensor feed could crash its adapter. A MISB ST 0601 frame declaring a length near the largest address overflowed the frame's end, a panic in debug and a panic on the slice in release. An ADS-B AVR line whose body was even in bytes but odd in characters left no octets and panicked reading the first.
+- Closing action: Check both length sums and refuse what overflows; count the AVR body in characters; keep the crash inputs and replay them in the workspace's tests the way the fuzz targets drive the adapters.
+- Target: I3. Owner: Services engineer. Status: Closed.
+- Reference: Found by GAP-213's fuzz targets on their first nightly (`../../record/2026-10-29/gap-245-two-feed-parsers-no-longer-crash.md`).
+- Depends on: GAP-213.
 

@@ -516,8 +516,13 @@ fn decode_local_set(value: &[u8], full_frame: &[u8]) -> Result<Misb0601Frame, Mi
         let (len, len_bytes) =
             read_ber_length(rest).map_err(|_| Misb0601Error::LocalSetTruncated { tag })?;
         pos += len_bytes;
+        // A BER length can name up to eight bytes of length, past any address; an item
+        // whose end overflows is truncated like one whose end is past the set.
+        let end = pos
+            .checked_add(len)
+            .ok_or(Misb0601Error::LocalSetTruncated { tag })?;
         let item = value
-            .get(pos..pos + len)
+            .get(pos..end)
             .ok_or(Misb0601Error::LocalSetTruncated { tag })?;
         pos += len;
         apply_tag(&mut frame, tag, item);
@@ -555,7 +560,12 @@ pub fn decode_frame(bytes: &[u8]) -> Result<(Misb0601Frame, usize), Misb0601Erro
     }
     let (value_len, length_field_len) = read_ber_length(&bytes[16..])?;
     let header_len = 16 + length_field_len;
-    let total_len = header_len + value_len;
+    // A length whose frame would end past the last address is no frame any buffer could
+    // hold, so it is corrupt rather than one to wait for (the fuzz nightly of 2026-10-29
+    // found the unchecked sum overflowing).
+    let total_len = header_len
+        .checked_add(value_len)
+        .ok_or(Misb0601Error::BerLengthMalformed)?;
     if bytes.len() < total_len {
         return Err(Misb0601Error::Truncated {
             needed: total_len,
@@ -624,6 +634,31 @@ mod tests {
         assert_eq!(
             read_ber_length(&[0xFF; 9]),
             Err(Misb0601Error::BerLengthMalformed)
+        );
+    }
+
+    /// The fuzz nightly of 2026-10-29: an eight-byte BER length near `usize::MAX`
+    /// overflowed the frame's end, a panic in a debug build and a wrapped length in
+    /// release. It is malformed, not a frame to wait for.
+    #[test]
+    fn a_frame_length_past_the_last_address_is_malformed() {
+        let mut bytes = UDS_KEY.to_vec();
+        bytes.push(0x88);
+        bytes.extend_from_slice(&[0xFF; 8]);
+        assert_eq!(decode_frame(&bytes), Err(Misb0601Error::BerLengthMalformed));
+    }
+
+    /// The same overflow one level in: an item whose length runs past the last address.
+    #[test]
+    fn an_item_length_past_the_last_address_is_truncated() {
+        let mut value = vec![5u8, 0x88];
+        value.extend_from_slice(&[0xFF; 8]);
+        let mut frame = UDS_KEY.to_vec();
+        frame.push(u8::try_from(value.len()).expect("short"));
+        frame.extend_from_slice(&value);
+        assert_eq!(
+            decode_frame(&frame),
+            Err(Misb0601Error::LocalSetTruncated { tag: 5 })
         );
     }
 

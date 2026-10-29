@@ -12,6 +12,8 @@ testdata/** -text
 # Fuzz seeds are fixtures too, cut from `testdata/` (GAP-213): a normalised seed is not
 # the input its corpus test proves decodable.
 gungnir-fuzz/corpus/** -text
+# Inputs the fuzzer crashed on, kept byte for byte so the replay reproduces the crash.
+gungnir-fuzz/regressions/** -text
 *.jsonl -text
 
 # Sparx EA wrote these, not us: they are the evidence for what EA's XMI dialect
