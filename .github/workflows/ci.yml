@@ -7,6 +7,17 @@ on:
   # No merge queue is enabled today. Declared so that, if one ever is, the gates run on
   # the queued merge instead of being skipped silently.
   merge_group:
+  # Weekly, on main, everything (2026-10-29): the whole workspace, the libproj job and
+  # the container image from source, whatever the week's pushes touched. Two things it
+  # does that a push does not. The from-source container build and the libproj job now
+  # run on a push only when the push can reach them (see each job), so this is the run
+  # that proves them against everything else that merged. And GitHub drops a cache not
+  # restored for seven days: after a month without a push (2026-10-23, #200) every
+  # cache was gone and pull requests built cold at their 30-minute limit. A weekly
+  # restore keeps main's caches alive through a quiet fortnight.
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
 
 # Nothing in this workflow writes to the repository, and the repository is public.
 permissions:
@@ -55,12 +66,23 @@ jobs:
   # Markdown file at the root, or a Markdown file under `deploy/` is `docs`; anything else,
   # and every push and merge-queue run, is `code`. The signature pull request #240 changed
   # only the ledger and spent 39 minutes building everything.
+  #
+  # `crs` (2026-10-29): whether the change can reach the libproj job, `proj-crs` below.
+  # Its feature-gated code is in `gungnir-data`, `gungnir-app` and `gungnir-node` and
+  # nowhere else (grep `feature = "crs"`), its fixtures under `testdata/dem`, `geoid`,
+  # `nadcon5` and `pointcloud`, its pinned grids in `deploy/geoid/`, and its build in the
+  # lockfile, the workspace manifest and this file. A change elsewhere compiles
+  # `gungnir-app` all the same in `test`, without the feature; what the feature adds is
+  # what those paths hold. The job was 4.5 minutes and 2.2 GB of the 10 GB cache on
+  # every code pull request, most of which touched none of this. Every push, schedule
+  # and merge-queue run still runs it.
   changes:
     name: what changed
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       code: ${{ steps.scan.outputs.code }}
+      crs: ${{ steps.scan.outputs.crs }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,6 +91,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "crs=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
@@ -79,6 +102,14 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+          crs='^(gungnir-(data|app|node)/|testdata/(dem|geoid|nadcon5|pointcloud)/|deploy/geoid/|Cargo\.(lock|toml)$|\.github/workflows/ci\.yml$)'
+          if echo "$changed" | grep -qE "$crs"; then
+            echo "crs=true" >> "$GITHUB_OUTPUT"
+            echo "the change can reach the libproj job"
+          else
+            echo "crs=false" >> "$GITHUB_OUTPUT"
+            echo "the change cannot reach the libproj job; it is skipped"
           fi
 
   # The Rust gates as three jobs that run side by side (2026-10-28), where they were one
@@ -419,10 +450,15 @@ jobs:
   # `sha256sum -c` and the job, it is never used. It is cached under that digest and saved
   # from main only (the cache-quota rule the Rust cache above follows), so a pull request
   # restores it and the CDN is asked once per cache eviction, not once per run.
+  #
+  # **On a pull request only when the change can reach it** (2026-10-29): the `crs`
+  # output of `changes` says which paths those are and why. Every push to main, the
+  # weekly run and a merge-queue run still run it, so main's cache and the grid cache
+  # are kept warm and a change that slipped past the path list is caught on main.
   proj-crs:
     name: DEM and point-cloud CRS conversion (libproj)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.crs == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -567,12 +603,19 @@ jobs:
   # built first, and the start-up check is also what proves the runtime stage carries the
   # shared libraries that libproj needs.
   #
-  # The from-source path still runs where it can still find something: on main (off
-  # everyone's critical path, and the build release.yml's container job will repeat),
-  # and on a pull request that touches what the in-image compile depends on -- the
-  # manifests, the lockfile, the toolchain file, the Dockerfile and its context filter.
+  # The from-source path still runs where it can still find something: on a change that
+  # touches what the in-image compile depends on -- the manifests, the lockfile, the
+  # toolchain file, the Dockerfile and its context filter -- and on the weekly run.
   # The compile above already happens in the same image, so what that path adds is the
   # Dockerfile's own build stage: its `COPY . .` under `.dockerignore`, its `--locked`.
+  #
+  # **Not on every push to main any more** (2026-10-29). It was, as "off everyone's
+  # critical path", and it was: 9.8 to 10.3 minutes on each of 48 pushes in 30 days,
+  # about eight hours of runner time a month for an image nothing consumed, since
+  # release.yml builds its own on a tag. A push to main is one squash commit, or a merge
+  # commit whose first parent is the previous main, so the same two-commit diff that
+  # scopes a pull request scopes a push: the from-source build runs on main when the
+  # merge touched those files, and once a week regardless.
   node-linux-container:
     name: gungnir-node builds for Linux x86_64
     needs: changes
@@ -588,7 +631,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           # HEAD on a pull_request event is the merge commit; its first parent is the
-          # base branch, so depth 2 is enough to diff the whole pull request.
+          # base branch, so depth 2 is enough to diff the whole pull request. On a push
+          # to main HEAD is the squash or merge commit and its first parent the previous
+          # main, so the same depth diffs the whole merge.
           fetch-depth: 2
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -664,11 +709,12 @@ jobs:
         id: scope
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "from_source=true" >> "$GITHUB_OUTPUT"
-            echo "not a pull request: building the image from source as well"
-            exit 0
-          fi
+          case "${{ github.event_name }}" in
+            schedule | workflow_dispatch)
+              echo "from_source=true" >> "$GITHUB_OUTPUT"
+              echo "${{ github.event_name }}: building the image from source as well"
+              exit 0 ;;
+          esac
           changed=$(git diff --name-only HEAD^1 HEAD -- \
             Cargo.lock '*Cargo.toml' rust-toolchain.toml deploy/ .dockerignore)
           if [ -n "$changed" ]; then
