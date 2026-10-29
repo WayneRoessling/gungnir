@@ -308,13 +308,16 @@ pub fn parse_avr(line: &str) -> Result<Vec<u8>, AdsbError> {
         .ok_or(AdsbError::NotAvrFrame)?
         .strip_suffix(';')
         .ok_or(AdsbError::Malformed("an AVR frame ends with a semicolon"))?;
-    if body.is_empty() || body.len() % 2 != 0 {
+    // Counted in characters, the unit the digits are paired in. Counted in bytes, a
+    // two-byte character passed as two digits and made no pair, and the empty frame
+    // that left panicked below (the fuzz nightly of 2026-10-29).
+    let digits: Vec<char> = body.chars().collect();
+    if digits.is_empty() || !digits.len().is_multiple_of(2) {
         return Err(AdsbError::Malformed(
             "an AVR frame is an even number of hexadecimal digits",
         ));
     }
-    let mut octets = Vec::with_capacity(body.len() / 2);
-    let digits: Vec<char> = body.chars().collect();
+    let mut octets = Vec::with_capacity(digits.len() / 2);
     let (pairs, _even_by_the_check_above) = digits.as_chunks::<2>();
     for (i, pair) in pairs.iter().enumerate() {
         let value = |c: char, at: usize| {
@@ -531,6 +534,20 @@ mod tests {
     /// The frame the ADS-B literature uses as its worked example: DF 17, ICAO 4840D6,
     /// identification KLM1023.
     const IDENTIFICATION: &str = "*8D4840D6202CC371C32CE0576098;";
+
+    /// The fuzz nightly of 2026-10-29: a body of an even number of bytes but an odd
+    /// number of characters made no octet and panicked reading the first. Each is now
+    /// refused as malformed.
+    #[test]
+    fn a_body_odd_in_characters_is_malformed_whatever_its_bytes() {
+        // Each body is an even number of bytes and an odd number of characters.
+        for line in ["*é;", "*8Dé;", "*é8D;", "*\u{FFFD}é0;"] {
+            assert!(
+                matches!(parse_avr(line), Err(AdsbError::Malformed(_))),
+                "{line:?}"
+            );
+        }
+    }
 
     #[test]
     fn an_avr_line_parses_and_its_length_matches_its_downlink_format() {
