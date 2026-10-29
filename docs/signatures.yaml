@@ -3652,3 +3652,34 @@
   commit: 7ad06cfd7d7876e3bfac6be98e50a8ae1aa72c01
   pre_repository: false
   record: "GAP-215; D-145; DN-22 §17; docs/record/2026-10-28/gap-215-sealed-files-are-their-owner-s.md; PR #244"
+
+- date: 2026-10-29
+  signer: Owner
+  subject: >-
+    D-143, the session lifetime: a twelve-hour maximum and a fifteen-minute idle lock, both
+    configurable downward only, a locked screen keeping the picture and the queue visible
+    and refusing every action until re-authentication. Taken by the owner in the walk of
+    2026-10-26 and built under GAP-212.
+  kind: other
+  paths:
+  - docs/mission/gap-analysis/data/decisions.yaml
+  commit: 2509e4fa4ee5ef3f178f12b642839806bb42bb51
+  pre_repository: false
+  record: "D-143; GAP-212; docs/record/2026-10-26/the-owner-s-walk-of-2026-10-26.md; PR #228"
+
+- date: 2026-10-29
+  signer: Owner
+  subject: >-
+    D-145, taken under the owner's delegation of 2026-10-28 and now signed: `zeroize`
+    admitted to clear the wrapping key, the token key and the link passphrase from memory
+    when they are dropped, through `Zeroizing` or a `Drop` that calls it and never `unsafe`.
+    It adds no crate to the build, since `aes-gcm`, `p256` and `argon2` already compile it;
+    its row in agentic-coding-standards.md section 2.9 and its workspace dependency.
+  kind: other
+  paths:
+  - docs/mission/gap-analysis/data/decisions.yaml
+  - docs/agentic-coding-standards.md
+  - Cargo.toml
+  commit: 7ad06cfd7d7876e3bfac6be98e50a8ae1aa72c01
+  pre_repository: false
+  record: "D-145; GAP-215; docs/record/2026-10-28/gap-215-sealed-files-are-their-owner-s.md; PR #244"
