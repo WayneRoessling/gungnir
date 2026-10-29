@@ -118,6 +118,9 @@ pub fn tick(state: &mut AppState) {
     // ground is placed on it from the next report on, or carried as unknown with the
     // reason.
     crate::ground::lend_to_feeds(state);
+    // GAP-246: the terrain dead spots, computed off the tick whenever the sensors, the
+    // terrain or the height they depend on change, and drawn stale until the next lands.
+    crate::dead_spots::tick(state);
 
     // 1b'. The configured point-cloud pair, if one is loading (GAP-098): same
     //      off-frame loader pattern as terrain, on its own channel so the two never

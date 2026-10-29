@@ -1755,32 +1755,104 @@ pub fn coverage_report(state: &AppState) -> Option<gungnir_analytics::CoverageRe
                 .collect()
         })
         .collect();
-    let approaches: Vec<&[[f64; 3]]> = routes.iter().map(Vec::as_slice).collect();
+    Some(masked_report(
+        state,
+        volumes,
+        routes,
+        state.config.analytics.coverage_sample_spacing_m,
+    ))
+}
 
-    // GAP-023: mask against the loaded terrain when there is one; flat otherwise, and
-    // the parameters say which, because flat is optimistic by construction.
-    let spacing = state.config.analytics.coverage_sample_spacing_m;
-    let parameters = |masked: bool| gungnir_analytics::CoverageParameters {
-        sample_spacing_m: spacing,
-        terrain_masking_applied: masked,
+/// How many distinct reports the cache keeps: the live one and one per laydown PN-16
+/// lists, with room to spare.
+const COVERAGE_CACHE_ENTRIES: usize = 16;
+
+/// What a coverage report depends on, so equal inputs give the cached report (GAP-247).
+#[derive(Debug, Clone)]
+struct CoverageKey {
+    volumes: Vec<(gungnir_model::SensorId, gungnir_analytics::CoverageVolume)>,
+    routes: Vec<Vec<[f64; 3]>>,
+    parameters: gungnir_analytics::CoverageParameters,
+    /// The surface masked against, compared by identity. Held, so a reload cannot put a
+    /// new surface at the address of one a key still names.
+    terrain: Option<std::sync::Arc<gungnir_analytics::HeightField>>,
+}
+
+impl PartialEq for CoverageKey {
+    fn eq(&self, other: &Self) -> bool {
+        let same_terrain = match (&self.terrain, &other.terrain) {
+            (Some(a), Some(b)) => std::sync::Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        };
+        same_terrain
+            && self.parameters == other.parameters
+            && self.volumes == other.volumes
+            && self.routes == other.routes
+    }
+}
+
+/// The coverage reports this desktop has computed, by their inputs (GAP-247,
+/// `docs/design/DN-34-sensor-dead-spots.md` §6.1). The report is asked for several times
+/// a frame -- PN-02's gaps, PN-11, PN-01's strip, the acceptance ledger, and one per
+/// laydown on PN-16 -- and its inputs change only when a sensor, the terrain or the
+/// baseline does, so each distinct report is computed once and handed out after.
+#[derive(Debug, Default)]
+pub struct CoverageCache {
+    entries: std::sync::Mutex<Vec<(CoverageKey, gungnir_analytics::CoverageReport)>>,
+}
+
+/// The report for these volumes along these routes, masked against the loaded terrain
+/// when there is one and flat otherwise, with the parameters saying which -- flat is
+/// optimistic by construction (GAP-023) -- from the cache when the inputs are unchanged.
+/// The mask reads the surface resampled once per load, never every vertex per sample
+/// (GAP-247).
+fn masked_report(
+    state: &AppState,
+    volumes: Vec<(gungnir_model::SensorId, gungnir_analytics::CoverageVolume)>,
+    routes: Vec<Vec<[f64; 3]>>,
+    spacing: f64,
+) -> gungnir_analytics::CoverageReport {
+    let terrain = state
+        .height_field
+        .clone()
+        .filter(|_| state.terrain.is_masking());
+    let key = CoverageKey {
+        volumes,
+        routes,
+        parameters: gungnir_analytics::CoverageParameters {
+            sample_spacing_m: spacing,
+            terrain_masking_applied: terrain.is_some(),
+        },
+        terrain,
     };
-    Some(match state.data.terrains.first() {
-        Some(terrain) if state.terrain.is_masking() => gungnir_analytics::combined_coverage(
-            &volumes,
-            &gungnir_analytics::TerrainMaskLineOfSight {
-                terrain,
-                sample_spacing_m: spacing,
-            },
+    if let Ok(entries) = state.coverage_cache.entries.lock() {
+        if let Some((_, report)) = entries.iter().find(|(k, _)| *k == key) {
+            return report.clone();
+        }
+    }
+    let approaches: Vec<&[[f64; 3]]> = key.routes.iter().map(Vec::as_slice).collect();
+    let report = match key.terrain.as_deref() {
+        Some(field) => gungnir_analytics::combined_coverage(
+            &key.volumes,
+            &gungnir_analytics::HeightFieldLineOfSight { field },
             &approaches,
-            parameters(true),
+            key.parameters,
         ),
-        _ => gungnir_analytics::combined_coverage(
-            &volumes,
+        None => gungnir_analytics::combined_coverage(
+            &key.volumes,
             &gungnir_analytics::FlatTerrainLineOfSight,
             &approaches,
-            parameters(false),
+            key.parameters,
         ),
-    })
+    };
+    // A poisoned lock means another holder panicked mid-update; the report is still right,
+    // it is only not kept.
+    if let Ok(mut entries) = state.coverage_cache.entries.lock() {
+        entries.insert(0, (key, report.clone()));
+        entries.truncate(COVERAGE_CACHE_ENTRIES);
+    }
+    report
 }
 
 /// A laydown's `CoverageVolume`s: the sensors it places that are searching or tracking,
@@ -2134,37 +2206,13 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
                 .collect()
         })
         .collect();
-    let approaches: Vec<&[[f64; 3]]> = routes.iter().map(Vec::as_slice).collect();
-
     let min_elevation_rad = state.config.analytics.coverage_min_elevation_rad;
     let spacing = state.config.analytics.coverage_sample_spacing_m;
-
-    let terrain_masking_applied = !state.data.terrains.is_empty() && state.terrain.is_masking();
-    let parameters = gungnir_analytics::CoverageParameters {
-        sample_spacing_m: spacing,
-        terrain_masking_applied,
-    };
 
     let report_for = |laydown: &gungnir_model::Laydown| -> gungnir_analytics::CoverageReport {
         let volumes =
             laydown_coverage_volumes(laydown, &state.config.sensors, min_elevation_rad, &frame);
-        match state.data.terrains.first() {
-            Some(terrain) if terrain_masking_applied => gungnir_analytics::combined_coverage(
-                &volumes,
-                &gungnir_analytics::TerrainMaskLineOfSight {
-                    terrain,
-                    sample_spacing_m: spacing,
-                },
-                &approaches,
-                parameters,
-            ),
-            _ => gungnir_analytics::combined_coverage(
-                &volumes,
-                &gungnir_analytics::FlatTerrainLineOfSight,
-                &approaches,
-                parameters,
-            ),
-        }
+        masked_report(state, volumes, routes.clone(), spacing)
     };
 
     let current_uncovered_m = state

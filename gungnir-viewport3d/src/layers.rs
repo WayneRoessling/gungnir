@@ -249,6 +249,288 @@ pub struct LayerInputs<'a> {
     /// The dense group the tracker could not resolve into tracks (GAP-015), or `None`
     /// for a resolvable scene. Drawn as a group, never as track symbols.
     pub dense_group: Option<&'a gungnir_model::DenseGroupView>,
+    /// Where the terrain blinds the sensors (GAP-246), or why that is not known.
+    pub dead_spots: DeadSpotLayer<'a>,
+}
+
+/// One cell of a dead-spot field as the viewport draws it (GAP-246,
+/// `docs/design/DN-34-sensor-dead-spots.md` §4 and §8.1): what the analytics found, folded
+/// to what the map shows. Its own type rather than `gungnir_analytics::CellSight`, because
+/// this crate does not reach the analytics and draws what it is given.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DeadSpotCell {
+    /// Nothing drawn: no sensor claims it, or two or more see it.
+    Clear,
+    /// Claimed by a sensor and hidden from every one that claims it: **the dead spot**.
+    Shadow,
+    /// Seen by one sensor alone.
+    Single,
+    /// Claimed, over ground the DEM has no height for: unknown, which is not clear.
+    NoData,
+}
+
+/// A computed dead-spot field, ready to draw (GAP-246).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DeadSpotField<'a> {
+    /// Changes whenever the cells do, so the texture is rebuilt once per field, never per
+    /// frame (`docs/rust-ui-architecture-coding-standards.md` §5).
+    pub revision: u64,
+    /// ENU east and north of the field's south-west corner, metres.
+    pub origin_enu: [f64; 2],
+    pub cell_m: f64,
+    pub rows: u32,
+    pub columns: u32,
+    /// `rows * columns` cells, north row first.
+    pub cells: &'a [DeadSpotCell],
+    /// The probe's height above the ground, metres: the field says what it was computed
+    /// for, because a shadow at 100 m is not one at 3 000 m.
+    pub height_agl_m: f64,
+    /// Seconds since the field was computed.
+    pub age_s: f64,
+    /// The inputs have changed since, and a newer field is being computed. Drawn faded and
+    /// said, never torn down: a stale shadow that says so is a better claim than none for
+    /// the seconds a recompute takes (DN-34 §6.5).
+    pub stale: bool,
+    /// One sensor's own shadow, named, rather than every active sensor's.
+    pub sensor: Option<&'a str>,
+    /// The desktop is linked: the field is this desktop's own, from the node's sensors and
+    /// this desktop's DEM, since the node computes none (D-148).
+    pub linked: bool,
+}
+
+/// The dead-spot layer for a frame: a field, or why there is none (DN-34 §4 rule 4).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DeadSpotLayer<'a> {
+    /// Not computed, and why, in words. **The dead spots are not absent, they are
+    /// unknown**, and the map says so rather than drawing a clear sector.
+    NotComputed {
+        reason: &'a str,
+    },
+    /// The first field is being computed.
+    Computing,
+    Field(DeadSpotField<'a>),
+}
+
+/// What the map says under a dead-spot field: what it is, the height, its age, the key to
+/// its patterns, and that it is geometric line of sight.
+#[must_use]
+pub fn dead_spot_line(field: &DeadSpotField<'_>) -> String {
+    let whose = field
+        .sensor
+        .map_or_else(String::new, |s| format!(" for {s} alone"));
+    let mut line = format!(
+        "Terrain dead spots{whose} at {:.0} m above ground (dark: hidden by terrain; \
+         hatched: one sensor; dotted: no terrain data), computed {:.0} s ago, geometric \
+         line of sight",
+        field.height_agl_m, field.age_s
+    );
+    if field.linked {
+        line.push_str("; this desktop's own, from the node's sensors");
+    }
+    if field.stale {
+        line.push_str("; recomputing, the inputs have changed");
+    }
+    line
+}
+
+/// What the map says when there is no field.
+#[must_use]
+pub fn dead_spot_not_computed_line(reason: &str) -> String {
+    format!("Terrain dead spots not computed: {reason}. They are not absent, they are unknown.")
+}
+
+/// The pattern period, in cells, that keeps a hatch about this many pixels apart on screen.
+const DEAD_SPOT_PATTERN_PX: f64 = 8.0;
+
+/// The hatch and dot period for a field drawn at `meters_per_px`, in cells, rounded up to
+/// a power of two so the texture is rebuilt only when the zoom crosses a doubling.
+#[must_use]
+// A period of at most 64 cells.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub fn dead_spot_pattern_cells(cell_m: f64, meters_per_px: f64) -> u32 {
+    let px_per_cell = cell_m / meters_per_px.max(f64::EPSILON);
+    if !px_per_cell.is_finite() || px_per_cell <= 0.0 {
+        return 64;
+    }
+    let cells = (DEAD_SPOT_PATTERN_PX / px_per_cell).ceil().clamp(2.0, 64.0) as u32;
+    cells.next_power_of_two()
+}
+
+/// A dead-spot field as an image, one pixel per `stride` cells, the meaning carried in
+/// pattern as well as colour (DN-34 §8.1, `docs/ux/accessibility.md`): a dead spot is a
+/// solid dark fill, single-sensor a diagonal hatch in the warning colour, no data a dot
+/// grid in the muted colour over a faint wash, and clear cells transparent so the terrain
+/// and the rings stay legible. `period` is the pattern's repeat in image pixels.
+#[must_use]
+pub fn dead_spot_image(
+    field: &DeadSpotField<'_>,
+    palette: &theme::Palette,
+    period: u32,
+    stride: u32,
+) -> egui::ColorImage {
+    let stride = stride.max(1) as usize;
+    let period = period.max(2) as usize;
+    let (rows, columns) = (field.rows as usize, field.columns as usize);
+    let (width, height) = (columns.div_ceil(stride), rows.div_ceil(stride));
+    let with_alpha =
+        |c: egui::Color32, a: u8| egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), a);
+    let shadow = with_alpha(palette.shadow_color, palette.shadow_alpha);
+    let single = with_alpha(palette.warning_color, 160);
+    let dot = with_alpha(palette.muted_text_color(), 220);
+    let wash = with_alpha(palette.muted_text_color(), 36);
+    let mut pixels = Vec::with_capacity(width * height);
+    for y in 0..height {
+        for x in 0..width {
+            let cell = field
+                .cells
+                .get(y * stride * columns + x * stride)
+                .copied()
+                .unwrap_or(DeadSpotCell::Clear);
+            pixels.push(match cell {
+                DeadSpotCell::Clear => egui::Color32::TRANSPARENT,
+                DeadSpotCell::Shadow => shadow,
+                DeadSpotCell::Single => {
+                    if (x + y) % period < period / 2 {
+                        single
+                    } else {
+                        egui::Color32::TRANSPARENT
+                    }
+                }
+                DeadSpotCell::NoData => {
+                    if x % period == period / 2 && y % period == period / 2 {
+                        dot
+                    } else {
+                        wash
+                    }
+                }
+            });
+        }
+    }
+    egui::ColorImage {
+        size: [width, height],
+        pixels,
+        ..egui::ColorImage::default()
+    }
+}
+
+/// The dead-spot texture the viewport keeps across frames, and what it was built from.
+pub struct DeadSpotTexture {
+    /// The field's revision, the pattern period, and the palette's shadow fill: a change to
+    /// any of them rebuilds the image.
+    key: (u64, u32, egui::Color32, egui::Color32),
+    pub handle: egui::TextureHandle,
+}
+
+/// Bring `slot` up to date with `layer`: build the texture when the field, the zoom's
+/// pattern bucket or the palette changed, and drop it when there is no field. Called once
+/// a frame before the layers are drawn; costs nothing when nothing changed.
+pub fn sync_dead_spot_texture(
+    ctx: &egui::Context,
+    palette: &theme::Palette,
+    view: &TopDownView,
+    slot: &mut Option<DeadSpotTexture>,
+    layer: DeadSpotLayer<'_>,
+) {
+    let DeadSpotLayer::Field(field) = layer else {
+        *slot = None;
+        return;
+    };
+    if field.rows == 0 || field.columns == 0 {
+        *slot = None;
+        return;
+    }
+    let period = dead_spot_pattern_cells(field.cell_m, view.meters_per_px);
+    let key = (
+        field.revision,
+        period,
+        palette.shadow_color,
+        palette.warning_color,
+    );
+    if slot.as_ref().is_some_and(|t| t.key == key) {
+        return;
+    }
+    let max_side = ctx.input(|i| i.max_texture_side).max(1);
+    #[allow(clippy::cast_possible_truncation)]
+    let stride = (field.rows.max(field.columns) as usize)
+        .div_ceil(max_side)
+        .max(1) as u32;
+    let image = dead_spot_image(&field, palette, (period / stride).max(2), stride);
+    let handle = ctx.load_texture("gungnir-dead-spots", image, egui::TextureOptions::LINEAR);
+    *slot = Some(DeadSpotTexture { key, handle });
+}
+
+/// The screen rectangle a field covers.
+#[must_use]
+pub fn dead_spot_rect(
+    field: &DeadSpotField<'_>,
+    rect: egui::Rect,
+    view: &TopDownView,
+) -> egui::Rect {
+    let [e, n] = field.origin_enu;
+    let width = f64::from(field.columns) * field.cell_m;
+    let height = f64::from(field.rows) * field.cell_m;
+    egui::Rect::from_two_pos(
+        view.project([e, n + height, 0.0], rect),
+        view.project([e + width, n, 0.0], rect),
+    )
+}
+
+/// Draw the dead-spot layer (GAP-246): the field's texture over the terrain and under
+/// everything else, and the line that says what it is; or, with no field, the sentence
+/// that says why. A texture built for an older field is not drawn.
+pub fn draw_dead_spots_2d(
+    painter: &egui::Painter,
+    palette: &theme::Palette,
+    rect: egui::Rect,
+    view: &TopDownView,
+    texture: Option<&DeadSpotTexture>,
+    layer: DeadSpotLayer<'_>,
+) {
+    let anchor = rect.left_bottom()
+        + egui::vec2(
+            palette.panel_spacing,
+            -palette.panel_spacing - 1.6 * palette.small_font_size,
+        );
+    let (line, colour) = match layer {
+        DeadSpotLayer::NotComputed { reason } => (
+            dead_spot_not_computed_line(reason),
+            palette.muted_text_color(),
+        ),
+        DeadSpotLayer::Computing => (
+            "Terrain dead spots: computing the first field.".to_owned(),
+            palette.muted_text_color(),
+        ),
+        DeadSpotLayer::Field(field) => {
+            if let Some(texture) = texture.filter(|t| t.key.0 == field.revision) {
+                let tint = if field.stale {
+                    egui::Color32::WHITE.gamma_multiply(0.5)
+                } else {
+                    egui::Color32::WHITE
+                };
+                painter.image(
+                    texture.handle.id(),
+                    dead_spot_rect(&field, rect, view),
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    tint,
+                );
+            }
+            (
+                dead_spot_line(&field),
+                if field.stale {
+                    palette.warning_color
+                } else {
+                    palette.viewport_text_color
+                },
+            )
+        }
+    };
+    painter.text(
+        anchor,
+        egui::Align2::LEFT_BOTTOM,
+        line,
+        egui::FontId::proportional(palette.small_font_size),
+        colour,
+    );
 }
 
 /// The placed terrain as the viewport draws it: the grid's vertices in local ENU metres.
@@ -872,6 +1154,136 @@ mod tests {
         assert!(
             cphd.contains("most likely 20") && cphd.ends_with("stale"),
             "{cphd}"
+        );
+    }
+
+    fn field(cells: &[DeadSpotCell], columns: u32) -> DeadSpotField<'_> {
+        #[allow(clippy::cast_possible_truncation)]
+        let rows = cells.len() as u32 / columns;
+        DeadSpotField {
+            revision: 1,
+            origin_enu: [0.0, 0.0],
+            cell_m: 30.0,
+            rows,
+            columns,
+            cells,
+            height_agl_m: 100.0,
+            age_s: 6.0,
+            stale: false,
+            sensor: None,
+            linked: false,
+        }
+    }
+
+    /// GAP-246: each kind of cell differs in pattern as well as colour. A dead spot is
+    /// solid and dark, single-sensor is hatched (some pixels clear), no data is a dot grid
+    /// over a wash, and a clear cell draws nothing so the terrain shows through.
+    #[test]
+    fn a_dead_spot_image_carries_its_meaning_in_pattern_as_well_as_colour() {
+        let palette = theme::Palette::day();
+        let side = 8u32;
+        for (kind, check) in [
+            (DeadSpotCell::Clear, "clear"),
+            (DeadSpotCell::Shadow, "shadow"),
+            (DeadSpotCell::Single, "single"),
+            (DeadSpotCell::NoData, "no data"),
+        ] {
+            let cells = vec![kind; (side * side) as usize];
+            let image = dead_spot_image(&field(&cells, side), &palette, 4, 1);
+            assert_eq!(image.size, [8, 8]);
+            let distinct: std::collections::HashSet<_> = image.pixels.iter().collect();
+            let clear = image
+                .pixels
+                .iter()
+                .filter(|p| **p == egui::Color32::TRANSPARENT)
+                .count();
+            match kind {
+                DeadSpotCell::Clear => assert_eq!(clear, 64, "{check}"),
+                DeadSpotCell::Shadow => {
+                    assert_eq!(distinct.len(), 1, "{check} is solid");
+                    let [r, g, b, a] = image.pixels[0].to_srgba_unmultiplied();
+                    assert!(
+                        u16::from(r) + u16::from(g) + u16::from(b) < 60,
+                        "{check} is dark"
+                    );
+                    assert_eq!(a, palette.shadow_alpha);
+                }
+                DeadSpotCell::Single => {
+                    assert!(
+                        clear > 16 && clear < 48,
+                        "{check} is a hatch: {clear} clear"
+                    );
+                }
+                DeadSpotCell::NoData => {
+                    assert_eq!(clear, 0, "{check} is washed");
+                    assert_eq!(distinct.len(), 2, "{check} is dots over a wash");
+                }
+            }
+        }
+    }
+
+    /// A field larger than a texture side is drawn one pixel per `stride` cells, never
+    /// truncated to its first rows.
+    #[test]
+    fn a_large_field_is_decimated_into_the_texture() {
+        let palette = theme::Palette::day();
+        let cells = vec![DeadSpotCell::Shadow; 100 * 30];
+        let image = dead_spot_image(&field(&cells, 100), &palette, 4, 3);
+        assert_eq!(image.size, [34, 10]);
+    }
+
+    /// The pattern keeps about the same pitch on screen whatever the zoom, and changes only
+    /// at a doubling, so zooming does not rebuild the texture every frame.
+    #[test]
+    fn the_pattern_period_follows_the_zoom_in_doublings() {
+        assert_eq!(
+            dead_spot_pattern_cells(30.0, 1.0),
+            2,
+            "zoomed in, the floor"
+        );
+        assert_eq!(dead_spot_pattern_cells(30.0, 30.0), 8);
+        assert_eq!(dead_spot_pattern_cells(30.0, 33.0), 16);
+        assert_eq!(
+            dead_spot_pattern_cells(30.0, 10_000.0),
+            64,
+            "zoomed out, the ceiling"
+        );
+        assert_eq!(dead_spot_pattern_cells(30.0, 0.0), 2);
+    }
+
+    /// The line says the height, the age, the key, and geometric line of sight; a stale
+    /// field and a linked desktop's say so; and a field that could not be computed says the
+    /// dead spots are unknown, not absent.
+    #[test]
+    fn the_dead_spot_lines_say_what_the_field_is_and_what_it_is_not() {
+        let cells = [DeadSpotCell::Shadow];
+        let mut f = field(&cells, 1);
+        let line = dead_spot_line(&f);
+        for want in [
+            "100 m above ground",
+            "6 s ago",
+            "geometric line of sight",
+            "dark: hidden",
+        ] {
+            assert!(line.contains(want), "{want}: {line}");
+        }
+        assert!(
+            !line.contains("recomputing") && !line.contains("node"),
+            "{line}"
+        );
+        f.stale = true;
+        f.linked = true;
+        f.sensor = Some("S2 radar");
+        let line = dead_spot_line(&f);
+        assert!(
+            line.contains("recomputing") && line.contains("node's sensors"),
+            "{line}"
+        );
+        assert!(line.contains("for S2 radar alone"), "{line}");
+        let none = dead_spot_not_computed_line("no DEM is configured");
+        assert!(
+            none.contains("no DEM is configured") && none.contains("unknown"),
+            "{none}"
         );
     }
 

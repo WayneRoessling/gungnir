@@ -240,10 +240,11 @@ history, and an entry is never edited once it has merged.
 | GAP-243 | The session-token MAC key is derived in the node, not held by a key provider | Technical | CAP-6.1, CAP-6.4 | 2 | 10 | M | 20 | I4 | Security engineer (human-owned crate) | Open |
 | GAP-244 | An alternative whose solve overran its budget vanished, timed on a clock of its own | Technical | CAP-3.5 | 3 | 4 | S | 12 | I3 | Services engineer | Closed |
 | GAP-245 | Two feed parsers panicked on input the fuzzer found on its first night | Technical | CAP-1.2 | 2 | 9 | S | 18 | I3 | Services engineer | Closed |
-| GAP-246 | Sensor dead spots are not computed or drawn | Mission | CAP-1.4, CAP-2.11, CAP-5.9 | 3 | 10 | L | 30 | I4 | Services engineer | Open |
-| GAP-247 | Terrain line of sight scans every DEM vertex per sample, on a report computed every frame | Technical | CAP-2.11, CAP-1.4 | 3 | 4 | S | 12 | I4 | Services engineer | Open |
+| GAP-246 | Sensor dead spots are not computed or drawn | Mission | CAP-1.4, CAP-2.11, CAP-5.9 | 3 | 10 | L | 30 | I4 | Services engineer | Closed |
+| GAP-247 | Terrain line of sight scans every DEM vertex per sample, on a report computed every frame | Technical | CAP-2.11, CAP-1.4 | 3 | 4 | S | 12 | I4 | Services engineer | Closed |
+| GAP-248 | A laydown option's dead spots are not computed on PN-16 | Mission | CAP-1.4, CAP-2.11 | 2 | 4 | M | 8 | I4 | Services engineer | Open |
 
-Counts: 229 gaps, 4 mission, 225 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 230 gaps, 5 mission, 225 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3497,11 +3498,12 @@ Counts: 229 gaps, 4 mission, 225 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-10-29, Open: Filed with DN-34 from the owner's request of 2026-10-29 for terrain dead spots on the 3D map. Design only; three owner decisions open.
   - 2026-10-29, Open: D-146 to D-148 taken by the owner the same day, each to the recommended default (`../../record/2026-10-29/the-owner-s-walk-of-2026-10-29.md`). Buildable once GAP-247 is closed; no code yet.
+  - 2026-10-29, Closed: Built on the desktop (D-148), in `gungnir-analytics::shadow` (the field, a radial horizon sweep that hands the cells inside its own error bound to the sampled reference), `gungnir-app::dead_spots` (the worker off the tick, stale while it recomputes) and the viewport's textured layer in both renderers, with PN-11's toggle, height, one-sensor choice, measure, age and recompute. Not built: PN-16's per-option column, now GAP-248. DN-34 §11's six rows stay drafts, criteria being human-owned; the tests are `gungnir-analytics/tests/shadow_geometry.rs`, `gungnir-app/tests/dead_spots.rs` and the MOP-14 measurement in `frame_budgets.rs` (`../../record/2026-10-29/gap-246-and-gap-247-terrain-dead-spots.md`).
 - Evidence: `gungnir-analytics/src/coverage.rs` (`combined_coverage` samples approaches only); `gungnir-viewport3d/src/layers.rs` (rings, wedges and gap polylines, no area layer); `gungnir-analytics/src/lib.rs` (`viewshed` has no caller outside its tests); `../../design/DN-34-sensor-dead-spots.md` §2.
 - Severity: 3. Reach: 10 threads. Effort: L. Priority: 30.
 - Impact: Terrain masking is applied only along the declared approach polylines, so between them a sensor's ring claims coverage a ridge denies and nothing on the picture says so. A sensor manager or planner reads the ring as watched; a low flyer routes down the valley the ring covers on paper. MT-09 step 2 and MT-07 step 3 ask for coverage over terrain, and the system computes it along lines only.
 - Closing action: Per DN-34: a regular height field resampled once from the placed DEM, a shadow field at a stated height above ground (claimed by an active sensor, seen by none) by a radial horizon sweep held to a sampled reference, computed off the tick under MOP-14, drawn as one textured layer in the overlay both renderers share, with its height, age and measure on PN-11 and the not-computed sentence when there is no DEM.
-- Target: I4. Owner: Services engineer. Status: Open.
+- Target: I4. Owner: Services engineer. Status: Closed.
 - Reference: `../../design/DN-34-sensor-dead-spots.md`; D-146 (what dark means), D-147 (the default heights), D-148 (desktop only); GAP-226 gates the GL drape (DN-34 §13).
 - Depends on: GAP-247, D-146, D-147, D-148.
 
@@ -3511,10 +3513,25 @@ Counts: 229 gaps, 4 mission, 225 technical; 1 already covered by a plan in `../.
 - Capability: CAP-2.11 Geometric questions; CAP-1.4 Coverage and gaps.
 - History:
   - 2026-10-29, Open: Found while writing DN-34. A bound computed from the code, not a measurement; the first thing GAP-246's build does, and worth doing before it.
+  - 2026-10-29, Closed: The placed mesh is resampled once per load into a `HeightField` whose cells sit on the DEM's vertices, `PlacedGround`'s interpolation moved down as `MeshSurface`, and the approach report and PN-16's per-laydown reports read `HeightFieldLineOfSight` through a cache keyed on their inputs. PN-11 does not single out the one-time re-opening: the desktop cannot tell a shape change this caused from any other, so each re-opened acceptance is listed as a shape change, and the record item says why (`../../record/2026-10-29/gap-246-and-gap-247-terrain-dead-spots.md`).
 - Evidence: `gungnir-analytics/src/lib.rs` (`TerrainMaskLineOfSight`, O(vertices) per sample by its own comment); `gungnir-app/src/sustainment.rs::coverage_report`, called from `main.rs`, `workspace.rs`, `status.rs` and `gap_acceptance.rs` each frame; `gungnir-app/tests/terrain.rs` fixture sizes.
 - Severity: 3. Reach: 4 threads. Effort: S. Priority: 12.
 - Impact: `TerrainMaskLineOfSight::height_at` takes the nearest vertex by scanning the whole mesh, for every sample of every ray, and the desktop computes the approach report on the tick several times a frame. A realistic DEM (a million vertices) with two 40 km approaches and three active sensors is of the order of ten to the tenth vertex visits per report. The tests pass on grids of a few hundred vertices. Read from the code on 2026-10-29, not measured.
 - Closing action: DN-34 §5 and §6.1: resample the placed mesh once per load into a regular height field with an index lookup and a bilinear surface (`HeightField`, taking `PlacedGround::up_at`'s interpolation down into `gungnir-analytics`), a `HeightFieldLineOfSight` the approach report uses, and the report cached per inputs rather than recomputed per call. Say on PN-11 that every standing acceptance re-opens once on the first bilinear report (DN-33 §5, a shape change).
-- Target: I4. Owner: Services engineer. Status: Open.
+- Target: I4. Owner: Services engineer. Status: Closed.
 - Reference: `../../design/DN-34-sensor-dead-spots.md` §2.2 item 2 and §6.1; GAP-023 (the DEM); GAP-199 (`PlacedGround`); GAP-106 (the re-opening).
+
+**GAP-248 A laydown option's dead spots are not computed on PN-16**
+
+- Type: Mission.
+- Capability: CAP-1.4 Coverage and gaps; CAP-2.11 Geometric questions.
+- History:
+  - 2026-10-29, Open: Split from GAP-246 when it was built: the only item of DN-34 §7 the build left out.
+- Evidence: `gungnir-app/src/dead_spots.rs` computes the field from the live registry's searching and tracking sensors only; `gungnir-app/src/sustainment.rs::planning_rows` has no shadow column; `../../design/DN-34-sensor-dead-spots.md` §7 item 5.
+- Severity: 2. Reach: 4 threads. Effort: M. Priority: 8.
+- Impact: A planner comparing laydown options on PN-16 sees each option's gaps along the approaches but not the area its terrain would hide, so two options with the same approach coverage and very different blind valleys read the same.
+- Closing action: Per DN-34 §7 item 5: on selecting an option, compute its field on the same worker from `laydown_coverage_volumes`, and show the shadow area in a column beside its coverage cell, filled on selection rather than for every row, since every row is a full recompute.
+- Target: I4. Owner: Services engineer. Status: Open.
+- Reference: `../../design/DN-34-sensor-dead-spots.md` §7 item 5 and its amendment 1; GAP-087 (the laydown preview).
+- Depends on: GAP-246.
 

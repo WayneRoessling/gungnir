@@ -1,7 +1,8 @@
 # DN-34 Sensor dead spots: terrain shadow as a field, drawn as a layer
 
-Closes GAP-246, and GAP-247 on the way. Status: first draft, 2026-10-29. **Design only; no
-code exists.** Raised outside the plan-11 set, from the owner's request of 2026-10-29: show
+Closes GAP-246, and GAP-247 on the way. Status: first draft, 2026-10-29; **built the same
+day**, with what the build changed in amendment 1 at the end. PN-16's per-option column
+(§7 item 5) was not built and is GAP-248. Raised outside the plan-11 set, from the owner's request of 2026-10-29: show
 the places where the terrain blinds the sensors to an approaching UAS or aircraft, as a
 darkened area on the map an operator reads at a glance, and say what other three-dimensional
 elements should follow it. What the owner has signed of this note is in
@@ -485,6 +486,56 @@ them should go there before the path has been looked at.
 - No new dependency edge: `gungnir-viewport3d` already reaches `gungnir-data`,
   `gungnir-data-fusion`, `gungnir-model` and `gungnir-ui`, which is everything the rows
   above read; a 3D Tiles crate is a §2.9 decision, not an edge.
+
+## Amendment 1, 2026-10-29: what the build changed
+
+GAP-247 and GAP-246 were built the day this note was written. Where the build departed
+from the text above, the code is right and this says why; §1 to §13 stand otherwise.
+
+1. **Rays sample every half cell, not every cell** (§5, §6.2, §6.3). At a whole cell a
+   crest between two samples is stepped over, and two rays a few metres apart disagreed
+   by the height of a ridge. `HeightFieldLineOfSight` and the sweep both sample at half
+   the terrain cell.
+2. **The height field's cells sit on the DEM's vertices** (§6.1). The first draft's raster
+   started at the vertices' corner, half a cell off them, which smoothed every edge a
+   second time; the wall test found its shadow three cells late. Centred on the vertices,
+   resampling at the DEM's own cell copies the surface.
+3. **The sweep knows its own error and hands the doubtful cells to the reference** (§6.3).
+   The ray that decides a cell runs beside the true line to its centre, and over steep
+   ground that offset reads different ground: one test cell was hidden to the sweep and
+   seen by the reference with ten metres to spare. Each verdict now carries a bound, the
+   steepest slope in the field times the ray's offset plus half a step, over the cell's
+   distance; a cell inside it is decided by the reference. Over two 360 000-cell test
+   fields the two then disagree on no cell at all, and the sweep stays four times
+   (steep) to twelve times (rolling) faster than the reference in a release build.
+4. **The types grew where the build needed them** (§5). `per_sensor` carries a
+   `Sight` (unclaimed, no data, hidden, seen) rather than a bool, since one sensor's
+   shadow needs its claim as well as its sight; the field carries `clamped_from_m` for
+   PN-11's sentence; `measure_cells` measures one sensor's cells; `shadow_field_reference`
+   is public, the oracle. `PlacedGround`'s lookup moved down as `MeshSurface`, with the
+   wording of its refusals kept.
+5. **One sensor's shadow is chosen on PN-11, not PN-10** (§7 item 6, §10). PN-10 has no row
+   selection to hang it on; PN-11 has the height chooser already, and the chooser beside
+   it names the sensor, as does the map's line.
+6. **The approach report is cached by its inputs** (§6.1, GAP-247's action): the volumes,
+   the placed approaches, the parameters and the surface by identity. The one-time
+   re-opening of §6.1 is not singled out on PN-11, because the desktop cannot tell a
+   shape change the lookup caused from any other; each is listed as a shape change.
+7. **The map's cells are folded on the worker** (§6.5). Folding a million-cell field into
+   the viewport's cells on the tick that received it cost one 7 ms tick; on the worker
+   the slowest tick while a field is computed is 105 µs.
+8. **Two draft criteria were restated by their tests** (§11). The wall's top begins at
+   the first DEM cell centre on it, since the surface runs through the centres, and the
+   tolerance is a cell plus the ramp's half cell carried along the line. "Removing a
+   sensor never removes a shadow cell" is false where only that sensor claimed the cell,
+   which becomes unclaimed; the property tested is that removing a sensor never turns a
+   dead spot into a watched cell, and that what only it saw stops being watched. The rows
+   stay drafts here: a pass criterion is human-owned.
+9. **Measured** (`gungnir-app/tests/frame_budgets.rs`, release, not asserted): over a
+   1 000 by 1 000 DEM at 30 m with three radars of 12 km, the field of 1 301 by 1 267
+   cells is on the map 363 ms after the change, against MOP-14's 10 s.
+10. **PN-09** says the resampled surface's cell and size and the worker's state on the
+    terrain's own line, not a line of its own.
 
 ## Traceability
 

@@ -289,6 +289,9 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
                 point_clouds: &[],
                 laydown_preview: None,
                 dense_group: None,
+                dead_spots: gungnir_viewport3d::layers::DeadSpotLayer::NotComputed {
+                    reason: "no DEM is configured in this baseline (terrain)",
+                },
             },
         );
     });
@@ -350,6 +353,9 @@ fn coverage_that_cannot_be_placed_says_so_on_the_map() {
                 point_clouds: &[],
                 laydown_preview: None,
                 dense_group: None,
+                dead_spots: gungnir_viewport3d::layers::DeadSpotLayer::NotComputed {
+                    reason: "no DEM is configured in this baseline (terrain)",
+                },
             },
         );
     });
@@ -485,6 +491,9 @@ fn coverage_gaps_are_reported_along_the_declared_approaches() {
                 point_clouds: &[],
                 laydown_preview: None,
                 dense_group: None,
+                dead_spots: gungnir_viewport3d::layers::DeadSpotLayer::NotComputed {
+                    reason: "no DEM is configured in this baseline (terrain)",
+                },
             },
         );
     });
@@ -583,6 +592,9 @@ fn a_dense_group_is_drawn_as_a_group_and_not_as_tracks() {
                 point_clouds: &[],
                 laydown_preview: None,
                 dense_group: Some(&group),
+                dead_spots: gungnir_viewport3d::layers::DeadSpotLayer::NotComputed {
+                    reason: "no DEM is configured in this baseline (terrain)",
+                },
             },
         );
     });
