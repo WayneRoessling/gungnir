@@ -212,11 +212,14 @@ The non-core layers have draft pass criteria in `verification-capability-table.m
 
 The workflow files exist under `.github/workflows/` (`gungnir-workspace-structure.md`).
 They run on GitHub since 2026-09-07 (D-10 as amended). `gpu-fusion.yml` is the
-exception, in two ways. Its runner exists as of 2026-09-08 -- `gungnir-rtx-5060ti`, the
-owner's workstation -- but the GPU path and its tests are still GAP-024's, so it cannot
-pass yet. And it runs on manual dispatch **permanently**, by decision: dispatch on a
-self-hosted runner is local execution with a recorded log, and only a caller with write
-access can fire it, which a `pull_request` trigger on a public repository would undo.
+exception, in two ways. Its runner is `gungnir-rtx-5060ti`, the owner's workstation,
+and its first recorded dispatch passed on 2026-09-16 and closed GAP-024. And it runs on
+manual dispatch **permanently**, by decision: dispatch on a self-hosted runner is local
+execution with a recorded log, and only a caller with write access can fire it, which a
+`pull_request` trigger on a public repository would undo. Since 2026-10-29 the runner is
+registered for one job at a time: `pwsh .github/scripts/run_self_hosted.ps1 gpu-fusion.yml`
+(or `bench-regression.yml`), run on the workstation, registers it, dispatches, and runs
+that job. A standing registration expired after fourteen days offline.
 
 ## Review pipeline
 

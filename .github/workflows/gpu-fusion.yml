@@ -21,9 +21,17 @@
 # `gpu-tests` (`tests/gpu_vs_cpu.rs`), and `cargo test -p gungnir-data-fusion
 # --features gpu-tests --no-run` compiles them, so a dispatch now executes four tests
 # rather than none and the "ran nothing" guard below is a guard rather than a certainty.
-# What has never happened is the dispatch itself: item (3) of GAP-024's closing action is
-# a *recorded* run on the registered runner, which a passing sandbox run is not.
-# Fire it with `gh workflow run gpu-fusion.yml`.
+# Item (3) of GAP-024's closing action was a *recorded* run on this runner, which a
+# passing sandbox run is not; it happened on 2026-09-16 (run 35113741715) and closed the
+# gap.
+#
+# **Fire it with `pwsh .github/scripts/run_self_hosted.ps1 gpu-fusion.yml`, on the
+# workstation** (2026-10-29). The runner is no longer a standing registration: GitHub
+# removed that one after fourteen days without a connection, and dispatches then queued
+# for a runner that did not exist. The script registers a runner for this one job,
+# dispatches, runs it, and leaves nothing registered. It is still started by hand, as
+# D-63 has it. A bare `gh workflow run` now queues until the script, or nothing, picks
+# it up.
 #
 # The same validation runs directly on any GPU host, no forge involved:
 #   cargo test -p gungnir-data-fusion --features gpu-tests -- --ignored

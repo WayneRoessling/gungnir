@@ -148,6 +148,9 @@ only when the change touches what that build reads; every push to main runs the
 libproj job, and a weekly scheduled run on main runs everything, which also keeps
 main's caches from expiring through a quiet fortnight.
 `bench-regression.yml` runs by dispatch only, since 2026-10-28; its header says why.
+It and `gpu-fusion.yml` run on the owner's workstation, and are fired from it with
+`pwsh .github/scripts/run_self_hosted.ps1 <workflow>`, which registers a runner for that
+one job; a plain `gh workflow run` queues with no runner to take it.
 `cross-document-recheck.yml` re-runs the document checks of every open pull request after
 each merge to `main` and posts the result on it, and `pr-rules.yml` checks the description
 and the commit messages.

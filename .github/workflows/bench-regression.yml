@@ -68,7 +68,10 @@
 # **Not on pushes to main since 2026-10-28.** The self-hosted runner had stopped taking
 # jobs, so each push queued a run that waited up to three hours and was then cancelled by
 # the next push: every push to main on 2026-10-28, and none ran a benchmark. Dispatch on
-# main when the runner is back, to write a fresh baseline, and before comparing. **The `pull_request` trigger does
+# main to write a fresh baseline before comparing, with
+# `pwsh .github/scripts/run_self_hosted.ps1 bench-regression.yml` on the workstation,
+# which registers a runner for that one job (2026-10-29; the standing registration had
+# expired, see gpu-fusion.yml). **The `pull_request` trigger does
 # not come back** (D-62): the number does not mean enough on this host, and a different
 # machine is out of scope for this release. ci.yml's `benches compile` step is what proves, per pull
 # request, that the benchmarks still build.
@@ -110,8 +113,8 @@ env:
 
 jobs:
   bench:
-    # `gungnir-rtx-5060ti`, the one self-hosted runner registered to this repository
-    # (GAP-061). **The `gpu` label is pinning a machine, not requesting a GPU** -- no
+    # `gungnir-rtx-5060ti`, the one self-hosted runner of this repository (GAP-061),
+    # registered for one job at a time by .github/scripts/run_self_hosted.ps1. **The `gpu` label is pinning a machine, not requesting a GPU** -- no
     # benchmark here touches one. It is in the list because it is what identifies this
     # particular host today, and the whole point of the move is that every run happens on
     # the same host. **If a second self-hosted runner is ever registered, this must move
