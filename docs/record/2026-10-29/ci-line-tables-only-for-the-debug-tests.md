@@ -26,3 +26,23 @@ that space is debug information. The owner chose to try building the CI tests wi
 The setting is part of the cache key, so this pull request's runs build from nothing: a
 pull request reads main's cache and never writes one. They show the disk the new build
 takes. How long a warm build takes shows only after main's first run saves the new cache.
+
+## What the pull request's run showed
+
+Every check passed, with all 2,594 tests across the three shards (956, 862 and 776).
+
+| | Full debug (#247, warm cache) | Line tables (#248, no cache) |
+|---|---|---|
+| Disk used at the end of a shard | 129 GB of 145 | 74 GB of 145 |
+| Of which the build | about 88 GB | about 33 GB |
+| Free at the end | 17 GB | 72 GB |
+| Compile, per shard | 5.6 to 8.6 min | 6.5 to 6.8 min |
+| Job, per shard | 8.5 to 14.1 min | 9.2 to 10.4 min |
+
+- **The build takes 55 GB less.** A shard now ends with more free space than the runner
+  starts with before the background deletion, so the deletion is a margin, no longer a
+  necessity. It is kept: in the background it costs nothing.
+- **Compiling from nothing was as fast as the full-debug build was from a warm cache.** The
+  time saved is in writing and linking the debug information, which was most of the
+  work for about 150 test binaries. A warm run should be shorter still; main's first run
+  after the merge saves the cache that shows it.
