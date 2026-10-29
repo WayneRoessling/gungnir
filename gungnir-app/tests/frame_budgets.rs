@@ -20,7 +20,7 @@
 //! | egui pass, p99 under 8 ms at Scenario 4 counts | measured since 2026-09-15, **not asserted** | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured here now; the owner gates it after reading a figure, which is the same rule the two rows above were held to. |
 //! | `tracks()`/`is_healthy()`, p99 under 1 ms | **yes** since 2026-09-15 | Gated in the same walk. Both calls measure p99 100 ns against a 1 ms budget -- four orders of magnitude -- so this one is asserted in **both** profiles; see its own documentation for why the usual release-only rule is not what protects it. |
 //!
-//! | MOP-14, coverage recompute over terrain under 10 s | measured since 2026-10-29, **not asserted** | GAP-246's dead-spot field, the first coverage computed over terrain as an area (`docs/design/DN-34-sensor-dead-spots.md` §11's last row, a Draft). Measured on a 1 000 by 1 000 DEM; gating it is the owner's confirmation, the rule the rows above were held to. |
+//! | MOP-14, coverage recompute over terrain under 10 s | **yes** since 2026-10-29 | GAP-246's dead-spot field, the first coverage computed over terrain as an area. Measured on a 1 000 by 1 000 DEM at 363 ms, 645 ms once the line of sight became exact, and gated the same day when the owner agreed `docs/design/DN-34-sensor-dead-spots.md` §11's rows, this one's included. Release only, the convention the rows above follow. |
 //!
 //! **What changed on 2026-09-15 was not the code.** Both rows were measured and printed
 //! for over a week and deliberately not asserted, because promoting a Draft row to a gate
@@ -60,6 +60,9 @@ const BUDGET_STARTUP: Duration = Duration::from_secs(3);
 /// The `gungnir-ui` §2 row: "egui pass p99 under 8 ms at Scenario 4 track counts"
 /// (agreed 2026-09-04, D-16).
 const BUDGET_EGUI_P99: Duration = Duration::from_millis(8);
+/// MOP-14, `docs/mission/measures.md`: "time to recompute coverage over terrain for the
+/// sector after a sensor change, under 10 s" (confirmed 2026-09-04).
+const BUDGET_COVERAGE_RECOMPUTE: Duration = Duration::from_secs(10);
 /// Enough passes for a p99 to mean something without making the suite slow: the same
 /// order as the snapshot budget's sample count, scaled down because a full tree render
 /// costs far more than a `tracks()` call.
@@ -620,20 +623,95 @@ fn write_hills_dem(path: &Path) {
     }
 }
 
-/// **Measured, not asserted** (GAP-246, MOP-14: "time to recompute coverage over terrain
-/// for the sector after a sensor change, under 10 s"). The dead-spot field over a
-/// 1 000 by 1 000 synthetic DEM at 30 m, three radars switched from standby to search:
-/// the time from the tick that saw the change to the tick that holds a field computed
-/// under it, and the slowest tick in between, which is the "no frame waits on it" half of
-/// DN-34 §11's draft row. Release only, because the budget is a release figure; printed
-/// for the owner to read before gating, as every row above was.
+/// **Gated 2026-10-29** (GAP-246, MOP-14: "time to recompute coverage over terrain for the
+/// sector after a sensor change, under 10 s"), with DN-34 §11's last row, agreed by the
+/// owner that day after reading the figure this test printed: 363 ms. The line of sight
+/// became exact the same day (DN-34 amendment 1 item 1), and the figure is 645 ms since,
+/// on the same machine. The dead-spot field
+/// over a 1 000 by 1 000 synthetic DEM at 30 m, three radars switched from standby to
+/// search. Two halves, both asserted:
+///
+/// - **No frame waits on it.** The tick that sees the change hands the work to the worker
+///   and returns with the old field still the one drawn: structural, so asserted in any
+///   profile would hold, and asserted here once. The slowest tick meanwhile is printed.
+/// - **Under 10 s** from that tick to the one that holds a field computed under the change.
+///   Release only, because the budget is a release figure and `ci.yml` runs this file with
+///   `--release`, the convention every budget above follows.
 #[test]
-fn the_dead_spot_recompute_is_measured_against_mop_14() {
+fn the_dead_spot_recompute_meets_mop_14() {
     if cfg!(debug_assertions) {
         println!("dead-spot recompute: not measured in debug; the budget is a release figure");
         return;
     }
     let dir = scratch("dead-spots");
+    let mut state = hills_desktop(&dir);
+    let wait = |state: &mut AppState, done: &dyn Fn(&AppState) -> bool| -> Duration {
+        let mut slowest = Duration::ZERO;
+        for _ in 0..12_000 {
+            let tick = Instant::now();
+            update::tick(state);
+            slowest = slowest.max(tick.elapsed());
+            if done(state) {
+                return slowest;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!(
+            "never settled: {}",
+            gungnir_app::dead_spots::health_line(state)
+        );
+    };
+    wait(&mut state, &|s| {
+        s.height_field.is_some() && s.dead_spots.computed.is_some()
+    });
+    for id in 1..=3 {
+        gungnir_app::sustainment::record_observed_mode(
+            &mut state,
+            id,
+            gungnir_model::SensorMode::Search,
+        )
+        .expect("searching");
+    }
+    let started = Instant::now();
+    update::tick(&mut state);
+    assert!(
+        state.dead_spots.computing()
+            && state
+                .dead_spots
+                .computed
+                .as_ref()
+                .is_some_and(|c| c.inputs.sensors.is_empty()),
+        "the tick that saw the change waited for the field: {}",
+        gungnir_app::dead_spots::health_line(&state)
+    );
+    let slowest = wait(&mut state, &|s| {
+        s.dead_spots
+            .computed
+            .as_ref()
+            .is_some_and(|c| c.inputs.sensors.len() == 3)
+            && !s.dead_spots.stale
+    });
+    let recompute = started.elapsed();
+    let computed = state.dead_spots.computed.as_ref().expect("a field");
+    println!(
+        "dead-spot recompute: {recompute:?} from the change to the field ({} by {} cells of \
+         {:.0} m, the worker took {:?}); slowest tick meanwhile {slowest:?} \
+         (MOP-14 budget {BUDGET_COVERAGE_RECOMPUTE:?}, release profile)",
+        computed.field.columns,
+        computed.field.rows,
+        computed.field.parameters.cell_m,
+        computed.took
+    );
+    assert!(
+        recompute < BUDGET_COVERAGE_RECOMPUTE,
+        "the dead-spot field took {recompute:?} from the change, over MOP-14's \
+         {BUDGET_COVERAGE_RECOMPUTE:?}"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A desktop over the hills DEM with three 12 km radars at standby, ready to switch on.
+fn hills_desktop(dir: &Path) -> AppState {
     let dem = dir.join("hills.asc");
     write_hills_dem(&dem);
     let origin = [0.959_931, 0.209_44, 0.0];
@@ -676,52 +754,5 @@ fn the_dead_spot_recompute_is_measured_against_mop_14() {
         ..ConfigBaseline::default()
     };
     gungnir_config::validate(&config).expect("valid");
-    let mut state = AppState::with_config(config).expect("starts");
-    let wait = |state: &mut AppState, done: &dyn Fn(&AppState) -> bool| -> Duration {
-        let mut slowest = Duration::ZERO;
-        for _ in 0..12_000 {
-            let tick = Instant::now();
-            update::tick(state);
-            slowest = slowest.max(tick.elapsed());
-            if done(state) {
-                return slowest;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        panic!(
-            "never settled: {}",
-            gungnir_app::dead_spots::health_line(state)
-        );
-    };
-    wait(&mut state, &|s| {
-        s.height_field.is_some() && s.dead_spots.computed.is_some()
-    });
-    for id in 1..=3 {
-        gungnir_app::sustainment::record_observed_mode(
-            &mut state,
-            id,
-            gungnir_model::SensorMode::Search,
-        )
-        .expect("searching");
-    }
-    let started = Instant::now();
-    let slowest = wait(&mut state, &|s| {
-        s.dead_spots
-            .computed
-            .as_ref()
-            .is_some_and(|c| c.inputs.sensors.len() == 3)
-            && !s.dead_spots.stale
-    });
-    let recompute = started.elapsed();
-    let computed = state.dead_spots.computed.as_ref().expect("a field");
-    println!(
-        "dead-spot recompute: {recompute:?} from the change to the field ({} by {} cells of \
-         {:.0} m, the worker took {:?}); slowest tick meanwhile {slowest:?} (MOP-14 budget 10 s, \
-         release profile, not asserted)",
-        computed.field.columns,
-        computed.field.rows,
-        computed.field.parameters.cell_m,
-        computed.took
-    );
-    let _ = std::fs::remove_dir_all(dir);
+    AppState::with_config(config).expect("starts")
 }

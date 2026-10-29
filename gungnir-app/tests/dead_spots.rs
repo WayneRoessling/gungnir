@@ -352,9 +352,9 @@ fn the_ridge_casts_the_dead_spots_and_the_map_says_so() {
     // And the cached report is not served for inputs it was not computed under.
     let standby = sustainment::coverage_report(&state).expect("still an approach");
     assert_ne!(standby, report);
-    assert_eq!(
-        standby.gap_length_m(gungnir_model::GapSeverity::SingleSensor),
-        0.0
+    assert!(
+        standby.gap_length_m(gungnir_model::GapSeverity::SingleSensor) < f64::EPSILON,
+        "a standby radar watches nothing"
     );
     let _ = std::fs::remove_dir_all(dir);
 }

@@ -423,26 +423,43 @@ fn decide(
     let mut reached = vec![false; grid.len()];
     if method == Method::Sweep {
         let reach = volume.max_range_m;
-        // Half a terrain cell, as the reference's line of sight samples.
+        // The ray is marched every half terrain cell, so no field cell is passed over, and
+        // reads the ground at every crossing of a line of cell centres too, where the
+        // surface bends and a peak sits, as the reference does.
         let step = (terrain.cell_m / 2.0).max(f64::EPSILON);
         // **The sweep's own error bound.** The ray that decides a cell runs `offset` to one
         // side of the true line at the cell, and proportionally less nearer the sensor, so
         // the ground it reads at the line's binding point can differ by the steepest slope
-        // times that offset, plus half a step of sampling phase. Over the cell's distance
-        // that is an error in elevation slope; a cell whose margin is inside it is not the
-        // sweep's to decide, and the reference decides it.
+        // times that offset, plus half a step between the points it reads. Over the cell's
+        // distance that is an error in elevation slope; a cell whose margin is inside it is
+        // not the sweep's to decide, and the reference decides it.
         let gradient = terrain.max_gradient();
         // Adjacent rays no more than one field cell apart at the far edge.
         let rays = ((std::f64::consts::TAU * reach / grid.cell).ceil() as usize).max(16);
-        let steps = (reach / step).ceil() as usize + 1;
+        let end = reach + step;
         let mut best = vec![f64::INFINITY; grid.len()];
         for ray in 0..rays {
             let bearing = std::f64::consts::TAU * ray as f64 / rays as f64;
             let (de, dn) = (bearing.sin(), bearing.cos());
             let mut horizon = f64::NEG_INFINITY;
             let mut previous = None;
-            for k in 1..=steps {
-                let d = k as f64 * step;
+            let mut crossings = terrain.crossings([s[0], s[1]], [de, dn], end).peekable();
+            let mut k = 1usize;
+            loop {
+                let half = k as f64 * step;
+                let d = match crossings.peek() {
+                    Some(&c) if c < half => {
+                        crossings.next();
+                        c
+                    }
+                    _ => {
+                        k += 1;
+                        half
+                    }
+                };
+                if d > end {
+                    break;
+                }
                 let (e, n) = (s[0] + de * d, s[1] + dn * d);
                 let here = grid.index_at(e, n);
                 // A cell is decided where the ray enters it, so the horizon holds only the

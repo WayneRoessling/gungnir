@@ -176,6 +176,132 @@ fn a_walls_shadow_begins_where_the_line_over_its_top_says() {
     }
 }
 
+/// The first and last dead-spot cells along a line of cells, as distances from the sensor.
+fn shadow_span(line: &[(f64, CellSight)]) -> (f64, f64) {
+    let mut shadows = line
+        .iter()
+        .filter(|(_, c)| matches!(c, CellSight::Shadow { .. }))
+        .map(|(x, _)| *x);
+    let first = shadows.next().expect("a shadow on the line");
+    (first, shadows.next_back().unwrap_or(first))
+}
+
+/// Row a: a cone. Its apex `D` from a sensor at `hs`, height `H`, on flat ground, with the
+/// sensor outside its base so the apex is the highest elevation the near face presents. A
+/// probe at `hp` above the apex is hidden from `x = D(hp − hs)/(H − hs)` on, along the line
+/// through the apex. The apex is a DEM cell centre, so the surface along that line is the
+/// cone's own and one cell is the tolerance.
+#[test]
+fn a_cones_shadow_begins_where_the_line_over_its_apex_says() {
+    const CELL: f64 = 10.0;
+    let (apex_e, apex_n, height, radius) = (705.0, 205.0, 150.0, 100.0);
+    let terrain = HeightField::resample(
+        &dem(41, 201, CELL, |e, n| {
+            let r = ((e - apex_e).powi(2) + (n - apex_n).powi(2)).sqrt();
+            height * (1.0 - r / radius).max(0.0)
+        }),
+        CELL,
+    )
+    .expect("resampled");
+    let (se, sn, hs, hp) = (105.0, 205.0, 20.0, 200.0);
+    // The field's cells are laid out from the sensor's reach, so a range of 190.5 cells puts
+    // a row of cell centres on the line through the apex. At 190 the centres sit half a cell
+    // to either side, where a cone this steep is five metres lower than on the line.
+    let sensors = [(SensorId(1), sensor([se, sn, hs], 1_905.0))];
+    let expected = (apex_e - se) * (hp - hs) / (height - hs);
+    for compute in [shadow_field, shadow_field_reference] {
+        let field = compute(
+            &sensors,
+            &terrain,
+            ShadowParameters {
+                height_agl_m: hp,
+                cell_m: CELL,
+            },
+        );
+        let line = east_of(&field, se, sn, 1_990.0);
+        let (first, _) = shadow_span(&line);
+        assert!(
+            (first - expected).abs() <= CELL,
+            "the cone's shadow begins at {first} m, the line over its apex says {expected} m"
+        );
+        assert!(line
+            .iter()
+            .filter(|(x, _)| *x > expected + CELL)
+            .all(|(_, c)| matches!(c, CellSight::Shadow { .. })));
+    }
+}
+
+/// Row a: a valley. A sensor at `hs` on a plateau whose rim is `d` away, the far side of the
+/// rim falling at slope `s` to a floor `V` down and rising again at the same slope to the
+/// plateau. A probe at `hp` above the ground is hidden where the line from the sensor over
+/// the rim passes above it: from `x₁ = (hp − hs + s·d)/(s − hs/d)` on the near slope until
+/// the far slope climbs back into sight at `x₂`, where `−V + s(x₂ − f) + hp − hs = −hs·x₂/d`
+/// and `f` is the far slope's foot. Every kink is a DEM cell centre, so the surface is the
+/// valley's own and one cell is the tolerance at each end.
+#[test]
+fn a_valleys_shadow_runs_between_the_rim_and_where_the_far_slope_rises_into_sight() {
+    const CELL: f64 = 10.0;
+    let (rim, floor_from, floor_to, far_rim, slope, depth) =
+        (605.0, 905.0, 1_305.0, 1_605.0, 0.5, 150.0);
+    let ground = move |e: f64| {
+        if e <= rim || e >= far_rim {
+            0.0
+        } else if e < floor_from {
+            -slope * (e - rim)
+        } else if e <= floor_to {
+            -depth
+        } else {
+            -depth + slope * (e - floor_to)
+        }
+    };
+    let terrain =
+        HeightField::resample(&dem(41, 201, CELL, |e, _| ground(e)), CELL).expect("resampled");
+    let (se, sn, hs, hp) = (105.0, 205.0, 20.0, 10.0);
+    let sensors = [(SensorId(1), sensor([se, sn, hs], 1_900.0))];
+    let d = rim - se;
+    let foot = floor_to - se;
+    let enters = (hp - hs + slope * d) / (slope - hs / d);
+    let leaves = (depth + slope * foot - hp + hs) / (slope + hs / d);
+    assert!(
+        enters > d && enters < floor_from - se,
+        "the fixture hides the near slope"
+    );
+    assert!(
+        leaves > foot && leaves < far_rim - se,
+        "and the far slope rises into sight"
+    );
+    for compute in [shadow_field, shadow_field_reference] {
+        let field = compute(
+            &sensors,
+            &terrain,
+            ShadowParameters {
+                height_agl_m: hp,
+                cell_m: CELL,
+            },
+        );
+        let line = east_of(&field, se, sn, 1_990.0);
+        let (first, last) = shadow_span(&line);
+        assert!(
+            (first - enters).abs() <= CELL,
+            "the valley's shadow begins at {first} m, the rim says {enters} m"
+        );
+        assert!(
+            (last - leaves).abs() <= CELL,
+            "the valley's shadow ends at {last} m, the rim says {leaves} m"
+        );
+        for (x, c) in &line {
+            let inside = *x > enters + CELL && *x < leaves - CELL;
+            let outside = *x < enters - CELL || *x > leaves + CELL;
+            if inside {
+                assert!(matches!(c, CellSight::Shadow { .. }), "{x} m: {c:?}");
+            }
+            if outside {
+                assert!(matches!(c, CellSight::Single { .. }), "{x} m: {c:?}");
+            }
+        }
+    }
+}
+
 /// A deterministic sequence in [0, 1), so the terrain is the same on every run.
 struct Lcg(u64);
 

@@ -13451,6 +13451,14 @@
       the tests are `gungnir-analytics/tests/shadow_geometry.rs`,
       `gungnir-app/tests/dead_spots.rs` and the MOP-14 measurement in `frame_budgets.rs`
       (`../../record/2026-10-29/gap-246-and-gap-247-terrain-dead-spots.md`).
+  - date: 2026-10-29
+    status: Closed
+    note: >-
+      DN-34 §11's six rows agreed the same day and added to the verification table as
+      gates, the MOP-14 recompute asserted in release; the first row's cone and valley
+      written with them, and the line of sight made exact when the cone found a sampled
+      ray reading a sharp peak low
+      (`../../record/2026-10-29/dn-34-s-verification-rows-agreed-and-the.md`).
 
 - id: GAP-247
   name: Terrain line of sight scans every DEM vertex per sample, on a report computed every frame

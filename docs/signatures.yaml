@@ -3683,3 +3683,20 @@
   commit: 7ad06cfd7d7876e3bfac6be98e50a8ae1aa72c01
   pre_repository: false
   record: "D-145; GAP-215; docs/record/2026-10-28/gap-215-sealed-files-are-their-owner-s.md; PR #244"
+
+- date: 2026-10-29
+  signer: Owner
+  subject: >-
+    DN-34's six verification rows agreed as criteria and made gates, as section 11 drafts
+    them and amendment 1 item 8 restates two: terrain shadow geometry, the sweep against
+    the reference, shadow monotonicity, agreement with the approach report, the dead-spot
+    layer, and the MOP-14 recompute budget, the last asserted in the release profile.
+  kind: criterion
+  paths:
+  - docs/design/DN-34-sensor-dead-spots.md
+  - gungnir-analytics/tests/shadow_geometry.rs
+  - gungnir-app/tests/dead_spots.rs
+  - gungnir-app/tests/frame_budgets.rs
+  commit: 84fb96167c7d0f2b218411d0160544ad362b4b21
+  pre_repository: false
+  record: "GAP-246; DN-34 §11; docs/record/2026-10-29/dn-34-s-verification-rows-agreed-and-the.md; PR #258"

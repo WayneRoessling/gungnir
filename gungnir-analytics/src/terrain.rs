@@ -468,38 +468,132 @@ pub fn fit_cell(east_m: f64, north_m: f64, wanted: f64, budget: usize) -> (f64, 
     ((area / budget).sqrt() * 1.01, true)
 }
 
-/// Line of sight against a height field: the segment sampled every half cell, each
-/// sample against the bilinear surface. O(length / cell) per ray (DN-34 §5).
+/// Where a ray across a [`HeightField`] crosses a line through cell centres: the places
+/// the bilinear surface can bend, in order of distance, up to a reach.
+#[derive(Debug, Clone)]
+pub struct Crossings {
+    /// The next crossing's distance along each axis's family of lines, and the distance
+    /// between successive crossings of that family.
+    next: [f64; 2],
+    step: [f64; 2],
+    reach: f64,
+}
+
+impl Iterator for Crossings {
+    type Item = f64;
+
+    fn next(&mut self) -> Option<f64> {
+        let axis = usize::from(self.next[1] < self.next[0]);
+        let d = self.next[axis];
+        // Infinite for an axis the ray never crosses, so the reach ends it.
+        if d.is_nan() || d > self.reach {
+            return None;
+        }
+        self.next[axis] += self.step[axis];
+        Some(d)
+    }
+}
+
+impl HeightField {
+    /// The distances along the ray from `start` in the unit direction `direction` at which
+    /// it crosses a line of cell centres, in order, up to `reach`, excluding the start.
+    #[must_use]
+    pub fn crossings(&self, start: [f64; 2], direction: [f64; 2], reach: f64) -> Crossings {
+        let axis = |start: f64, dir: f64, origin: f64| -> (f64, f64) {
+            if dir.abs() < 1e-12 {
+                return (f64::INFINITY, f64::INFINITY);
+            }
+            // The continuous index of `start` on the centre lines, and the first line
+            // strictly ahead of it.
+            let at = (start - origin) / self.cell_m - 0.5;
+            let k = if dir > 0.0 {
+                at.floor() + 1.0
+            } else {
+                at.ceil() - 1.0
+            };
+            let line = origin + (k + 0.5) * self.cell_m;
+            ((line - start) / dir, self.cell_m / dir.abs())
+        };
+        let (e0, de) = axis(start[0], direction[0], self.origin_enu[0]);
+        let (n0, dn) = axis(start[1], direction[1], self.origin_enu[1]);
+        Crossings {
+            next: [e0, n0],
+            step: [de, dn],
+            reach,
+        }
+    }
+}
+
+/// Line of sight against a height field, **exactly**: the segment is clear when no point of
+/// it lies below the bilinear surface. O(length / cell) per ray (DN-34 §5).
 ///
-/// The same rule as [`crate::TerrainMaskLineOfSight`], which stays the reference: every
-/// sample, both ends included, must be at or above the ground under it, and a sample over
-/// no data or off the field is not blocked by ground nobody measured.
+/// The surface bends only where the segment crosses a line through cell centres, and
+/// between two crossings its height along the segment is a parabola, so the test checks
+/// every crossing, both ends, and the top of each piece's parabola where it has one inside
+/// the piece. It does not sample: a sharp peak sits on a crossing, and a ray stepping at a
+/// fixed spacing reads it low (DN-34 amendment 1 item 1, found by a cone).
 ///
-/// **Half a cell, not a whole one.** A crest between two samples is a crest the ray
-/// passes through; at a whole cell a ridge one cell wide could be stepped over entirely,
-/// and two rays a few metres apart could disagree by the height of the ridge.
+/// The same rule as [`crate::TerrainMaskLineOfSight`], which stays a reference over the
+/// mesh: every point, both ends included, must be at or above the ground under it, and a
+/// point over no data or off the field is not blocked by ground nobody measured.
 #[derive(Debug, Clone, Copy)]
 pub struct HeightFieldLineOfSight<'a> {
     pub field: &'a HeightField,
 }
 
 impl LineOfSight for HeightFieldLineOfSight<'_> {
-    // The sample count is a positive integer from a clamped ratio.
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss
-    )]
     fn visible(&self, from: [f64; 3], to: [f64; 3]) -> bool {
         let d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+        // How far the ground stands above the segment at parameter `t`; positive is blocked.
+        let above = |t: f64| {
+            self.field
+                .up_at(from[0] + d[0] * t, from[1] + d[1] * t)
+                .map(|h| h - (from[2] + d[2] * t))
+        };
+        let blocked = |t: f64| above(t).is_some_and(|g| g > 0.0);
+        if blocked(0.0) || blocked(1.0) {
+            return false;
+        }
         let length = (d[0] * d[0] + d[1] * d[1]).sqrt();
-        let spacing = (self.field.cell_m / 2.0).max(f64::EPSILON);
-        let steps = ((length / spacing).ceil() as usize).max(1);
-        (0..=steps).all(|i| {
-            let t = i as f64 / steps as f64;
-            let p = [from[0] + d[0] * t, from[1] + d[1] * t, from[2] + d[2] * t];
-            self.field.up_at(p[0], p[1]).is_none_or(|h| p[2] >= h)
-        })
+        if length <= f64::EPSILON {
+            return true;
+        }
+        let direction = [d[0] / length, d[1] / length];
+        let mut previous = 0.0;
+        for distance in self
+            .field
+            .crossings([from[0], from[1]], direction, length)
+            .chain(std::iter::once(length))
+        {
+            let (t0, t1) = (previous / length, distance / length);
+            previous = distance;
+            if t1 <= t0 {
+                continue;
+            }
+            if blocked(t1) {
+                return false;
+            }
+            // The piece lies in one bilinear patch, so the height above the segment is a
+            // quadratic in t; through its two ends and its middle, its top is exact.
+            let middle = f64::midpoint(t0, t1);
+            match (above(t0), above(middle), above(t1)) {
+                (Some(a), Some(m), Some(b)) => {
+                    let (c1, c2) = (4.0 * m - 3.0 * a - b, 2.0 * a + 2.0 * b - 4.0 * m);
+                    if c2 < 0.0 {
+                        let u = -c1 / (2.0 * c2);
+                        if u > 0.0 && u < 1.0 && blocked(t0 + u * (t1 - t0)) {
+                            return false;
+                        }
+                    }
+                }
+                _ => {
+                    if blocked(middle) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
     }
 }
 
