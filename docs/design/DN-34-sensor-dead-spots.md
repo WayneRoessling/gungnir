@@ -403,7 +403,8 @@ is `[100.0]`.**
 
 ## 11. Verification
 
-Draft rows for `../verification-capability-table.md` §2, not agreed:
+Rows for `../verification-capability-table.md` §2, as first drafted; agreed on 2026-10-29
+with amendment 1 item 8's two restatements, and gates since (amendment 2):
 
 | Component | Test | Method | Criterion |
 |---|---|---|---|
@@ -536,6 +537,31 @@ from the text above, the code is right and this says why; §1 to §13 stand othe
    cells is on the map 363 ms after the change, against MOP-14's 10 s.
 10. **PN-09** says the resampled surface's cell and size and the worker's state on the
     terrain's own line, not a line of its own.
+
+## Amendment 2, 2026-10-29: the rows agreed, and the line of sight made exact
+
+1. **§11's six rows are agreed and are gates**, in `../verification-capability-table.md`
+   §2 ("Rows added by DN-34"), as amendment 1 item 8 restated two of them. What the owner
+   has signed is in [`../signatures.md`](../signatures.md).
+2. **The first row's cone and valley were not built with the wall, and are now**
+   (`gungnir-analytics/tests/shadow_geometry.rs`): a cone's shadow begins at the line over
+   its apex, and a valley's runs from the line over its rim to where the far slope rises
+   into sight, each within one cell of the closed form, through both paths.
+3. **The line of sight is exact, not sampled** (amending amendment 1 item 1). The cone
+   showed that a ray stepping every half cell can read a sharp peak several metres low,
+   which hides nothing it should and shows ground it should not: the unsafe direction.
+   The interpolated surface bends only where a ray crosses a line through cell centres,
+   and between two crossings its height along the ray is a parabola, so
+   `HeightFieldLineOfSight` checks every crossing, both ends and each piece's own top.
+   The sweep reads the same crossings into its horizon as well as its half-cell steps.
+4. **The recompute is 645 ms**, not amendment 1 item 9's 363 ms, on the same machine and
+   fixture: the exact test reads more points a ray. MOP-14's budget is 10 s, and the test
+   now asserts it in the release profile, with the structural half of the row, that the
+   tick which sees a change returns with the old field still drawn.
+5. **A test fixture's own mistake, recorded because it will recur.** A field's cells are
+   laid out from its sensors' reach, so a test reading the cells "along" a line must put a
+   row of cell centres on that line, or it reads probes half a cell to one side. The wall
+   and the valley do not vary across the line and could not show it; the cone could.
 
 ## Traceability
 
