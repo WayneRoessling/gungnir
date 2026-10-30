@@ -13700,3 +13700,43 @@
       assignment over the scene's discs, through the function `render` uses. Tested by
       `gungnir-viewport3d/src/lib.rs`'s tests; what the owner should look at is in
       `../../record/2026-10-30/the-three-d-scene-draws-each-track-s.md`.
+- id: GAP-252
+  name: The three-d scene draws no terrain, and its one paint callback would cover every layer if it did
+  type: Technical
+  caps: [CAP-5.9, CAP-5.10]
+  layer: UI and data ecosystem
+  sev: 3
+  effort: M
+  target: I4
+  owner: UI engineer
+  deps: [GAP-226, GAP-023, D-154, D-155, D-156, D-157]
+  impact: >-
+    DN-34 §13.2 makes the terrain in GL, with the layers on it, the first 3D element after
+    the scene was seen. The scene draws only the track discs, so the tilt that follows has no
+    ground to tilt over. The scene's one paint callback is added after egui has painted every
+    layer and the status line, so a ground drawn in it would cover the dead spots, rings,
+    gaps, geofences, hazards and the line that stands in for a test, and no headless test
+    would see it. The projection rebuilds the terrain mesh every frame, reading every vertex
+    of the full grid for its colour ramp.
+  evidence: >-
+    `gungnir-viewport3d/src/lib.rs::prepare_3d` and `gungnir-app/src/main.rs::scene_callback`
+    (the callback after the layers); `gungnir-viewport3d/src/gl.rs::SceneRenderer` (one
+    instanced mesh); `gungnir-viewport3d/src/layers.rs::draw_terrain_2d` (the per-frame fold
+    and decimation); eframe 0.34.3's `NativeOptions::depth_buffer` default of 0 (the window
+    has no depth buffer)
+  action: >-
+    Per DN-35: a terrain surface built once per load for both renderers; the scene's draw
+    split into a ground pass and a glyph pass with the one `draw_layers` between them, placed
+    by the viewport crate and read by a probe; the scene drawing its own ground only when the
+    surface for this revision is uploaded, the egui ground otherwise; the draft rows of DN-35
+    §8.1; and the owner's look of §8.2 over the fixture of §9. The build follows the owner's
+    answers to D-154 to D-157.
+  ref: >-
+    `../../design/DN-35-terrain-in-the-three-d-scene.md`;
+    `../../design/DN-34-sensor-dead-spots.md` §13 and amendment 6; GAP-226
+  history:
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      Filed with DN-35's design, taking DN-34 §13.2 step 1 once GAP-226's look had met
+      increment 0. D-154 to D-157 raised the same day.
