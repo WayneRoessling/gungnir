@@ -254,31 +254,35 @@ pub fn tick(state: &mut AppState) {
     let Some(session) = state.session() else {
         return;
     };
-    let tracks: Vec<gungnir_model::TrackView> = state.tracking.tracks().to_vec();
+    // Borrowed beside `state.identity` rather than copied out of `state` (2026-10-30): a
+    // copy of the picture every frame was some 340 track views at Scenario 4's count,
+    // each with its provenance's allocations, for a loop that only reads them.
+    let tracks = state.tracking.tracks();
+    let identity = &mut state.identity;
     if tracks.is_empty() {
         return;
     }
-    if !state.identity.sessions.contains(&session) {
-        state.identity.sessions.push(session);
+    if !identity.sessions.contains(&session) {
+        identity.sessions.push(session);
     }
     let now = state.clock.now();
     let mut events = Vec::new();
-    for t in &tracks {
+    for t in tracks {
         let sighting = Sighting::new(session, t.id);
-        let first_time = state.identity.resolver.identity_of(session, t.id).is_none();
+        let first_time = identity.resolver.identity_of(session, t.id).is_none();
         // The live picture has no envelope sequence; the record carries the journal's
         // once the session is folded at the next start.
-        state.identity.observe(session, 0, t, None);
+        identity.observe(session, 0, t, None);
         if !first_time {
             continue;
         }
-        let Some(entity) = state.identity.resolver.identity_of(session, t.id) else {
+        let Some(entity) = identity.resolver.identity_of(session, t.id) else {
             continue;
         };
         // The resolver records a correlation on the lineage when it matched one and
         // records nothing when it minted, which is how this tells the two apart without
         // the resolver reporting it twice.
-        let matched = state.identity.resolver.lineage(entity).and_then(|lineage| {
+        let matched = identity.resolver.lineage(entity).and_then(|lineage| {
             lineage
                 .correlations
                 .iter()
