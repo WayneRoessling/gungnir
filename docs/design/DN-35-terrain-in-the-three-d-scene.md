@@ -1,9 +1,10 @@
 # DN-35 Terrain in the three-d scene, with the layers on it
 
 Closes GAP-252: rows 1 and 2 of `DN-34-sensor-dead-spots.md` §13.1, taken together as §13.2
-step 1 orders them. Status: design, 2026-10-30; **nothing is built**. Four choices are
-raised for the owner as D-154 to D-157 (§10), each with a recommended default. The build
-waits for the owner's answers. What the owner has signed of this note is in
+step 1 orders them. Status: design, 2026-10-30; **nothing is built**. Four choices were
+raised for the owner as D-154 to D-157 (§10), each with a recommended default, and a fifth,
+D-158, followed from D-156. The owner took all five on 2026-10-30, two of them past the
+default; amendment 1 says what they change. What the owner has signed of this note is in
 [`../signatures.md`](../signatures.md).
 
 A note of its own, not a DN-34 amendment. DN-34's amendments record what was built from
@@ -312,9 +313,81 @@ schema change**: `SCHEMA_VERSION` stands. No `NotImplemented` is added or remove
   puts them. The build of this note starts from main with #269 merged.
 - **No point clouds in GL** (§13.1 row 7) and **no basemap** (row 8).
 
+## Amendment 1, 2026-10-30: the owner's answers (D-154 to D-158)
+
+| Id | Taken | What it changes |
+|---|---|---|
+| D-154 | The default: the layers stay in egui, between the ground pass and the glyph pass | Nothing. §5 stands, and the drape in GL waits for the tilt |
+| D-155 | The default: the projection's decimation | Nothing. §6 stands |
+| D-156 | **Past the default: a real DEM**, not a synthetic one | §9, by D-158 (item 2 below) |
+| D-157 | **Past the default: a hillshade now, in both renderers** | §1's "nothing should change", §6's colours, §8 (item 1 below) |
+| D-158 | The default offered when D-156 was taken: USGS 3DEP 1 arc-second over the Oregon Coast Range | §9 (item 2 below) |
+
+1. **The hillshade (D-157).** `terrain_surface` computes it once per load, into the same
+   vertex colours both renderers draw, so the projection and the scene still show the same
+   ground.
+   - **The light** comes from the north-west, azimuth 315 degrees and 45 degrees above the
+     horizon. That is the cartographic convention, because a light from the upper left of
+     the screen is the one a reader sees relief under rather than inverted.
+   - **The normal** at each kept vertex is taken from its kept neighbours, by central
+     differences in the frame. It uses the decimated grid, so the shade matches the
+     triangles drawn. A neighbour with no height is left out, and a vertex with no
+     neighbour on an axis is shaded as flat on that axis.
+   - **The shade multiplies the height ramp's colour** by a factor normalised so that
+     **flat ground keeps exactly today's colour**. A slope facing the light lightens and a
+     slope facing away darkens, within a bounded range, so no slope goes black or white and
+     the dead-spot fill stays darker than any shaded ground. The alpha stays
+     `terrain_alpha`.
+   - **What the tests hold** (§8.1 row a, restated). The geometry is still held to today's
+     `draw_terrain_2d`, kept as the oracle, vertex for vertex and index for index. Over a
+     flat grid the colours are held to it too. A shade test covers the rest: flat ground
+     shades to exactly one; a slope toward the light is lighter and one away is darker; the
+     factor stays within its bounds; and a no-data neighbour changes no other vertex's
+     colour. The dead-spot fill's contrast against the lightest and darkest shaded ground
+     joins the palette's contrast tests.
+   - **What it changes for the look.** The projection's terrain changes, so §1's "nothing
+     the operator sees should change" no longer holds for the ground. The look's criterion
+     becomes: the two renderers agree with each other, and the relief is the place's (§8.2
+     check 9 below). The projection is still the path the tests see.
+2. **The ground the owner looks at (D-156, D-158).** It replaces §9's synthetic DEM.
+   - **The source.** USGS 3DEP at 1 arc-second from the National Map. It is public domain
+     and owes no attribution, but `testdata/dem/SOURCE.md` names it anyway, modelled on
+     `testdata/geoid/SOURCE.md`: the tile it was cut from, the tile's SHA-256, the clip's
+     bounds and SHA-256, and how it was cut. Only the clip is committed. Like the geoid
+     clips, it is test data and is never shipped.
+   - **The place.** The Oregon Coast Range, inside 43 to 45 degrees north and 122 to 124
+     degrees west, where the committed GEOID18 and NADCON5 clips already reach. Around
+     Marys Peak (44.50 N, 123.55 W, about 1 250 m), the range's highest point, cut just
+     large enough to hold round 1's sector, a few megabytes at most.
+   - **The placement** goes through the path GAP-197 and GAP-200 built. The baseline states
+     what the file does not: `nad83_realisation` from the tile's own metadata, and
+     `vertical` as NAVD88 (`epsg:5703`) if the file states no vertical system. The look
+     therefore exercises the real-world placement as well as the drawing.
+   - **The baseline.** A variant of round 1, `testdata/usability/round-1-oregon.json` or
+     similar, with its origin moved over the clip and a `terrain` section naming it. The
+     sensors, geofence, approach, boom and rehearsal seed are placed in the local frame, so
+     they move with the origin. Two consequences the build must handle, not hide:
+     - **Each radar is lifted to the ground under it plus its declared mast.** At the
+       origin's height, a radar on a slope would sit inside the hill and see nothing, and
+       the dead spots would show the fixture's mistake rather than the terrain's shadow.
+     - **The seed's tracks fly at their scripted heights above the origin**, so over the
+       higher ground some pass below the surface. That is §4 item 2's case, a track drawn
+       over a ridge it is under, and the look should see it drawn. The harbour boom lies
+       on land, which makes it a test of drawing, not of the scenario.
+   - **The download** is done by the build session, which asks the owner first, as any
+     download needs.
+3. **§8.2 gains one check, and two change:**
+   - Check 1 now reads: the two renderers' ground is the same, hillshade included.
+   - Check 7 also covers the hillshade appearing with the terrain, not a frame after it.
+   - Check 9 is added: the relief is the place's. Marys Peak and the ridge lines fall where
+     a published topographic map of the area puts them, against the metre grid and the
+     origin. This catches a gross placement error, such as a swapped axis, a flipped
+     row order or the wrong origin, which no other check looks for. It cannot see an error
+     of a metre or a cell; the placement's own tests (GAP-197, GAP-200) hold those.
+
 ## Traceability
 
-GAP-252; D-154, D-155, D-156, D-157; DN-34 §13.1 rows 1 and 2, §13.2 step 1, §13.3,
+GAP-252; D-154, D-155, D-156, D-157, D-158; DN-34 §13.1 rows 1 and 2, §13.2 step 1, §13.3,
 amendment 5; GAP-226, D-153; GAP-251 (PR #269); GAP-007, GAP-022, GAP-023; CAP-5.9, CAP-5.10; PN-02, PN-09;
 `ARCHITECTURE.md` §9 and §10 items 52 and 53; `../rust-ui-architecture-coding-standards.md`
 §5; `../record/2026-10-30/the-owner-s-look-at-the-three-d.md`;
