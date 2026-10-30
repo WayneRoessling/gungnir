@@ -4,7 +4,7 @@ The interface review of 2026-10-30 (`../../review/2026-10-30-ui-review.md` §4.3
 rebuilds that `rust-ui-architecture-coding-standards.md` §5 forbids, both running on every
 frame whether or not anything had changed, and found that no budget could have caught
 either, because the egui gate timed the dock tree and nothing else. Its §6 item 2 puts the
-three findings together as one change. That is GAP-254.
+three findings together as one change. That is GAP-255.
 
 **The glyph instance buffers (finding 14).** `SceneRenderer::paint_glyphs` called
 three-d's `set_instances` on every frame. In three-d 0.19.0 that call allocates four fresh

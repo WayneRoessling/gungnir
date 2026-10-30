@@ -248,9 +248,10 @@ history, and an entry is never edited once it has merged.
 | GAP-251 | The three-d scene draws each track as a bare disc, with no number, frame or assignment | Technical | CAP-2.10, CAP-5.9 | 3 | 10 | S | 30 | I4 | UI engineer | Closed |
 | GAP-252 | The three-d scene draws no terrain, and its one paint callback would cover every layer if it did | Technical | CAP-5.9, CAP-5.10 | 3 | 10 | M | 30 | I4 | UI engineer | Closed |
 | GAP-253 | An assignment label is drawn over the number of the track below | Technical | CAP-2.10, CAP-5.9 | 2 | 10 | S | 20 | I4 | UI engineer | Closed |
-| GAP-254 | The viewport rebuilt GPU and egui geometry every frame, outside every budget | Technical | CAP-5.10, CAP-2.10 | 2 | 8 | S | 16 | I4 | UI engineer | Closed |
+| GAP-254 | The docked replay picker never reads the journal's sessions | Technical | CAP-5.2, CAP-5.3 | 2 | 1 | S | 2 | I4 | UI engineer | Closed |
+| GAP-255 | The viewport rebuilt GPU and egui geometry every frame, outside every budget | Technical | CAP-5.10, CAP-2.10 | 2 | 8 | S | 16 | I4 | UI engineer | Closed |
 
-Counts: 236 gaps, 6 mission, 230 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 237 gaps, 6 mission, 231 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3623,7 +3624,22 @@ Counts: 236 gaps, 6 mission, 230 technical; 1 already covered by a plan in `../.
 - Reference: GAP-251.
 - Depends on: GAP-251.
 
-**GAP-254 The viewport rebuilt GPU and egui geometry every frame, outside every budget**
+**GAP-254 The docked replay picker never reads the journal's sessions**
+
+- Type: Technical.
+- Capability: CAP-5.2 Replay and rehearse; CAP-5.3 Reports and measures.
+- History:
+  - 2026-10-30, Open: Found in the 2026-10-30 UI review (`docs/review/2026-10-30-ui-review.md` §4.2, finding 6).
+  - 2026-10-30, Closed: `SustainmentState::read_sessions_once` is the one place the picker's sessions are read, and both `PanelBehavior::draw_panel` and `App::draw_docked` call it. Tested in `gungnir-app/tests/rendered_workspace.rs` (`../../record/2026-10-30/the-docked-replay-picker-never-read-the-journal.md`).
+- Evidence: The one-time read of the journal directory lived in `App::draw_docked` in `gungnir-app/src/main.rs`, which only the detached window reached; the dock tree's `PanelBehavior::draw_panel` in `gungnir-app/src/dock.rs` passed the unread list. The headless tests drew PN-12 over an empty journal, where the empty picker is the truth (`docs/review/2026-10-30-ui-review.md` §4.2 finding 6)..
+- Severity: 2. Reach: 1 threads. Effort: S. Priority: 2.
+- Impact: PN-12 docked, which is where the analyst, intelligence analyst, planner and administrator layouts put it, shows "No sessions recorded." for the whole session over a journal that has sessions in it, so an analyst cannot open a replay without detaching the panel.
+- Closing action: One read on `SustainmentState`, called from both draw paths, and a rendered test that draws the analyst's dock tree over a journal with a session in it.
+- Target: I4. Owner: UI engineer. Status: Closed.
+- Reference: GAP-071, GAP-075.
+- Depends on: GAP-071, GAP-075.
+
+**GAP-255 The viewport rebuilt GPU and egui geometry every frame, outside every budget**
 
 - Type: Technical.
 - Capability: CAP-5.10 Performance budgets; CAP-2.10 Terrain and map context.

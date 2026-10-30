@@ -895,7 +895,7 @@ pub fn sync_terrain_surface(
 /// The surface projected into the top-down view as an egui mesh. The colours and
 /// triangles were decided once, in [`terrain_surface`]; the projection is done when the
 /// surface, the view or the rect changes, by [`sync_terrain_mesh_2d`], and not per frame
-/// (GAP-254).
+/// (GAP-255).
 #[must_use]
 pub fn terrain_mesh_2d(
     rect: egui::Rect,
@@ -912,7 +912,7 @@ pub fn terrain_mesh_2d(
     mesh
 }
 
-/// What the overlay's terrain mesh was projected under (GAP-254): which surface, at which
+/// What the overlay's terrain mesh was projected under (GAP-255): which surface, at which
 /// view, into which rect. Any change to one of them is a reprojection; nothing else is.
 /// `PartialEq` and not `Eq` because a view holds floats: a NaN view rebuilds every frame,
 /// which errs towards drawing, as `glyphs_need_rebuild` does.
@@ -936,7 +936,7 @@ impl TerrainMeshKey {
 }
 
 /// The overlay's terrain mesh the viewport keeps across frames, and what it was projected
-/// under (GAP-254), the model being [`DeadSpotTexture`]. Held behind an `Arc` because
+/// under (GAP-255), the model being [`DeadSpotTexture`]. Held behind an `Arc` because
 /// `egui::Shape::Mesh` takes one, so drawing it each frame clones a pointer and not up to
 /// [`TERRAIN_VERTEX_BUDGET`] vertices.
 #[derive(Debug, Clone)]
@@ -957,7 +957,7 @@ impl TerrainMesh2d {
 /// the mesh when the surface, the view or the rect differs from what the slot holds, and
 /// drop it when there is no surface to draw. Called once a frame before the layers are
 /// drawn, as [`sync_dead_spot_texture`] is; costs nothing when nothing changed. Returns
-/// whether it projected (GAP-254; before it, `draw_terrain_2d` projected every frame).
+/// whether it projected (GAP-255; before it, `draw_terrain_2d` projected every frame).
 pub fn sync_terrain_mesh_2d(
     slot: &mut Option<TerrainMesh2d>,
     surface: Option<&TerrainSurface>,
@@ -1795,7 +1795,7 @@ mod tests {
         (!mesh.indices.is_empty()).then_some(mesh)
     }
 
-    /// GAP-254: an unchanged view does not reproject the terrain. The mesh is projected
+    /// GAP-255: an unchanged view does not reproject the terrain. The mesh is projected
     /// when the surface first appears, held through a hundred frames whose surface, view
     /// and rect are the same (the same `Arc`, not an equal copy), reprojected when any one
     /// of the three changes, and dropped when the surface goes. What it holds is what

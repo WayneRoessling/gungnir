@@ -129,7 +129,7 @@ pub struct ViewportState {
     pub scene: scene::Scene,
     pub glyphs: Vec<tracks::TrackGlyph>,
     /// Which glyph list `glyphs` is: changed every time the list is rebuilt, and read by
-    /// the scene's glyph pass to upload its instance buffers only then (GAP-254,
+    /// the scene's glyph pass to upload its instance buffers only then (GAP-255,
     /// `gl::GlyphUploadKey`). Wraps rather than overflows; at one rebuild a frame that is
     /// nineteen billion years away.
     pub glyph_revision: u64,
@@ -155,7 +155,7 @@ pub struct ViewportState {
     pub terrain_surface: Option<layers::TerrainSurfaceSlot>,
     /// The surface projected into the view as the egui mesh the overlay draws, kept while
     /// the surface, the view and the rect are what it was projected under, and rebuilt
-    /// only when one of them changes (GAP-254). `None` while the scene draws its own
+    /// only when one of them changes (GAP-255). `None` while the scene draws its own
     /// ground, so the projection is not kept up to date for a frame that does not draw it.
     pub terrain_mesh_2d: Option<layers::TerrainMesh2d>,
     /// Who drew the ground on the last frame, for PN-09's terrain line (DN-35 §7 item 3).
@@ -213,7 +213,7 @@ impl ViewportState {
     }
 
     /// Rebuild the glyph lists from the snapshot where they no longer match it, and mark
-    /// the track glyphs as a new list when they are rebuilt (GAP-254), so the scene's glyph
+    /// the track glyphs as a new list when they are rebuilt (GAP-255), so the scene's glyph
     /// pass uploads its instances on that frame and not on the frames between.
     fn sync_glyphs(&mut self, tracks: &[TrackView], bearing_rays: &[BearingRayView]) {
         if tracks::glyphs_need_rebuild(&self.glyphs, tracks) {
@@ -226,7 +226,7 @@ impl ViewportState {
     }
 
     /// Bring the overlay's terrain mesh up to date for a frame drawn into `rect`
-    /// (GAP-254): projected when the overlay draws the ground and the surface, the view or
+    /// (GAP-255): projected when the overlay draws the ground and the surface, the view or
     /// the rect differs from what the mesh holds; dropped when the scene draws the ground
     /// or there is no surface. The borrow is split by field so the surface can be read
     /// while the mesh slot is written.
@@ -294,7 +294,7 @@ fn draw_layers(
 ) {
     // Terrain goes under everything: it is the ground the rest is drawn on (GAP-023). The
     // mesh was projected before this call, by `ViewportState::sync_terrain_mesh_2d`, and
-    // only if something it depends on changed (GAP-254).
+    // only if something it depends on changed (GAP-255).
     if ground == Ground::Overlay {
         layers::draw_terrain_2d(
             painter,
@@ -457,12 +457,14 @@ pub fn prepare_3d(
     state.view.apply_input(&response, scroll);
     state.sync_glyphs(tracks, bearing_rays);
 
-    // Coverage is drawn by egui rather than in the GL pass: it is a flat overlay on
-    // the ground plane, and drawing it here means it survives whatever the callback
-    // does -- the same reason the status line is here (GAP-022 item 53). Bearing rays
-    // join it for the same reason: the scene's only GL geometry is the track disc, so
-    // this overlay is where a ray is drawn. The dead spots join it too (GAP-246, DN-34
-    // §8.2): the same texture, the same toggle, on whichever renderer is in front.
+    // Coverage is drawn by egui rather than in a GL pass: it is a flat overlay on
+    // the ground plane, and drawing it here means it survives whatever the callbacks
+    // do -- the same reason the status line is here (GAP-022 item 53). Bearing rays
+    // join it for the same reason: the scene's two GL passes draw the ground (GAP-252)
+    // and each track's disc, with the rest of the glyph drawn over the disc by egui
+    // (GAP-251), and nothing else, so this overlay is where a ray is drawn. The dead
+    // spots join it too (GAP-246, DN-34 §8.2): the same texture, the same toggle, on
+    // whichever renderer is in front.
     layers::sync_dead_spot_texture(
         ui.ctx(),
         palette,
@@ -1006,7 +1008,7 @@ mod tests {
         assert_eq!(state.ground_line(), None);
     }
 
-    /// GAP-254: the glyph revision changes exactly when the glyph list is rebuilt. Frames
+    /// GAP-255: the glyph revision changes exactly when the glyph list is rebuilt. Frames
     /// with the same tracks keep it, through either entry point; a track that moved bumps
     /// it once. The scene's glyph pass uploads its instances on that key, so a revision
     /// that moved every frame would put the per-frame upload back, and one that never moved
@@ -1065,7 +1067,7 @@ mod tests {
         assert_eq!(state.glyph_revision, built + 1);
     }
 
-    /// GAP-254 through the frame: the projection draws the terrain on every frame, but
+    /// GAP-255 through the frame: the projection draws the terrain on every frame, but
     /// projects it once while the view stands still -- three frames hold the same `Arc` --
     /// and once more after a pan. The scene drops the overlay's mesh while it draws the
     /// ground itself, and projects it again when the ground comes back to egui.

@@ -17,7 +17,7 @@
 //! | Startup to first frame, under 3 s | **yes** | Every stage it covers is implemented. |
 //! | Journal append, under 1 ms for 50 envelopes | **yes** since GAP-085 | Implemented, and now meets its budget under the D-04 desktop profile. |
 //! | Per-frame `update()`, p99 under 4 ms | **yes** since 2026-09-15 | Gated in the GAP-067 walk, on measurements the owner read first: p99 16 microseconds release, 189 microseconds debug, against 4 ms. Release only, the convention this file already applies to the journal budget. Those frames held no track; since 2026-10-30 the convoy is in the picture first. |
-//! | egui pass, p99 under 8 ms at Scenario 4 counts | **yes** since 2026-09-16 | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured from 2026-09-15 and gated by the owner in the same walk on reading the figures. Release only. Over the operator's workspace as well as the commander's since GAP-226, because only the operator's has the track table. Over the viewport and its layer assembly as well as the dock tree since GAP-254, because until then the picture was outside every budget. |
+//! | egui pass, p99 under 8 ms at Scenario 4 counts | **yes** since 2026-09-16 | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured from 2026-09-15 and gated by the owner in the same walk on reading the figures. Release only. Over the operator's workspace as well as the commander's since GAP-226, because only the operator's has the track table. Over the viewport and its layer assembly as well as the dock tree since GAP-255, because until then the picture was outside every budget. |
 //! | `tracks()`/`is_healthy()`, p99 under 1 ms | **yes** since 2026-09-15 | Gated in the same walk. Both calls measure p99 100 ns against a 1 ms budget -- four orders of magnitude -- so this one is asserted in **both** profiles; see its own documentation for why the usual release-only rule is not what protects it. |
 //!
 //! | MOP-14, coverage recompute over terrain under 10 s | **yes** since 2026-10-29 | GAP-246's dead-spot field, the first coverage computed over terrain as an area. Measured on a 1 000 by 1 000 DEM at 363 ms, 645 ms once the line of sight became exact, and gated the same day when the owner agreed `docs/design/DN-34-sensor-dead-spots.md` §11's rows, this one's included. Release only, the convention the rows above follow. |
@@ -467,10 +467,10 @@ fn snapshot_calls_meet_their_budget() {
 ///
 /// **What is timed is the frame an operator sees**, not one panel: the dock tree over the
 /// commander's arrangement and, since GAP-226, the operator's, which is the one with the
-/// track table, and **since GAP-254 the viewport beside it**, drawn through
+/// track table, and **since GAP-255 the viewport beside it**, drawn through
 /// `gungnir_viewport3d::render` from the layers `main.rs` assembles every frame, through
 /// `RenderProbe`, which runs a real egui pass headlessly -- layout, paint and all -- which
-/// is the quantity the row names. Until GAP-254 the viewport, the layer assembly and every
+/// is the quantity the row names. Until GAP-255 the viewport, the layer assembly and every
 /// glyph were outside every budget (`docs/review/2026-10-30-ui-review.md` §4.3 finding 17).
 /// The state is driven by Scenario 4 first, so the panels and the picture draw against a
 /// populated picture rather than an empty one; measuring an empty workspace and calling it
@@ -530,7 +530,7 @@ fn the_egui_pass_meets_its_budget() {
 /// Time `EGUI_PASSES` full passes over `role`'s frame as the desktop lays it out: the
 /// dock tree in the dashboard on the left, as `main.rs`'s `draw_workspace` puts it, and
 /// the picture in the centre, drawn through `gungnir_viewport3d::render` from the layer
-/// inputs `draw_picture` assembles, assembled here as there on every pass (GAP-254).
+/// inputs `draw_picture` assembles, assembled here as there on every pass (GAP-255).
 /// `must_say` is text a panel the measurement is about draws, so a workspace that left
 /// that panel out, or tabbed it out of sight, fails rather than timing something smaller;
 /// the viewport's own status line is held to the same rule.
@@ -595,7 +595,7 @@ fn egui_pass_samples(
 /// The picture as `main.rs`'s `draw_picture` draws it in the projection: every layer
 /// assembled from the state, per frame, as the desktop assembles it, and `render` over
 /// them. Kept in step with that function by hand; the layer set it names is the frame an
-/// operator sees, and a layer left out here is a cost left out of the gate (GAP-254).
+/// operator sees, and a layer left out here is a cost left out of the gate (GAP-255).
 fn draw_picture(
     ui: &mut egui::Ui,
     state: &AppState,

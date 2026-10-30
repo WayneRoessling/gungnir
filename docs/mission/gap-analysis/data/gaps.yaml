@@ -13797,8 +13797,45 @@
       The assignment follows the id on one line, and a track with two resources lists both.
       Tested in `gungnir-viewport3d/src/tracks.rs`
       (`../../record/2026-10-30/an-assignment-label-no-longer-covers-the-next.md`).
-
 - id: GAP-254
+  name: The docked replay picker never reads the journal's sessions
+  type: Technical
+  caps: [CAP-5.2, CAP-5.3]
+  layer: UI and data ecosystem
+  sev: 2
+  effort: S
+  target: I4
+  owner: UI engineer
+  deps: [GAP-071, GAP-075]
+  impact: >-
+    PN-12 docked, which is where the analyst, intelligence analyst, planner and administrator
+    layouts put it, shows "No sessions recorded." for the whole session over a journal that
+    has sessions in it, so an analyst cannot open a replay without detaching the panel.
+  evidence: >-
+    The one-time read of the journal directory lived in `App::draw_docked` in
+    `gungnir-app/src/main.rs`, which only the detached window reached; the dock tree's
+    `PanelBehavior::draw_panel` in `gungnir-app/src/dock.rs` passed the unread list. The
+    headless tests drew PN-12 over an empty journal, where the empty picker is the truth
+    (`docs/review/2026-10-30-ui-review.md` §4.2 finding 6).
+  action: >-
+    One read on `SustainmentState`, called from both draw paths, and a rendered test that
+    draws the analyst's dock tree over a journal with a session in it.
+  ref: >-
+    GAP-071, GAP-075
+  history:
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      Found in the 2026-10-30 UI review (`docs/review/2026-10-30-ui-review.md` §4.2, finding 6).
+  - date: 2026-10-30
+    status: Closed
+    note: >-
+      `SustainmentState::read_sessions_once` is the one place the picker's sessions are read,
+      and both `PanelBehavior::draw_panel` and `App::draw_docked` call it. Tested in
+      `gungnir-app/tests/rendered_workspace.rs`
+      (`../../record/2026-10-30/the-docked-replay-picker-never-read-the-journal.md`).
+
+- id: GAP-255
   name: The viewport rebuilt GPU and egui geometry every frame, outside every budget
   type: Technical
   caps: [CAP-5.10, CAP-2.10]

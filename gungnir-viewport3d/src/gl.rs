@@ -90,16 +90,16 @@ pub enum AttachError {
 /// and the mesh's vertex buffers are created once; **its instance buffers are not**:
 /// three-d 0.19's `InstancedMesh::set_instances` allocates four fresh `InstanceBuffer`s
 /// on every call (three transform rows and the colours), so the glyph pass calls it only
-/// when the glyph list or the zoom has changed, keyed by [`GlyphUploadKey`] (GAP-254).
+/// when the glyph list or the zoom has changed, keyed by [`GlyphUploadKey`] (GAP-255).
 /// `rust-ui-architecture-coding-standards.md` §5 forbids building GPU objects per frame,
-/// and until GAP-254 this pass did, on every frame, whether or not any track had moved.
+/// and until GAP-255 this pass did, on every frame, whether or not any track had moved.
 /// An instanced mesh is still the shape that lets one draw call serve however many
 /// tracks there are.
 pub struct SceneRenderer {
     context: three_d::Context,
     glyph_mesh: three_d::Gm<three_d::InstancedMesh, three_d::ColorMaterial>,
     /// What the instance buffers hold: the glyph revision and the zoom they were built
-    /// for, or `None` before the first upload (GAP-254). A frame whose key is this one
+    /// for, or `None` before the first upload (GAP-255). A frame whose key is this one
     /// draws the buffers as they are.
     uploaded: Option<GlyphUploadKey>,
     /// The terrain's mesh and the surface revision it was built from (GAP-252, DN-35 §6):
@@ -204,7 +204,7 @@ impl SceneRenderer {
     ///
     /// `glyph_revision` is `ViewportState::glyph_revision`, which changes whenever the
     /// glyph list is rebuilt. The instance buffers are uploaded only when it or the zoom
-    /// differs from what they hold (GAP-254; [`glyph_upload`] is the decision, and it is
+    /// differs from what they hold (GAP-255; [`glyph_upload`] is the decision, and it is
     /// tested): everything an instance carries is a function of the glyph list, the zoom
     /// and the palette, and the palette is fixed at attach.
     ///
@@ -238,7 +238,7 @@ impl SceneRenderer {
             .render_partially(clip.into(), &camera, [&self.glyph_mesh], &[]);
     }
 
-    /// How many instances the buffers hold, for the status line. Since GAP-254 that is the
+    /// How many instances the buffers hold, for the status line. Since GAP-255 that is the
     /// last upload's count, not necessarily the last frame's; the two differ only on the
     /// frame before a rebuilt glyph list is first drawn.
     #[must_use]
@@ -254,7 +254,7 @@ impl SceneRenderer {
     }
 }
 
-/// What a glyph upload depends on (GAP-254): which glyph list, and at what zoom. The
+/// What a glyph upload depends on (GAP-255): which glyph list, and at what zoom. The
 /// zoom is carried as the bits of `TopDownView::meters_per_px`, so the key is `Eq` and a
 /// NaN zoom compares equal to itself rather than forcing an upload every frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -770,7 +770,7 @@ mod tests {
         assert_eq!(builds, 1);
     }
 
-    /// GAP-254: two paints with the same glyph list and the same zoom upload the instance
+    /// GAP-255: two paints with the same glyph list and the same zoom upload the instance
     /// buffers once. A hundred frames of a still picture are one upload; a rebuilt glyph
     /// list is another; a zoom is another, because the radius is sized at the zoom; and
     /// panning, which changes neither, is none. Before the first upload every key
