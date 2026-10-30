@@ -127,12 +127,26 @@ impl CoverageLayers {
 pub struct ViewportState {
     pub camera: three_d::Camera,
     pub scene: scene::Scene,
-    pub glyphs: Vec<tracks::TrackGlyph>,
+    /// The track glyphs, shared with the scene's paint callback (GAP-257): the callback
+    /// runs after the frame's borrows end, so it holds the list rather than borrowing it,
+    /// and an `Arc` makes that a pointer copy where a `Vec` clone was every glyph, every
+    /// frame. A new list is a new `Arc`; the old one lives until its last callback ran.
+    pub glyphs: std::sync::Arc<Vec<tracks::TrackGlyph>>,
     /// Which glyph list `glyphs` is: changed every time the list is rebuilt, and read by
     /// the scene's glyph pass to upload its instance buffers only then (GAP-255,
     /// `gl::GlyphUploadKey`). Wraps rather than overflows; at one rebuild a frame that is
     /// nineteen billion years away.
     pub glyph_revision: u64,
+    /// Each glyph's id as the text drawn beside it, one per entry of `glyphs`, formatted
+    /// when the list is rebuilt and not on every frame (GAP-257, standards §5).
+    pub glyph_ids: Vec<String>,
+    /// The plan's assignment label per assigned track, rebuilt when the plan's solutions
+    /// change, where every frame searched the solutions once per glyph and formatted each
+    /// label again (GAP-257).
+    pub plan_labels: tracks::PlanLabels,
+    /// The sentences the viewport draws on every frame, each formatted only when what it
+    /// says changes (GAP-257, standards §5).
+    pub texts: Texts,
     /// Retained bearings, drawn as rays rather than glyphs (DN-27 §7; GAP-096).
     pub bearing_rays: Vec<tracks::BearingRayGlyph>,
     pub view: interaction::TopDownView,
@@ -198,8 +212,11 @@ impl ViewportState {
                 50_000.0,
             ),
             scene: scene::Scene::default(),
-            glyphs: Vec::new(),
+            glyphs: std::sync::Arc::new(Vec::new()),
             glyph_revision: 0,
+            glyph_ids: Vec::new(),
+            plan_labels: tracks::PlanLabels::default(),
+            texts: Texts::default(),
             bearing_rays: Vec::new(),
             view: interaction::TopDownView::default(),
             gl_ready: false,
@@ -217,12 +234,88 @@ impl ViewportState {
     /// pass uploads its instances on that frame and not on the frames between.
     fn sync_glyphs(&mut self, tracks: &[TrackView], bearing_rays: &[BearingRayView]) {
         if tracks::glyphs_need_rebuild(&self.glyphs, tracks) {
-            self.glyphs = tracks::update_track_symbols(tracks);
+            let glyphs = tracks::update_track_symbols(tracks);
+            tracks::refill_glyph_ids(&mut self.glyph_ids, &glyphs);
+            self.glyphs = std::sync::Arc::new(glyphs);
             self.glyph_revision = self.glyph_revision.wrapping_add(1);
         }
         if tracks::bearing_glyphs_need_rebuild(&self.bearing_rays, bearing_rays) {
             self.bearing_rays = tracks::update_bearing_ray_glyphs(bearing_rays);
         }
+    }
+
+    /// Bring the per-frame sentences up to date for this frame (GAP-257): each is written
+    /// again only when the facts it states changed. Runs after the glyph and plan syncs,
+    /// since the status line counts both.
+    fn sync_texts(&mut self, layers: &layers::LayerInputs<'_>, scene: bool) {
+        self.texts.status.sync(
+            &StatusKey {
+                scene,
+                gl_ready: self.gl_ready,
+                tracks: self.glyphs.len(),
+                bearing_rays: self.bearing_rays.len(),
+                assignments: self.plan_labels.assignments(),
+            },
+            |k, p| k == p,
+            |p, text| {
+                use std::fmt::Write as _;
+                let _ = if p.scene {
+                    write!(
+                        text,
+                        "three-d scene: {} tracks, {} bearing rays, {} assignments. Drag to pan, scroll to zoom.",
+                        p.tracks, p.bearing_rays, p.assignments
+                    )
+                } else if p.gl_ready {
+                    write!(
+                        text,
+                        "Top-down projection ({} tracks, {} bearing rays, {} assignments). The three-d scene is attached; use the control in the corner to switch. Drag to pan, scroll to zoom.",
+                        p.tracks, p.bearing_rays, p.assignments
+                    )
+                } else {
+                    write!(
+                        text,
+                        "Top-down projection ({} tracks, {} bearing rays, {} assignments). No three-d scene is attached, so there is nothing to switch to. Drag to pan, scroll to zoom.",
+                        p.tracks, p.bearing_rays, p.assignments
+                    )
+                };
+                *p
+            },
+        );
+        self.texts.hidden.sync(
+            &self.layers,
+            |k, p| k == p,
+            |p, text| {
+                text.push_str("layers hidden: ");
+                text.push_str(&p.hidden_names().join(", "));
+                *p
+            },
+        );
+        self.texts.coverage_note.sync(
+            &layers.coverage,
+            layers::CoverageNoteKey::matches,
+            layers::CoverageNoteKey::write,
+        );
+        self.texts.dead_spots.sync(
+            &layers.dead_spots,
+            layers::DeadSpotLineKey::matches,
+            layers::DeadSpotLineKey::write,
+        );
+        self.texts.dense_group.sync(
+            &layers.dense_group,
+            |k, group| k.matches(*group),
+            |group, text| layers::DenseGroupLabelKey::write(*group, text),
+        );
+        self.texts.preview.sync(
+            &layers.laydown_preview,
+            |k, p| k.as_deref() == p.map(|p| p.intent),
+            |p, text| {
+                p.map(|p| {
+                    text.push_str("Preview: ");
+                    text.push_str(p.intent);
+                    p.intent.to_owned()
+                })
+            },
+        );
     }
 
     /// Bring the overlay's terrain mesh up to date for a frame drawn into `rect`
@@ -267,6 +360,84 @@ impl Default for ViewportState {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// A sentence drawn on every frame, formatted only when the facts it states change
+/// (`rust-ui-architecture-coding-standards.md` §5; GAP-257). `K` is what the text was
+/// written from; [`sync`](Self::sync) compares a probe of this frame's facts against it
+/// without building a key, so a frame that changes nothing allocates nothing here.
+#[derive(Debug)]
+pub struct CachedText<K> {
+    key: Option<K>,
+    text: String,
+}
+
+// By hand: the derive would ask `K: Default`, and a key is never made without its text.
+impl<K> Default for CachedText<K> {
+    fn default() -> Self {
+        Self {
+            key: None,
+            text: String::new(),
+        }
+    }
+}
+
+impl<K> CachedText<K> {
+    /// Keep the text when `matches(key, probe)` holds; otherwise clear it, let `write` fill
+    /// it from `probe`, and keep the key `write` returns.
+    pub fn sync<P: ?Sized>(
+        &mut self,
+        probe: &P,
+        matches: impl FnOnce(&K, &P) -> bool,
+        write: impl FnOnce(&P, &mut String) -> K,
+    ) {
+        if self.key.as_ref().is_some_and(|k| matches(k, probe)) {
+            return;
+        }
+        self.text.clear();
+        self.key = Some(write(probe, &mut self.text));
+    }
+
+    /// The text as last written; empty before the first sync.
+    #[must_use]
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// Whether a key has been written at all.
+    #[must_use]
+    pub fn is_written(&self) -> bool {
+        self.key.is_some()
+    }
+}
+
+/// What the status line states (GAP-257).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatusKey {
+    /// The three-d scene's line, or the projection's.
+    pub scene: bool,
+    pub gl_ready: bool,
+    pub tracks: usize,
+    pub bearing_rays: usize,
+    pub assignments: usize,
+}
+
+/// The sentences the viewport draws on every frame (GAP-257), each kept with the facts it
+/// was written from. Public fields, so a test can read what each says.
+#[derive(Debug, Default)]
+pub struct Texts {
+    /// Which renderer is running and what the picture holds.
+    pub status: CachedText<StatusKey>,
+    /// Which layers the operator has hidden; written for a hidden set, read only then.
+    pub hidden: CachedText<CoverageLayers>,
+    /// The coverage layer's note: why there are no rings, or that the rings are nominal.
+    pub coverage_note: CachedText<layers::CoverageNoteKey>,
+    /// What the dead-spot layer says under the field, or why there is none.
+    pub dead_spots: CachedText<layers::DeadSpotLineKey>,
+    /// The dense group's label, or nothing when the scene resolved.
+    pub dense_group: CachedText<layers::DenseGroupLabelKey>,
+    /// The laydown preview's label, keyed on the option's intent.
+    pub preview: CachedText<Option<String>>,
 }
 
 /// The control that switches between the three-d scene and the 2D projection.
@@ -318,13 +489,21 @@ fn draw_layers(
             &state.view,
             state.dead_spot_texture.as_ref(),
             layers.dead_spots,
+            state.texts.dead_spots.text(),
         );
     }
     if state.layers.geofences {
         layers::draw_geofences_2d(painter, palette, rect, &state.view, layers.geofences);
     }
     if state.layers.rings {
-        layers::draw_coverage_2d(painter, palette, rect, &state.view, layers.coverage);
+        layers::draw_coverage_2d(
+            painter,
+            palette,
+            rect,
+            &state.view,
+            layers.coverage,
+            state.texts.coverage_note.text(),
+        );
     }
     if state.layers.gaps {
         layers::draw_gaps_2d(painter, palette, rect, &state.view, layers.gaps);
@@ -337,11 +516,25 @@ fn draw_layers(
     layers::draw_predictions_2d(painter, palette, rect, &state.view, layers.predictions);
     // A dense group has no toggle either: a raid the operator cannot see is the failure
     // GAP-015 exists about, and `None` draws nothing.
-    layers::draw_dense_group_2d(painter, palette, rect, &state.view, layers.dense_group);
+    layers::draw_dense_group_2d(
+        painter,
+        palette,
+        rect,
+        &state.view,
+        layers.dense_group,
+        state.texts.dense_group.text(),
+    );
     // The laydown preview has no toggle either, for the same reason: selecting an
     // option on PN-16 is what turns it on, and there is nothing to hide when nothing
     // is selected (GAP-087).
-    layers::draw_laydown_preview_2d(painter, palette, rect, &state.view, layers.laydown_preview);
+    layers::draw_laydown_preview_2d(
+        painter,
+        palette,
+        rect,
+        &state.view,
+        layers.laydown_preview,
+        state.texts.preview.text(),
+    );
     // **A hidden layer and an empty one look identical.** Saying which is the whole
     // reason PN-11's toggles are safe to have: without this, turning coverage off would
     // make the map claim a sector nobody had measured.
@@ -349,7 +542,7 @@ fn draw_layers(
         painter.text(
             rect.left_bottom() + egui::vec2(palette.panel_spacing, -palette.panel_spacing),
             egui::Align2::LEFT_BOTTOM,
-            format!("layers hidden: {}", state.layers.hidden_names().join(", ")),
+            state.texts.hidden.text(),
             egui::FontId::proportional(palette.small_font_size),
             palette.warning_color,
         );
@@ -363,16 +556,31 @@ fn draw_layers(
 /// One function for both renderers, for `draw_layers`'s reason: the three-d scene drew
 /// each track as a bare disc while the projection drew all of this, so the scene's status
 /// line counted assignments the operator could not see. In the scene these sit over the
-/// disc, which is the lifecycle fill the projection draws small inside each frame.
+/// disc, which is the lifecycle fill the projection draws small inside each frame. The
+/// plan is read from `state.plan_labels`, synced this frame.
 fn draw_tracks(
     painter: &egui::Painter,
     palette: &theme::Palette,
     rect: egui::Rect,
     state: &ViewportState,
-    plan: &PlanView,
 ) {
-    tracks::draw_glyphs_2d(painter, palette, rect, &state.view, &state.glyphs);
-    tracks::draw_plan_2d(painter, palette, rect, &state.view, &state.glyphs, plan);
+    tracks::draw_glyphs_2d(
+        painter,
+        palette,
+        rect,
+        &state.view,
+        &state.glyphs,
+        &state.glyph_ids,
+    );
+    tracks::draw_plan_2d(
+        painter,
+        palette,
+        rect,
+        &state.view,
+        &state.glyphs,
+        &state.glyph_ids,
+        &state.plan_labels,
+    );
 }
 
 pub fn draw_renderer_toggle(
@@ -456,6 +664,8 @@ pub fn prepare_3d(
     let scroll = ui.input(|i| i.smooth_scroll_delta.y);
     state.view.apply_input(&response, scroll);
     state.sync_glyphs(tracks, bearing_rays);
+    state.plan_labels.sync(plan);
+    state.sync_texts(&layers, true);
 
     // Coverage is drawn by egui rather than in a GL pass: it is a flat overlay on
     // the ground plane, and drawing it here means it survives whatever the callbacks
@@ -493,7 +703,7 @@ pub fn prepare_3d(
     // The scene's discs go here, and everything each track carries beyond its lifecycle
     // colour is drawn over them by the function the projection uses (GAP-251).
     let scene_slot = painter.add(egui::Shape::Noop);
-    draw_tracks(&painter, palette, rect, state, plan);
+    draw_tracks(&painter, palette, rect, state);
 
     // The status line is drawn by egui after both GL passes, so nothing either draws can
     // cover it, and it says what the operator is looking at whether or not the GL draw
@@ -501,12 +711,7 @@ pub fn prepare_3d(
     painter.text(
         rect.left_top() + egui::vec2(palette.panel_spacing, palette.panel_spacing),
         egui::Align2::LEFT_TOP,
-        format!(
-            "three-d scene: {} tracks, {} bearing rays, {} assignments. Drag to pan, scroll to zoom.",
-            state.glyphs.len(),
-            state.bearing_rays.len(),
-            plan.solutions().len()
-        ),
+        state.texts.status.text(),
         egui::FontId::proportional(palette.small_font_size),
         palette.viewport_text_color,
     );
@@ -535,6 +740,8 @@ pub fn render(
     let scroll = ui.input(|i| i.smooth_scroll_delta.y);
     state.view.apply_input(&response, scroll);
     state.sync_glyphs(tracks, bearing_rays);
+    state.plan_labels.sync(plan);
+    state.sync_texts(&layers, false);
 
     layers::sync_dead_spot_texture(
         ui.ctx(),
@@ -556,29 +763,15 @@ pub fn render(
     // under the tracks it has not (yet) been folded into (DN-27 §7).
     draw_layers(&painter, palette, rect, state, &layers, Ground::Overlay);
     tracks::draw_bearing_rays_2d(&painter, palette, rect, &state.view, &state.bearing_rays);
-    draw_tracks(&painter, palette, rect, state, plan);
+    draw_tracks(&painter, palette, rect, state);
 
     // Says which renderer is running and why, because those are different situations:
     // a deployment that opted out of the scene, and a desktop that could not attach one.
-    let status = if state.gl_ready {
-        format!(
-            "Top-down projection ({} tracks, {} bearing rays, {} assignments). The three-d scene is attached; use the control in the corner to switch. Drag to pan, scroll to zoom.",
-            state.glyphs.len(),
-            state.bearing_rays.len(),
-            plan.solutions().len()
-        )
-    } else {
-        format!(
-            "Top-down projection ({} tracks, {} bearing rays, {} assignments). No three-d scene is attached, so there is nothing to switch to. Drag to pan, scroll to zoom.",
-            state.glyphs.len(),
-            state.bearing_rays.len(),
-            plan.solutions().len()
-        )
-    };
+    // Written in `sync_texts` when the facts change, read here every frame.
     painter.text(
         rect.left_top() + egui::vec2(palette.panel_spacing, palette.panel_spacing),
         egui::Align2::LEFT_TOP,
-        status,
+        state.texts.status.text(),
         egui::FontId::proportional(palette.small_font_size),
         palette.viewport_text_color,
     );
@@ -740,7 +933,7 @@ mod tests {
         let palette = theme::Palette::day();
         let projection: Vec<egui::Shape> = egui::Context::default()
             .run_ui(screen(), |ui| {
-                draw_tracks(&ui.painter_at(rect), &palette, rect, &state, &plan);
+                draw_tracks(&ui.painter_at(rect), &palette, rect, &state);
             })
             .shapes
             .into_iter()

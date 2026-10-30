@@ -251,8 +251,10 @@ history, and an entry is never edited once it has merged.
 | GAP-254 | The docked replay picker never reads the journal's sessions | Technical | CAP-5.2, CAP-5.3 | 2 | 1 | S | 2 | I4 | UI engineer | Closed |
 | GAP-255 | The viewport rebuilt GPU and egui geometry every frame, outside every budget | Technical | CAP-5.10, CAP-2.10 | 2 | 8 | S | 16 | I4 | UI engineer | Closed |
 | GAP-256 | Showing the replay picker decodes every envelope in the journal | Technical | CAP-5.1, CAP-5.2 | 3 | 10 | S | 30 | I4 | Storage engineer | Closed |
+| GAP-257 | The picture's layers were reassembled, and the 2D path allocated, on every frame | Technical | CAP-5.10, CAP-2.10 | 2 | 8 | M | 16 | I4 | UI engineer | Closed |
+| GAP-258 | The point clouds are up to forty thousand egui circles a frame | Technical | CAP-5.10 | 2 | 8 | S | 16 | I4 | UI engineer | Open |
 
-Counts: 238 gaps, 6 mission, 232 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 240 gaps, 6 mission, 234 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3672,4 +3674,33 @@ Counts: 238 gaps, 6 mission, 232 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: Storage engineer. Status: Closed.
 - Reference: GAP-254, GAP-126.
 - Depends on: GAP-254.
+
+**GAP-257 The picture's layers were reassembled, and the 2D path allocated, on every frame**
+
+- Type: Technical.
+- Capability: CAP-5.10 Performance budgets; CAP-2.10 Terrain and map context.
+- History:
+  - 2026-10-30, Open: Filed from the review's findings 16 and 18, the two GAP-255 left because the gate now times them.
+  - 2026-10-30, Closed: `gungnir-app/src/picture.rs` assembles each layer group when its key changes; the binary and `egui_pass_samples` both call it, and a test holds the rebuild counts. The viewport caches its sentences, ids and plan labels and shares its glyphs through an `Arc`. The point clouds stay per-frame dots: GAP-258 (`../../record/2026-10-30/gap-257-the-picture-assembled-once-per-change.md`).
+- Evidence: `docs/review/2026-10-30-ui-review.md` §4.3 findings 16 and 18. `gungnir-app/src/main.rs` `draw_picture` and `draw_detached_panel` held the same sixty lines; `gungnir-app/tests/frame_budgets.rs::draw_picture` a third. `gungnir-viewport3d/src/layers.rs` and `tracks.rs` collected a vector per gap, prediction, geofence and hazard, formatted five sentences and every id label per frame, and `draw_plan_2d` searched the plan once per glyph..
+- Severity: 2. Reach: 8 threads. Effort: M. Priority: 16.
+- Impact: The coverage circles and report, the placed hazards and geofences, the filter predictor over every track at every horizon and the laydown preview were recomputed on every frame, twice when the viewport was detached, and the egui gate carried a third hand-kept copy. The 2D path then allocated polyline vectors, status sentences, id labels and a plan search per glyph on every frame, and the binary cloned every glyph into the paint callback. `rust-ui-architecture-coding-standards.md` §5 forbids each.
+- Closing action: One cache, `gungnir_app::picture::PictureCache`, that the binary's two viewports and the gate all call, with a change key per layer group. In the viewport crate: sentences, glyph ids and plan labels written when the facts they state change, polylines projected as they are drawn, and the glyph list shared behind an `Arc`.
+- Target: I4. Owner: UI engineer. Status: Closed.
+- Reference: `../../review/2026-10-30-ui-review.md` §4.3; GAP-255; GAP-258; the `gungnir-ui` row of `../../verification-capability-table.md`, criterion unchanged.
+- Depends on: GAP-255.
+
+**GAP-258 The point clouds are up to forty thousand egui circles a frame**
+
+- Type: Technical.
+- Capability: CAP-5.10 Performance budgets.
+- History:
+  - 2026-10-30, Open: Filed from GAP-257, which left it because drawing the points as one mesh changes what is drawn.
+- Evidence: `gungnir-viewport3d/src/layers.rs::draw_point_clouds_2d` draws `circle_filled` per point within the vertex budget. A single mesh of quads or a texture would be a different picture (square points, no antialiasing), so it is a decision about the picture and not a fix..
+- Severity: 2. Reach: 8 threads. Effort: S. Priority: 16.
+- Impact: With a point-cloud pair loaded, the 2D path draws up to 40 000 `circle_filled` shapes every frame, each tessellated by egui. It is the one cost GAP-257 found in the viewport that cannot be removed without changing what is drawn.
+- Closing action: Draw each cloud as one cached `egui::Mesh`, keyed like the terrain mesh on the cloud, the view and the rect, and compare the picture before and after with the owner.
+- Target: I4. Owner: UI engineer. Status: Open.
+- Reference: GAP-257; GAP-255; GAP-098.
+- Depends on: GAP-257.
 

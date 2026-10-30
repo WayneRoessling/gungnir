@@ -17,7 +17,7 @@
 //! | Startup to first frame, under 3 s | **yes** | Every stage it covers is implemented. |
 //! | Journal append, under 1 ms for 50 envelopes | **yes** since GAP-085 | Implemented, and now meets its budget under the D-04 desktop profile. |
 //! | Per-frame `update()`, p99 under 4 ms | **yes** since 2026-09-15 | Gated in the GAP-067 walk, on measurements the owner read first: p99 16 microseconds release, 189 microseconds debug, against 4 ms. Release only, the convention this file already applies to the journal budget. Those frames held no track; since 2026-10-30 the convoy is in the picture first. |
-//! | egui pass, p99 under 8 ms at Scenario 4 counts | **yes** since 2026-09-16 | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured from 2026-09-15 and gated by the owner in the same walk on reading the figures. Release only. Over the operator's workspace as well as the commander's since GAP-226, because only the operator's has the track table. Over the viewport and its layer assembly as well as the dock tree since GAP-255, because until then the picture was outside every budget. |
+//! | egui pass, p99 under 8 ms at Scenario 4 counts | **yes** since 2026-09-16 | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured from 2026-09-15 and gated by the owner in the same walk on reading the figures. Release only. Over the operator's workspace as well as the commander's since GAP-226, because only the operator's has the track table. Over the viewport and its layer assembly as well as the dock tree since GAP-255, because until then the picture was outside every budget; through the desktop's own `gungnir_app::picture` since GAP-257, so the assembly timed is the assembly run. |
 //! | `tracks()`/`is_healthy()`, p99 under 1 ms | **yes** since 2026-09-15 | Gated in the same walk. Both calls measure p99 100 ns against a 1 ms budget -- four orders of magnitude -- so this one is asserted in **both** profiles; see its own documentation for why the usual release-only rule is not what protects it. |
 //!
 //! | MOP-14, coverage recompute over terrain under 10 s | **yes** since 2026-10-29 | GAP-246's dead-spot field, the first coverage computed over terrain as an area. Measured on a 1 000 by 1 000 DEM at 363 ms, 645 ms once the line of sight became exact, and gated the same day when the owner agreed `docs/design/DN-34-sensor-dead-spots.md` §11's rows, this one's included. Release only, the convention the rows above follow. |
@@ -529,8 +529,9 @@ fn the_egui_pass_meets_its_budget() {
 
 /// Time `EGUI_PASSES` full passes over `role`'s frame as the desktop lays it out: the
 /// dock tree in the dashboard on the left, as `main.rs`'s `draw_workspace` puts it, and
-/// the picture in the centre, drawn through `gungnir_viewport3d::render` from the layer
-/// inputs `draw_picture` assembles, assembled here as there on every pass (GAP-255).
+/// the picture in the centre, drawn through the same `gungnir_app::picture` calls the
+/// desktop's `draw_picture` makes (GAP-255, GAP-257): the layers are synced on every pass
+/// and recomputed only when the state they read changed, which over a still state is once.
 /// `must_say` is text a panel the measurement is about draws, so a workspace that left
 /// that panel out, or tabbed it out of sight, fails rather than timing something smaller;
 /// the viewport's own status line is held to the same rule.
@@ -545,6 +546,7 @@ fn egui_pass_samples(
     let arrangement = gungnir_app::dock::default_arrangement(&layout);
     let mut tree = gungnir_app::dock::tree_from(&arrangement);
     let mut viewport = gungnir_viewport3d::ViewportState::new();
+    let mut picture = gungnir_app::picture::PictureCache::default();
     let palette = state.palette;
 
     let mut samples = Vec::with_capacity(EGUI_PASSES);
@@ -563,7 +565,9 @@ fn egui_pass_samples(
                     tree.ui(&mut behavior, ui);
                 });
             egui::CentralPanel::default().show_inside(ui, |ui| {
-                draw_picture(ui, state, &mut viewport);
+                picture.sync(state);
+                let sources = gungnir_app::picture::Sources::of(state);
+                gungnir_app::picture::render_projection(ui, &picture, &sources, &mut viewport);
             });
         });
         samples.push(start.elapsed());
@@ -571,6 +575,19 @@ fn egui_pass_samples(
         said |= must_say.is_some_and(|text| frame.says(text));
         drew_picture |= frame.says("Top-down projection (");
     }
+    // GAP-257: the state did not change between passes, so every layer was computed on the
+    // first and lent after. A count above one is the per-frame reassembly coming back.
+    assert_eq!(
+        picture.rebuilds(),
+        gungnir_app::picture::Rebuilds {
+            coverage: 1,
+            rules: 1,
+            predictions: 1,
+            preview: 1,
+            dead_spot_label: 1,
+        },
+        "a layer was reassembled on a frame whose inputs had not changed"
+    );
     assert!(
         drew_text,
         "the {role:?} workspace drew no text at all, so what was timed was not a real pass"
@@ -592,69 +609,84 @@ fn egui_pass_samples(
     samples
 }
 
-/// The picture as `main.rs`'s `draw_picture` draws it in the projection: every layer
-/// assembled from the state, per frame, as the desktop assembles it, and `render` over
-/// them. Kept in step with that function by hand; the layer set it names is the frame an
-/// operator sees, and a layer left out here is a cost left out of the gate (GAP-255).
-fn draw_picture(
-    ui: &mut egui::Ui,
-    state: &AppState,
-    viewport: &mut gungnir_viewport3d::ViewportState,
-) {
-    use gungnir_app::sustainment;
-    let circles = sustainment::coverage_circles(state);
-    let coverage = sustainment::coverage_layer(state, &circles);
-    let report = sustainment::coverage_report(state);
-    let names = sustainment::approach_names(state);
-    let gaps = report
-        .as_ref()
-        .map(|r| sustainment::gap_polylines(&names, r, &sustainment::live_accepted(state, r)))
-        .unwrap_or_default();
-    let placed = gungnir_app::hazards::placed(state);
-    let hazards = gungnir_app::hazards::outlines(&placed);
-    let fences = gungnir_app::geofences::placed(state);
-    let geofences = gungnir_app::geofences::outlines(&fences);
-    let predicted = gungnir_app::prediction::paths(&gungnir_app::prediction::predict(state));
-    let predictions: Vec<gungnir_viewport3d::layers::PredictedPath> = predicted
-        .iter()
-        .map(|p| gungnir_viewport3d::layers::PredictedPath {
-            track: p.track,
-            points: &p.points,
-            uncertainty_drawable: p.uncertainty_drawable,
-        })
-        .collect();
-    let preview = sustainment::laydown_preview(state);
-    let laydown_preview = preview
-        .as_ref()
-        .map(|p| gungnir_viewport3d::layers::LaydownPreview {
-            intent: &p.intent,
-            sensors: &p.sensor_positions,
-            resources: &p.resource_positions,
-        });
-    let point_clouds = gungnir_app::pointcloud::layers(&state.point_cloud, &state.data);
-    let shown = gungnir_app::dead_spots::shown_label(state);
-    let dead_spots = gungnir_app::dead_spots::layer(&state.dead_spots, &shown);
-    let layers = gungnir_viewport3d::layers::LayerInputs {
-        coverage,
-        gaps: &gaps,
-        hazards: &hazards,
-        geofences: &geofences,
-        predictions: &predictions,
-        terrain: gungnir_app::terrain::layer(&state.terrain, &state.data),
-        point_clouds: &point_clouds,
-        laydown_preview,
-        dense_group: state.tracking.dense_group(),
-        dead_spots,
+/// GAP-257: the picture's layers are recomputed when, and only when, the state each reads
+/// changes. A still state is computed once and lent to every frame after; a selection
+/// recomputes the preview alone; a chosen sensor recomputes the dead-spot label alone; and
+/// tracks that moved recompute the predictions and leave the rule layers, which read the
+/// baseline and not the tracks, where they were.
+#[test]
+fn the_picture_is_reassembled_only_when_its_inputs_change() {
+    let timeline = generate(&Scenario::DenseSwarm { target_count: 200 }, 4);
+    let mut state = state_for(&timeline, "picture-cache");
+    let mut clock = ReplayClockAuthority {
+        current: MissionTime(0.0),
     };
-    gungnir_viewport3d::render(
-        ui,
-        &state.palette,
-        viewport,
-        state.tracking.tracks(),
-        state.tracking.bearing_rays(),
-        &state.last_plan,
-        layers,
+    drive_to_track_count(
+        &timeline,
+        &mut state,
+        &mut clock,
+        50,
+        "the cache's first picture",
     );
+
+    let mut picture = gungnir_app::picture::PictureCache::default();
+    picture.sync(&state);
+    let once = gungnir_app::picture::Rebuilds {
+        coverage: 1,
+        rules: 1,
+        predictions: 1,
+        preview: 1,
+        dead_spot_label: 1,
+    };
+    assert_eq!(
+        picture.rebuilds(),
+        once,
+        "the first sync computes every group"
+    );
+    for _ in 0..5 {
+        picture.sync(&state);
+    }
+    assert_eq!(picture.rebuilds(), once, "a still state is computed once");
+
+    state.select_laydown(gungnir_model::LaydownId("west-2".into()));
+    picture.sync(&state);
+    assert_eq!(
+        picture.rebuilds(),
+        gungnir_app::picture::Rebuilds { preview: 2, ..once },
+        "a selection recomputes the preview and nothing else"
+    );
+
+    state.dead_spots.for_sensor = Some(SensorId(1));
+    picture.sync(&state);
+    assert_eq!(
+        picture.rebuilds(),
+        gungnir_app::picture::Rebuilds {
+            preview: 2,
+            dead_spot_label: 2,
+            ..once
+        },
+        "a chosen sensor recomputes its label and nothing else"
+    );
+
+    let before = state.tracking.tracks().to_vec();
+    drive_to_track_count(&timeline, &mut state, &mut clock, 80, "a moved picture");
+    assert_ne!(
+        before,
+        state.tracking.tracks(),
+        "the drive moved the tracks"
+    );
+    picture.sync(&state);
+    let after = picture.rebuilds();
+    assert_eq!(
+        after.predictions, 2,
+        "moved tracks recompute the predictions"
+    );
+    assert_eq!(
+        after.rules, 1,
+        "the rule layers read the baseline, not the tracks"
+    );
+    assert_eq!(after.preview, 2);
+    assert_eq!(after.dead_spot_label, 2);
 }
 
 /// **Gated.** Journal append: 50 envelopes in under 1 ms, under the D-04 desktop
