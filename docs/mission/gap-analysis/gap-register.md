@@ -3251,13 +3251,14 @@ Counts: 237 gaps, 6 mission, 231 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-10-26, Open: Filed by plan 12.
   - 2026-10-26, Open: D-139 taken 2026-10-26 past the default: the full MIL-STD-2525D set, echelon and unit modifiers blank until a unit model exists. Effort stays L.
+  - 2026-10-30, Open: Widened at the owner's request after the GAP-252 build: zoomed out, the ground stops at the edge of the one DEM. DN-36 designs the action's basemap tiles as a staged store, terrain first and imagery on it after, and raises D-160 to D-163. Nothing is built; effort stays L.
 - Evidence: `gungnir-viewport3d/src/interaction.rs:94-123`; `gungnir-viewport3d/src/tracks.rs:170-230`; no `2525` in any source; `gungnir-viewport3d/src/streaming/`.
 - Severity: 3. Reach: 10 threads. Effort: L. Priority: 30.
-- Impact: The picture is a top-down local projection on a metric grid with no tiles or imagery, no latitude, longitude or MGRS readout, custom frame-by-affiliation glyphs rather than a standard set, fixed-offset labels that overprint on a dense picture, and 3D Tiles streaming that is three `NotImplemented` stubs.
-- Closing action: Per D-139 on symbology; a cursor latitude, longitude and MGRS readout; speed-scaled leaders; label collision avoidance; basemap tiles as the first consumer of the streaming stubs.
+- Impact: The picture is a top-down local projection on a metric grid with no tiles or imagery, no latitude, longitude or MGRS readout, custom frame-by-affiliation glyphs rather than a standard set, fixed-offset labels that overprint on a dense picture, and 3D Tiles streaming that is three `NotImplemented` stubs. The ground under the picture is one DEM file, and stops at its edge: zoomed out, there is no terrain beyond it and nothing says why.
+- Closing action: Per D-139 on symbology; a cursor latitude, longitude and MGRS readout; speed-scaled leaders; label collision avoidance; basemap tiles as the first consumer of the streaming stubs, widened by DN-36 to staged terrain tiles first and imagery on the same store after, under D-160 to D-163.
 - Target: I4. Owner: UI engineer. Status: Open.
-- Reference: GAP-022; `../../review/2026-10-26-comprehensive-review.md` §8 finding 6.
-- Depends on: D-139.
+- Reference: GAP-022; `../../review/2026-10-26-comprehensive-review.md` §8 finding 6; `../../design/DN-36-staged-terrain-and-map-tiles.md`.
+- Depends on: D-139, D-160, D-161, D-162, D-163.
 
 **GAP-228 No operator-initiated escalation**
 

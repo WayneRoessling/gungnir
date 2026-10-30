@@ -669,6 +669,22 @@ Rows 1 and 2 of §13.1, the terrain in GL and the layers on it, are designed in
 
 What the owner decides on D-154 to D-157 is in `../mission/gap-analysis/data/decisions.yaml`.
 
+## Amendment 7, 2026-10-30: row 8's tiles designed in DN-36 (GAP-227)
+
+The tile half of §13.1 row 8 is designed in `DN-36-staged-terrain-and-map-tiles.md`, ahead
+of §13.2's step 6. The owner asked for it once the GAP-252 build showed the ground stopping at
+the edge of the one DEM. Row 8 changes in two places:
+
+- **Its first consumer is the terrain, not imagery.** The streaming stubs take staged DEM
+  tiles first, chosen by view, and imagery follows on the same store, because a drape needs a
+  ground to lie on (DN-36 §7).
+- **"A signed-off tile source and dependency" may need no dependency.** Under D-160 to D-162's
+  defaults the tiles are staged GeoTIFFs read by the existing loader. A runtime fetch or a 3D
+  Tiles format would bring the §2.9 decision back.
+
+Row 8's symbology (D-139) is unchanged, and so is §13.2's order for every other row. D-163 asks
+the owner for the order inside GAP-227.
+
 ## Traceability
 
 GAP-246, GAP-247; D-146, D-147, D-148; CAP-1.4, CAP-2.10, CAP-2.11, CAP-5.9; MT-07
