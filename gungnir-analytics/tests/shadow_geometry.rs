@@ -580,3 +580,64 @@ fn the_approach_report_agrees_with_the_cells_under_it() {
     }
     assert!(checked > 150, "{checked} samples compared");
 }
+
+/// GAP-249: two fields laid over one extent are one grid, and the comparison says what a
+/// change clears and what it darkens. A sensor below a wall leaves the ground behind it
+/// dark; the same sensor raised above the wall clears it and darkens nothing; and two fields
+/// over different extents are refused rather than compared.
+#[test]
+fn a_raised_mast_clears_what_the_wall_hid_and_the_comparison_says_so() {
+    use gungnir_analytics::{
+        compare_fields, dead_spot_extent, shadow_field_over, union_extent, CellChange,
+    };
+    const CELL: f64 = 10.0;
+    let terrain = HeightField::resample(
+        &dem(41, 201, CELL, |e, _| {
+            if (600.0..=640.0).contains(&e) {
+                100.0
+            } else {
+                0.0
+            }
+        }),
+        CELL,
+    )
+    .expect("resampled");
+    let low = [(SensorId(1), sensor([105.0, 205.0, 20.0], 1_900.0))];
+    let raised = [(SensorId(1), sensor([105.0, 205.0, 400.0], 1_900.0))];
+    let extent = union_extent(dead_spot_extent(&low), dead_spot_extent(&raised)).expect("a reach");
+    let parameters = ShadowParameters {
+        height_agl_m: 60.0,
+        cell_m: CELL,
+    };
+    let before = shadow_field_over(&low, &terrain, parameters, extent);
+    let after = shadow_field_over(&raised, &terrain, parameters, extent);
+    let change = compare_fields(&before, &after).expect("one grid");
+    assert!(
+        change.cleared_m2 > 1.0e5,
+        "{} m² cleared",
+        change.cleared_m2
+    );
+    assert!(
+        change.darkened_m2 < f64::EPSILON,
+        "{} m² darkened",
+        change.darkened_m2
+    );
+    assert!(change.watched_after_m2 > change.watched_before_m2);
+    for (i, c) in change.cells.iter().enumerate() {
+        let was_dark = matches!(before.cells[i], CellSight::Shadow { .. });
+        let is_dark = matches!(after.cells[i], CellSight::Shadow { .. });
+        let expected = match (was_dark, is_dark) {
+            (true, false) => CellChange::Cleared,
+            (false, true) => CellChange::Darkened,
+            _ => CellChange::Same,
+        };
+        assert_eq!(*c, expected, "cell {i}");
+    }
+    // Lowered back below the wall, the change darkens what the raise cleared.
+    let back = compare_fields(&after, &before).expect("one grid");
+    assert!((back.darkened_m2 - change.cleared_m2).abs() < f64::EPSILON);
+    // Over their own reaches the two are different grids, and are not compared.
+    let elsewhere = [(SensorId(1), sensor([900.0, 205.0, 20.0], 1_000.0))];
+    let other = shadow_field(&elsewhere, &terrain, parameters);
+    assert!(compare_fields(&before, &other).is_none());
+}

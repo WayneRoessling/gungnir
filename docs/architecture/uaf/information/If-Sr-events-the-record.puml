@@ -164,6 +164,7 @@ enum "PlanningEvent" as PlanningEvent <<InformationElement>> {
   GapAccepted(crate::GapAcceptance)
   GapAcceptanceReopened { acceptance: crate::GapAcceptanceId, because: crate::ReopenedBecause, at: MissionTime, }
   LaydownRehearsed(crate::RehearsalStamp)
+  DeadSpotWhatIf(crate::DeadSpotWhatIf)
 }
 enum "RehearsalEvent" as RehearsalEvent <<InformationElement>> {
   Started { seed: String, seed_sha256: String, at: MissionTime, }
@@ -191,6 +192,8 @@ enum "Concurrence\n(see If-Sr-battle-rhythm-mission-records)" as Concurrence <<E
 class "ConflictSide\n(see If-Sr-policy-authority-settings)" as ConflictSide <<External>> #line.dashed {
 }
 class "ControlStatusChange\n(see If-Sr-policy-authority-settings)" as ControlStatusChange <<External>> #line.dashed {
+}
+class "DeadSpotWhatIf\n(see If-Sr-battle-rhythm-mission-records)" as DeadSpotWhatIf <<External>> #line.dashed {
 }
 class "DecisionId\n(see If-Sr-plans-effectors-handoff)" as DecisionId <<External>> #line.dashed {
 }
@@ -316,6 +319,7 @@ LinkEvent --> PlanId : ConflictResolved, ConflictArbitrated, DelegationsLapsed
 EngagementSide --> DecisionId : decision
 EngagementSide --> MissionTime : at
 EngagementSide --> PlanId : plan
+PlanningEvent --> DeadSpotWhatIf : DeadSpotWhatIf
 PlanningEvent --> GapAcceptance : GapAccepted
 PlanningEvent --> GapAcceptanceId : GapAcceptanceReopened
 PlanningEvent --> MissionTime : GapAcceptanceReopened

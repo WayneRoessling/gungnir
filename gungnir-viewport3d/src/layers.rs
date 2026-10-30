@@ -267,6 +267,12 @@ pub enum DeadSpotCell {
     Single,
     /// Claimed, over ground the DEM has no height for: unknown, which is not clear.
     NoData,
+    /// A what-if (GAP-249, D-150): a dead spot now that the change would clear. Drawn as
+    /// the dead spot it is, with a hatch over it, because it is still dark until somebody
+    /// makes the change.
+    WouldClear,
+    /// A what-if: not a dead spot now, and one with the change.
+    WouldDarken,
 }
 
 /// A computed dead-spot field, ready to draw (GAP-246).
@@ -296,6 +302,9 @@ pub struct DeadSpotField<'a> {
     /// The desktop is linked: the field is this desktop's own, from the node's sensors and
     /// this desktop's DEM, since the node computes none (D-148).
     pub linked: bool,
+    /// A what-if is shown, described in words (GAP-249, D-150): the cells are the live
+    /// dead spots with what the change would clear and darken marked over them.
+    pub what_if: Option<&'a str>,
 }
 
 /// The dead-spot layer for a frame: a field, or why there is none (DN-34 §4 rule 4).
@@ -315,6 +324,18 @@ pub enum DeadSpotLayer<'a> {
 /// its patterns, and that it is geometric line of sight.
 #[must_use]
 pub fn dead_spot_line(field: &DeadSpotField<'_>) -> String {
+    if let Some(what_if) = field.what_if {
+        let mut line = format!(
+            "WHAT-IF, not the live picture: {what_if}. Shown over the live dead spots at {:.0} m \
+             above ground: green hatching would clear, red cross-hatching would go dark. \
+             Computed {:.0} s ago, geometric line of sight",
+            field.height_agl_m, field.age_s
+        );
+        if field.stale {
+            line.push_str("; recomputing, the inputs have changed");
+        }
+        return line;
+    }
     let whose = field
         .sensor
         .map_or_else(String::new, |s| format!(" for {s} alone"));
@@ -378,6 +399,8 @@ pub fn dead_spot_image(
     let single = with_alpha(palette.warning_color, 160);
     let dot = with_alpha(palette.muted_text_color(), 220);
     let wash = with_alpha(palette.muted_text_color(), 36);
+    let clear = with_alpha(palette.healthy_color(), 230);
+    let darken = with_alpha(palette.alert_color, 230);
     let mut pixels = Vec::with_capacity(width * height);
     for y in 0..height {
         for x in 0..width {
@@ -403,6 +426,26 @@ pub fn dead_spot_image(
                         wash
                     }
                 }
+                // The dead spot's own fill, with a hatch running the other way from
+                // single-sensor's, in the healthy colour.
+                DeadSpotCell::WouldClear => {
+                    if (x + period - y % period) % period < period / 2 {
+                        clear
+                    } else {
+                        shadow
+                    }
+                }
+                // A cross-hatch in the alert colour over nothing: ground that is not dark
+                // now, which a single direction of hatch would confuse with single-sensor.
+                DeadSpotCell::WouldDarken => {
+                    if (x + y).is_multiple_of(period)
+                        || (x + period - y % period).is_multiple_of(period)
+                    {
+                        darken
+                    } else {
+                        egui::Color32::TRANSPARENT
+                    }
+                }
             });
         }
     }
@@ -415,9 +458,9 @@ pub fn dead_spot_image(
 
 /// The dead-spot texture the viewport keeps across frames, and what it was built from.
 pub struct DeadSpotTexture {
-    /// The field's revision, the pattern period, and the palette's shadow fill: a change to
-    /// any of them rebuilds the image.
-    key: (u64, u32, egui::Color32, egui::Color32),
+    /// The field's revision, the pattern period, and the palette's colours the image is
+    /// drawn in: a change to any of them rebuilds the image.
+    key: (u64, u32, egui::Color32, egui::Color32, egui::Color32),
     pub handle: egui::TextureHandle,
 }
 
@@ -445,6 +488,7 @@ pub fn sync_dead_spot_texture(
         period,
         palette.shadow_color,
         palette.warning_color,
+        palette.alert_color,
     );
     if slot.as_ref().is_some_and(|t| t.key == key) {
         return;
@@ -1172,6 +1216,86 @@ mod tests {
             stale: false,
             sensor: None,
             linked: false,
+            what_if: None,
+        }
+    }
+
+    /// GAP-249 (D-150): a what-if's two kinds of cell differ from every other kind and from
+    /// each other, in pattern as well as colour. "Would clear" keeps the dead spot's dark
+    /// fill under a hatch in the healthy colour, because it is still dark until somebody
+    /// makes the change; "would darken" is a cross-hatch in the alert colour over nothing.
+    #[test]
+    fn a_what_ifs_cells_are_told_apart_from_each_other_and_from_the_live_kinds() {
+        let palette = theme::Palette::day();
+        let side = 8u32;
+        let image_of = |kind| {
+            let cells = vec![kind; (side * side) as usize];
+            dead_spot_image(&field(&cells, side), &palette, 4, 1).pixels
+        };
+        // Every colour is compared as the image draws it, through the same premultiplied
+        // alpha: a palette colour read back unmultiplied is off by a unit in a channel.
+        let drawn =
+            |c: egui::Color32| egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 230);
+        let colours = |pixels: &[egui::Color32]| -> std::collections::HashSet<egui::Color32> {
+            pixels
+                .iter()
+                .filter(|p| **p != egui::Color32::TRANSPARENT)
+                .copied()
+                .collect()
+        };
+        let clears = image_of(DeadSpotCell::WouldClear);
+        let darkens = image_of(DeadSpotCell::WouldDarken);
+        assert!(
+            clears.iter().all(|p| *p != egui::Color32::TRANSPARENT),
+            "would-clear keeps the dark fill everywhere it is not hatched"
+        );
+        assert!(colours(&clears).contains(&drawn(palette.healthy_color())));
+        let shadow_pixel = image_of(DeadSpotCell::Shadow)[0];
+        assert!(
+            clears.contains(&shadow_pixel),
+            "would-clear keeps the dead spot's fill"
+        );
+        let hatched = darkens
+            .iter()
+            .filter(|p| **p != egui::Color32::TRANSPARENT)
+            .count();
+        assert!(
+            hatched > 8 && hatched < 40,
+            "would-darken is a cross-hatch: {hatched}"
+        );
+        assert_eq!(
+            colours(&darkens),
+            std::iter::once(drawn(palette.alert_color)).collect()
+        );
+        for live in [
+            DeadSpotCell::Shadow,
+            DeadSpotCell::Single,
+            DeadSpotCell::NoData,
+        ] {
+            let pixels = image_of(live);
+            assert_ne!(pixels, clears, "{live:?} and would-clear look alike");
+            assert_ne!(pixels, darkens, "{live:?} and would-darken look alike");
+        }
+    }
+
+    /// The what-if line leads with what it is not, says what is marked, and carries the
+    /// height and age the live line does.
+    #[test]
+    fn a_what_ifs_line_says_it_is_not_the_live_picture() {
+        let cells = [DeadSpotCell::WouldClear];
+        let f = DeadSpotField {
+            what_if: Some("S2 radar switched on, mast +10 m"),
+            ..field(&cells, 1)
+        };
+        let line = dead_spot_line(&f);
+        assert!(line.starts_with("WHAT-IF, not the live picture"), "{line}");
+        for want in [
+            "S2 radar switched on",
+            "green hatching would clear",
+            "100 m",
+            "6 s ago",
+        ] {
+            assert!(line.contains(want), "{want}: {line}");
         }
     }
 
@@ -1218,6 +1342,8 @@ mod tests {
                     assert_eq!(clear, 0, "{check} is washed");
                     assert_eq!(distinct.len(), 2, "{check} is dots over a wash");
                 }
+                // A what-if's own kinds, which the next test checks.
+                DeadSpotCell::WouldClear | DeadSpotCell::WouldDarken => {}
             }
         }
     }

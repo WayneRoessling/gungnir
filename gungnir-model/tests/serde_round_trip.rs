@@ -1182,6 +1182,33 @@ fn planning_events() -> Vec<PlanningEvent> {
             },
             ran_at: T2,
         }),
+        PlanningEvent::DeadSpotWhatIf(gungnir_model::DeadSpotWhatIf {
+            change: gungnir_model::SensorWhatIf {
+                sensor: SensorId(2),
+                mast_m: 12.5,
+                turn_rad: -0.3,
+                east_m: 140.0,
+                north_m: -60.0,
+            },
+            operator: "42".into(),
+            role: "SensorManager".into(),
+            revision: 7,
+            height_agl_m: 100.0,
+            cell_m: 30.0,
+            before: gungnir_model::DeadSpotAreas {
+                claimed_m2: 3.1e8,
+                shadow_m2: 1.23e7,
+                watched_m2: 2.977e8,
+            },
+            after: gungnir_model::DeadSpotAreas {
+                claimed_m2: 3.4e8,
+                shadow_m2: 9.1e6,
+                watched_m2: 3.309e8,
+            },
+            cleared_m2: 4.4e6,
+            darkened_m2: 1.2e6,
+            at: T2,
+        }),
     ]
 }
 
@@ -1491,6 +1518,7 @@ impl Variant for PlanningEvent {
             Self::GapAccepted(_) => "GapAccepted",
             Self::GapAcceptanceReopened { .. } => "GapAcceptanceReopened",
             Self::LaydownRehearsed(_) => "LaydownRehearsed",
+            Self::DeadSpotWhatIf(_) => "DeadSpotWhatIf",
         }
     }
 }

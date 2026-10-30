@@ -379,6 +379,62 @@ pub struct RehearsalStamp {
     pub ran_at: crate::MissionTime,
 }
 
+/// One sensor as a dead-spot what-if would have it (GAP-249, D-149,
+/// `docs/design/DN-34-sensor-dead-spots.md` amendment 4): counted as searching whatever mode
+/// it is in, its mast raised or lowered, its sector turned, and moved. A change of nothing
+/// at all is the sensor switched on where it stands.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SensorWhatIf {
+    pub sensor: SensorId,
+    /// Metres added to its declared height; negative lowers it.
+    pub mast_m: f64,
+    /// Radians its sector is turned clockwise. Zero for a sensor that declares no sector,
+    /// which has nothing to turn.
+    pub turn_rad: f64,
+    /// Metres it is moved east and north in the deployment's local frame.
+    pub east_m: f64,
+    pub north_m: f64,
+}
+
+/// A dead-spot field's areas as the record holds them, square metres.
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+pub struct DeadSpotAreas {
+    /// Claimed by at least one sensor.
+    pub claimed_m2: f64,
+    /// Claimed and hidden from every claiming sensor: the dead spots.
+    pub shadow_m2: f64,
+    /// Seen by at least one sensor.
+    pub watched_m2: f64,
+}
+
+/// A dead-spot what-if as the record holds it (GAP-249, D-151): who tried which change,
+/// under which baseline, at which height, and what it would do to the dead spots.
+///
+/// **Recorded once per run, when its first answer is computed.** A run abandoned before
+/// it has an answer leaves no record, because there is nothing it found; one recomputed
+/// later because the sensors or the terrain moved is the same run and is not recorded
+/// again. Nothing here changes a sensor: this is what somebody asked, not an act.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DeadSpotWhatIf {
+    pub change: SensorWhatIf,
+    /// The signed-in operator who ran it.
+    pub operator: String,
+    /// Their session's role, in `gungnir_security::Role`'s debug spelling.
+    pub role: String,
+    /// The baseline revision in force.
+    pub revision: u32,
+    /// The probe's height above the ground, metres, and the field's cell.
+    pub height_agl_m: f64,
+    pub cell_m: f64,
+    /// The live sensors' dead spots, and the same with the change.
+    pub before: DeadSpotAreas,
+    pub after: DeadSpotAreas,
+    /// Dead spots the change would clear, and ground it would leave dark that is not now.
+    pub cleared_m2: f64,
+    pub darkened_m2: f64,
+    pub at: crate::MissionTime,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

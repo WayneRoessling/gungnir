@@ -3619,3 +3619,65 @@
     Rejected: a field on the node, which needs a DEM on every node's baseline and a second
     place the height field must agree, for a layer only a desktop draws. The node's turn
     comes if a headless consumer wants shadow area. See the record item.
+
+- id: D-149
+  decision: What a dead-spot what-if may change
+  question: >-
+    GAP-249 lets a sensor manager try one sensor changed against the terrain's dead spots
+    without editing the baseline. What may the change be? Recommended: switched on whatever
+    its mode, its mast raised or lowered, and its sector turned, its position staying where
+    it is declared because moving a sensor is a laydown option's job (GAP-248).
+  raised_in: "`../../design/DN-34-sensor-dead-spots.md` amendment 4"
+  decider: Owner
+  unblocks: GAP-249
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, past the recommended default: the change may also
+    move the sensor**, by an east and north offset in the local frame, as well as switch it
+    on, raise or lower its mast and turn its sector. Rejected: position fixed (the default),
+    and mode and mast only. See the record item.
+
+- id: D-150
+  decision: What the map shows while a dead-spot what-if is active
+  question: >-
+    Recommended: the live dead spots stay, with the cells the change would newly clear or
+    newly darken marked over them, under a line saying it is a what-if; nothing on the map
+    stands as the live picture. The alternatives: the what-if field in place of the live
+    one, or numbers on PN-11 only.
+  raised_in: "`../../design/DN-34-sensor-dead-spots.md` amendment 4"
+  decider: Owner
+  unblocks: GAP-249
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default: the difference over the
+    live dead spots.** Rejected: the what-if field in place of the live one, and numbers
+    only. See the record item.
+
+- id: D-151
+  decision: Whether a dead-spot what-if is recorded
+  question: >-
+    A what-if commands nothing and is derived from the baseline, the registry and the DEM.
+    Recommended: run by anyone on PN-11 and not recorded, like the field itself (DN-34 §7
+    item 8). The alternative: each recorded on the journal with who ran it.
+  raised_in: "`../../design/DN-34-sensor-dead-spots.md` amendment 4"
+  decider: Owner
+  unblocks: GAP-249
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, past the recommended default: each what-if is
+    recorded on the journal with who ran it**, as a planning-record event. Rejected:
+    unrecorded (the default). See the record item.
+
+- id: D-152
+  decision: Where the dead-spot what-if controls live
+  question: >-
+    Recommended: on PN-11, beside the one-sensor chooser and the height, docked next to
+    PN-10 in the sensor manager's workspace. The alternative: PN-10, with row selection
+    added to it.
+  raised_in: "`../../design/DN-34-sensor-dead-spots.md` amendment 4"
+  decider: Owner
+  unblocks: GAP-249
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default: on PN-11.** Rejected:
+    PN-10 with row selection. See the record item.

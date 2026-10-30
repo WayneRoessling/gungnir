@@ -179,7 +179,9 @@ impl NodeGapAcceptances {
                     PlanningEvent::GapAcceptanceReopened { acceptance, .. } => {
                         out.standing.retain(|(a, _)| a.id != acceptance);
                     }
-                    PlanningEvent::LaydownRehearsed(_) => {}
+                    // A rehearsal and a dead-spot what-if (GAP-249) are a desktop's; the
+                    // node holds neither and has nothing to recover from them.
+                    PlanningEvent::LaydownRehearsed(_) | PlanningEvent::DeadSpotWhatIf(_) => {}
                 }
             }
         }

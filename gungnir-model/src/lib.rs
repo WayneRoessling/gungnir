@@ -120,8 +120,9 @@ pub use handoff::{
     accept_report, DecisionAttribution, DeliveryState, EffectorReport, Handoff, HandoffError,
 };
 pub use laydown::{
-    AcceptedGap, GapAcceptance, GapAcceptanceId, GapSeverity, Laydown, LaydownId, RehearsalBasis,
-    RehearsalStamp, ReopenedBecause, ResourcePlacement, SensorPlacement, TestTrackNumber,
+    AcceptedGap, DeadSpotAreas, DeadSpotWhatIf, GapAcceptance, GapAcceptanceId, GapSeverity,
+    Laydown, LaydownId, RehearsalBasis, RehearsalStamp, ReopenedBecause, ResourcePlacement,
+    SensorPlacement, SensorWhatIf, TestTrackNumber,
 };
 pub use plans::{
     Acknowledgement, DecisionId, DeconflictionCheck, DeconflictionKind, DeconflictionResult,
