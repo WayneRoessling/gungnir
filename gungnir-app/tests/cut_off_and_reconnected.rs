@@ -105,7 +105,7 @@ const B_OPERATOR: u64 = 62;
 /// engagement, and D-03's rule sees equal ranks and falls to the earlier decision.
 const ROLE: Role = Role::Operator;
 /// An account that may publish to the coalition exchange, which `ROLE` may not
-/// (`PUBLISH_EXCHANGE` is granted to Commander, IntelligenceAnalyst and Supervisor:
+/// (`PUBLISH_EXCHANGE` is granted to `Commander`, `IntelligenceAnalyst` and `Supervisor`:
 /// DN-18 §5 amendment 2). GAP-145's test signs in as this one, because a handoff only
 /// reaches the node's register when the console that issued it may send it.
 const SUPERVISOR: u64 = 63;
@@ -304,74 +304,20 @@ impl Node {
         let running = Arc::new(AtomicBool::new(true));
         let forwarding_held = Arc::new(AtomicBool::new(false));
         std::thread::spawn({
-            let api = api.clone();
-            let shared = shared.clone();
-            let config = config.clone();
-            let resources = resources.clone();
-            let geo = geo.clone();
-            let bus = bus.clone();
-            let running = running.clone();
-            let forwarding_held = forwarding_held.clone();
-            move || {
-                while running.load(Ordering::Relaxed) {
-                    {
-                        let Ok(mut state) = shared.lock() else { return };
-                        let now = state.now;
-                        let tracks = std::mem::take(&mut state.tracks);
-                        let frame = Frame {
-                            now,
-                            config: &config,
-                            tracks: &tracks,
-                            resources: &resources,
-                            geofences: &*geo,
-                            bus: &bus,
-                            endpoint_client: None,
-                            effectors: None,
-                            api: &api,
-                        };
-                        // `main.rs`'s order.
-                        approval::sweep(&mut state.approval, &frame);
-                        let _ = approval::answer_decisions(&mut state.approval, &frame);
-                        if !forwarding_held.load(Ordering::Relaxed) {
-                            approval::answer_forwarded(&mut state.approval, &frame);
-                        }
-                        approval::audit_refused_decisions(&mut state.approval, &frame);
-                        let queue = state.approval.queue_view(&config, &resources, &tracks);
-                        state.tracks = tracks;
-                        api.set_now(now.0);
-                        let _ = api.publish_snapshot(
-                            SnapshotResponse::new(
-                                Vec::new(),
-                                None,
-                                SystemHealth::default(),
-                                Vec::new(),
-                            )
-                            .with_queue(queue),
-                        );
-                    }
-                    for envelope in api_rx.try_iter() {
-                        let _ = api.publish_event(envelope);
-                    }
-                    std::thread::sleep(Duration::from_millis(2));
-                }
-            }
+            let node_loop = NodeLoop {
+                api: api.clone(),
+                shared: shared.clone(),
+                config: config.clone(),
+                resources: resources.clone(),
+                geo: geo.clone(),
+                bus: bus.clone(),
+                api_rx,
+                running: running.clone(),
+                forwarding_held: forwarding_held.clone(),
+            };
+            move || node_loop.run()
         });
-        let addr: SocketAddr = {
-            let probe = TcpListener::bind("127.0.0.1:0").expect("probe");
-            probe.local_addr().expect("addr")
-        };
-        let server = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .build()
-            .expect("node runtime");
-        server.block_on(async {
-            let listener = bind(addr).await.expect("bound");
-            let api = api.clone();
-            tokio::spawn(async move {
-                let _ = serve_on(listener, api).await;
-            });
-        });
+        let (addr, server) = serve(&api);
         Self {
             addr,
             api,
@@ -472,6 +418,92 @@ impl Node {
     fn hold_forwarding(&self, held: bool) {
         self.forwarding_held.store(held, Ordering::Relaxed);
     }
+}
+
+/// What the node's approval loop runs on, moved onto its thread.
+struct NodeLoop {
+    api: Arc<NodeApi>,
+    shared: Arc<Mutex<Shared>>,
+    config: Arc<ConfigBaseline>,
+    resources: Arc<Vec<ResourceView>>,
+    geo: Arc<InMemoryGeoService>,
+    bus: Arc<InProcessBus>,
+    api_rx: Receiver<Envelope>,
+    running: Arc<AtomicBool>,
+    forwarding_held: Arc<AtomicBool>,
+}
+
+impl NodeLoop {
+    /// Step the node's loop until the node is dropped.
+    fn run(self) {
+        while self.running.load(Ordering::Relaxed) {
+            if !self.step() {
+                return;
+            }
+            for envelope in self.api_rx.try_iter() {
+                let _ = self.api.publish_event(envelope);
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+
+    /// One pass of the loop; `false` once the shared state is poisoned.
+    fn step(&self) -> bool {
+        let Ok(mut state) = self.shared.lock() else {
+            return false;
+        };
+        let now = state.now;
+        let tracks = std::mem::take(&mut state.tracks);
+        let frame = Frame {
+            now,
+            config: &self.config,
+            tracks: &tracks,
+            resources: &self.resources,
+            geofences: &*self.geo,
+            bus: &self.bus,
+            endpoint_client: None,
+            effectors: None,
+            api: &self.api,
+        };
+        // `main.rs`'s order.
+        approval::sweep(&mut state.approval, &frame);
+        let _ = approval::answer_decisions(&mut state.approval, &frame);
+        if !self.forwarding_held.load(Ordering::Relaxed) {
+            approval::answer_forwarded(&mut state.approval, &frame);
+        }
+        approval::audit_refused_decisions(&mut state.approval, &frame);
+        let queue = state
+            .approval
+            .queue_view(&self.config, &self.resources, &tracks);
+        state.tracks = tracks;
+        self.api.set_now(now.0);
+        let _ = self.api.publish_snapshot(
+            SnapshotResponse::new(Vec::new(), None, SystemHealth::default(), Vec::new())
+                .with_queue(queue),
+        );
+        true
+    }
+}
+
+/// Serve `api` on a free loopback port, on the node's own runtime.
+fn serve(api: &Arc<NodeApi>) -> (SocketAddr, tokio::runtime::Runtime) {
+    let addr: SocketAddr = {
+        let probe = TcpListener::bind("127.0.0.1:0").expect("probe");
+        probe.local_addr().expect("addr")
+    };
+    let server = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("node runtime");
+    server.block_on(async {
+        let listener = bind(addr).await.expect("bound");
+        let api = api.clone();
+        tokio::spawn(async move {
+            let _ = serve_on(listener, api).await;
+        });
+    });
+    (addr, server)
 }
 
 fn account(operator: u64) -> Account {
