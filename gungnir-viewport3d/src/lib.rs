@@ -16,10 +16,10 @@
 //! [`gl::SceneRenderer`], and [`prepare_3d`] is the entry the binary drives with an
 //! `egui_glow` paint callback. The scene is the **default** (`ui.scene_3d`, on) by the
 //! owner's decision of 2026-09-05, with [`render`]'s 2D projection as the opt-out and as
-//! the fallback when no context could be attached. The GL draw call has not been
-//! rendered anywhere anyone could see it and there is no headless probe for one, so the
-//! status line and the runtime toggle are what stand in for that: see
-//! `ARCHITECTURE.md` §10 items 52 and 53.
+//! the fallback when no context could be attached. The owner looked at the GL draw on
+//! 2026-10-30 and it passed (GAP-226, D-153), but there is no headless probe for one, so
+//! between looks the status line and the runtime toggle are what stand in for a test:
+//! see `ARCHITECTURE.md` §10 items 52 and 53.
 
 pub mod gl;
 
@@ -176,9 +176,9 @@ impl Default for ViewportState {
 /// The control that switches between the three-d scene and the 2D projection.
 ///
 /// Drawn in the corner of the viewport by whichever renderer is running, so there is
-/// always a way back. The three-d path has not been looked at on a screen (GAP-022), and
-/// a deployment that finds it drawing badly must not have to edit a baseline and restart
-/// during whatever is happening at the time.
+/// always a way back. The three-d path has been looked at once (GAP-226) but no test can
+/// see it, and a deployment that finds it drawing badly must not have to edit a baseline
+/// and restart during whatever is happening at the time.
 ///
 /// Returns true when the operator switched.
 /// Draw the coverage layers the operator has left on.
@@ -269,7 +269,7 @@ pub fn draw_renderer_toggle(
         .put(corner, egui::Button::new(label).small())
         .on_hover_text(
             "Switch between the three-d scene and the 2D projection. The projection is \
-             the path that has been verified.",
+             the path the automated tests can see.",
         );
     if response.clicked() {
         state.use_3d = !state.use_3d;

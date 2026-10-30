@@ -632,6 +632,27 @@ laydown option (GAP-248). It does not task anything or offer to: a what-if that 
 a button for the change would be the wrong control on this panel. And the node computes
 none, as D-148 holds for every field.
 
+## Amendment 5, 2026-10-30: the scene seen, §13 increment 0 met (GAP-226, D-153)
+
+§13 put one item ahead of every other 3D element: see the scene, or default it off.
+The owner chose to see it (D-153) and looked at it on 2026-10-30. Three defects found
+first were fixed ahead of the look, and they change two statements above:
+
+- **The camera is orthographic**, not the straight-down perspective §8 and §13.1 row 3
+  describe. It is sized in egui points from the 2D view's zoom, so the scene and the egui
+  overlay put a track at the same place at any altitude and display scaling. §8's argument
+  holds more strongly for it: a flat overlay on an orthographic straight-down view is
+  exactly right, not approximately. Row 3's tilt becomes a change of projection as well as
+  of angle.
+- **A glyph is the 2D glyph's size on screen**, not 120 m.
+
+What the owner checked, and what passed, is in
+`../record/2026-10-30/the-owner-s-look-at-the-three-d.md`. The look does not make the
+GL path testable. There is still no headless probe for it, so §13's reason for adding to
+it slowly stands, now for a path that has been seen once. Rows 1 to 9 are unblocked in the
+§13.2 order. The sentences in §8 and §13 that say the draw has never been seen describe
+the note as written.
+
 ## Traceability
 
 GAP-246, GAP-247; D-146, D-147, D-148; CAP-1.4, CAP-2.10, CAP-2.11, CAP-5.9; MT-07
