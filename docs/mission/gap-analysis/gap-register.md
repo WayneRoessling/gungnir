@@ -245,8 +245,9 @@ history, and an entry is never edited once it has merged.
 | GAP-248 | A laydown option's dead spots are not computed on PN-16 | Mission | CAP-1.4, CAP-2.11 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
 | GAP-249 | A sensor change cannot be tried against the dead spots without editing the baseline | Mission | CAP-1.4, CAP-2.11, CAP-3.9 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
 | GAP-250 | An empty approval queue in a rehearsal says there are no tracks while nine are on screen | Technical | CAP-4.1, CAP-5.9 | 3 | 10 | S | 30 | I4 | UI engineer | Closed |
+| GAP-251 | The three-d scene draws no terrain, and its one paint callback would cover every layer if it did | Technical | CAP-5.9, CAP-5.10 | 3 | 10 | M | 30 | I4 | UI engineer | Open |
 
-Counts: 232 gaps, 6 mission, 226 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 233 gaps, 6 mission, 227 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3571,4 +3572,18 @@ Counts: 232 gaps, 6 mission, 226 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: UI engineer. Status: Closed.
 - Reference: The owner's round-1 screenshots of 2026-10-30; GAP-226; GAP-089.
 - Depends on: GAP-038, GAP-089.
+
+**GAP-251 The three-d scene draws no terrain, and its one paint callback would cover every layer if it did**
+
+- Type: Technical.
+- Capability: CAP-5.9 Role workspaces and workflow; CAP-5.10 Performance budgets.
+- History:
+  - 2026-10-30, Open: Filed with DN-35's design, taking DN-34 §13.2 step 1 once GAP-226's look had met increment 0. D-154 to D-157 raised the same day.
+- Evidence: `gungnir-viewport3d/src/lib.rs::prepare_3d` and `gungnir-app/src/main.rs::scene_callback` (the callback after the layers); `gungnir-viewport3d/src/gl.rs::SceneRenderer` (one instanced mesh); `gungnir-viewport3d/src/layers.rs::draw_terrain_2d` (the per-frame fold and decimation); eframe 0.34.3's `NativeOptions::depth_buffer` default of 0 (the window has no depth buffer).
+- Severity: 3. Reach: 10 threads. Effort: M. Priority: 30.
+- Impact: DN-34 §13.2 makes the terrain in GL, with the layers on it, the first 3D element after the scene was seen. The scene draws only the track discs, so the tilt that follows has no ground to tilt over. The scene's one paint callback is added after egui has painted every layer and the status line, so a ground drawn in it would cover the dead spots, rings, gaps, geofences, hazards and the line that stands in for a test, and no headless test would see it. The projection rebuilds the terrain mesh every frame, reading every vertex of the full grid for its colour ramp.
+- Closing action: Per DN-35: a terrain surface built once per load for both renderers; the scene's draw split into a ground pass and a glyph pass with the one `draw_layers` between them, placed by the viewport crate and read by a probe; the scene drawing its own ground only when the surface for this revision is uploaded, the egui ground otherwise; the draft rows of DN-35 §8.1; and the owner's look of §8.2 over the fixture of §9. The build follows the owner's answers to D-154 to D-157.
+- Target: I4. Owner: UI engineer. Status: Open.
+- Reference: `../../design/DN-35-terrain-in-the-three-d-scene.md`; `../../design/DN-34-sensor-dead-spots.md` §13 and amendment 6; GAP-226.
+- Depends on: GAP-226, GAP-023, D-154, D-155, D-156, D-157.
 

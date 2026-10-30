@@ -3696,3 +3696,56 @@
     **Taken by the owner, 2026-10-30, against GAP-226's action: the scene stays the
     default, and the owner looks at it on a display.** Rejected: defaulting it off until
     it has been seen. See the record item.
+
+- id: D-154
+  decision: Where the layers lie on the three-d scene's terrain
+  question: >-
+    With the terrain drawn by GL, the dead spots, rings, gaps, geofences and hazards must
+    lie on it. Recommended: keep them in egui, drawn by the one `draw_layers` between a GL
+    ground pass and a GL glyph pass; on the orthographic straight-down camera that is
+    exactly where a drape puts them, and the drape in GL is built with the tilt, the first
+    increment where it would draw a different pixel. The alternative: the drape in GL now,
+    as DN-34 §13.1 row 2 is written, the dead-spot texture on the mesh and the vector layers
+    as line geometry on the surface.
+  raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §5.3 and §10"
+  decider: Owner
+  unblocks: GAP-251
+  outcome: ""
+
+- id: D-155
+  decision: The resolution of the three-d scene's terrain surface
+  question: >-
+    Recommended: the projection's decimation, at most 16 384 vertices, so both renderers
+    draw the same triangles and a test holds one to the other. The alternative: a finer
+    budget for the scene alone, for example 512 by 512, which shows relief the projection
+    smooths away, so the two renderers no longer show the same ground.
+  raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §6 and §10"
+  decider: Owner
+  unblocks: GAP-251
+  outcome: ""
+
+- id: D-156
+  decision: The ground the owner looks at when the scene draws terrain
+  question: >-
+    Round 1's baseline names no terrain and the committed DEMs are a few cells each.
+    Recommended: a synthetic DEM over round 1's sector in the local frame, with a ridge the
+    approach crosses and a no-data patch, committed with a baseline variant naming it. The
+    alternative: a clip of a real DEM over a real place, with its licence and attribution
+    added to the notices.
+  raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §9 and §10"
+  decider: Owner
+  unblocks: GAP-251
+  outcome: ""
+
+- id: D-157
+  decision: Whether the terrain gains a hillshade with the scene's surface
+  question: >-
+    Recommended: no; the height ramp stays as it is in both renderers, so the look checks
+    that nothing changed, and a hillshade follows as a small change to both once the GL
+    ground has been seen. The alternative: a hillshade now in both renderers, computed once
+    per load into the vertex colours, which makes a ridge readable straight down and
+    changes the verified projection in the same increment.
+  raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §10"
+  decider: Owner
+  unblocks: GAP-251
+  outcome: ""
