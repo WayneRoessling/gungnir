@@ -133,6 +133,52 @@ pub fn similarity(
     })
 }
 
+/// The squared normalised distance no candidate above `settings.merge_threshold` can
+/// exceed, with a margin for rounding; `None` when every comparable pair could merge.
+///
+/// A match needs `exp(-d²/2)`, scaled by at most 1 for the class, at or above the
+/// threshold, so `d² <= -2 ln(threshold)`. The margin is far wider than any rounding in
+/// [`similarity`], because this bound only ever decides what is *not* compared.
+pub(crate) fn reach(settings: &CorrelationSettings) -> Option<f64> {
+    let threshold = settings.merge_threshold;
+    (threshold > 0.0).then(|| -2.0 * threshold.min(1.0).ln() * (1.0 + 1e-6) + 1e-9)
+}
+
+/// False only when [`similarity`] would return nothing, or a confidence below the merge
+/// threshold, for this pair: the same gap test, then each axis's share of the distance
+/// against [`reach`], by multiplication alone.
+///
+/// **A necessary condition, not a second rule** (2026-10-30). The resolver scans every
+/// lineage it holds for each new track id, and in a dense raid that scan was most of
+/// the desktop's frame: [`similarity`] in full, `exp` included, for thousands of lineages
+/// that were never near. Every pair this passes is still decided by [`similarity`], and
+/// a value this cannot judge -- a variance that is not finite and positive, a NaN -- is
+/// passed rather than refused, so [`similarity`] refuses it as it always has.
+pub(crate) fn may_match(
+    candidate: &TrackView,
+    last: &LastSeen,
+    settings: &CorrelationSettings,
+    reach: Option<f64>,
+) -> bool {
+    let gap_s = candidate.mission_time.0 - last.mission_time.0;
+    if !(settings.min_gap_s..=settings.max_gap_s).contains(&gap_s) {
+        return false;
+    }
+    let Some(reach) = reach else {
+        return true;
+    };
+    let p = candidate.position_enu();
+    (0..3).all(|i| {
+        let predicted = last.position_enu[i] + last.velocity_mps[i] * gap_s;
+        let variance = last.variance_m2[i]
+            + candidate.covariance[(i, i)]
+            + settings.process_noise_m2_per_s * gap_s;
+        let d = p[i] - predicted;
+        // Written so that a NaN on either side passes.
+        !(d * d > reach * variance && variance.is_finite() && variance > 0.0)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
