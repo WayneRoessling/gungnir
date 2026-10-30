@@ -68,6 +68,16 @@ pub trait EventJournal: Send + Sync {
     /// Every session this journal holds, ascending.
     fn sessions(&self) -> Result<Vec<SessionId>, StoreError>;
 
+    /// How many envelopes [`EventJournal::read_session`] would return for `session`.
+    ///
+    /// For a list of sessions, where the picker shows each one's length (GAP-256): the
+    /// default decodes every envelope to count them, which is correct and costs a full
+    /// read of the session. An implementation that can count without decoding overrides
+    /// it, and must return the same number `read_session` would, or the same error.
+    fn session_len(&self, session: SessionId) -> Result<usize, StoreError> {
+        self.read_session(session).map(|envelopes| envelopes.len())
+    }
+
     /// Force everything appended so far onto the disk.
     ///
     /// This is the "fsync on session save" half of D-04
@@ -268,6 +278,26 @@ impl FileEventJournal {
         }
     }
 
+    /// The session's file, ready to be read: anything still in the buffer belongs to
+    /// this session's record, so it is pushed to the operating system first and a reader
+    /// never sees a short file. This is a flush, not an fsync: the reader goes through
+    /// the same page cache. A session with no file is `UnknownSession`.
+    fn path_for_reading(&self, session: SessionId) -> Result<PathBuf, StoreError> {
+        {
+            let mut slot = self.slot();
+            if let Some(open) = slot.as_mut() {
+                if open.session == session {
+                    Self::flush_open(open)?;
+                }
+            }
+        }
+        let path = self.session_path(session);
+        if !path.exists() {
+            return Err(StoreError::UnknownSession(session));
+        }
+        Ok(path)
+    }
+
     /// Lock the open-file slot, treating a poisoned mutex as recoverable.
     ///
     /// A panic while the lock was held cannot corrupt the file: the only state behind
@@ -349,21 +379,7 @@ impl EventJournal for FileEventJournal {
     }
 
     fn read_session(&self, session: SessionId) -> Result<Vec<Envelope>, StoreError> {
-        // Anything still in the buffer belongs to this session's record; push it to
-        // the operating system before reading so a reader never sees a short file.
-        // This is a flush, not an fsync: the reader goes through the same page cache.
-        {
-            let mut slot = self.slot();
-            if let Some(open) = slot.as_mut() {
-                if open.session == session {
-                    Self::flush_open(open)?;
-                }
-            }
-        }
-        let path = self.session_path(session);
-        if !path.exists() {
-            return Err(StoreError::UnknownSession(session));
-        }
+        let path = self.path_for_reading(session)?;
         let reader = BufReader::new(File::open(&path)?);
         let lines: Vec<String> = reader.lines().collect::<Result<_, _>>()?;
         let mut envelopes = Vec::with_capacity(lines.len());
@@ -391,6 +407,47 @@ impl EventJournal for FileEventJournal {
             }
         }
         Ok(envelopes)
+    }
+
+    /// Counts the file's lines and decodes only the last one (GAP-256).
+    ///
+    /// `read_session` decodes every line, which for a length is the whole journal read,
+    /// unsealed and parsed, to learn one number per session. The count here is the
+    /// non-empty lines, which is what `read_session` returns because `append` refuses
+    /// any line that would not read back (GAP-126) and so the body of a file decodes.
+    /// The last line is the one that can differ: a process that died mid-append leaves a
+    /// torn line that `read_session` drops, so it is decoded, under the same rule --
+    /// a sealing failure is never torn and is returned as the error it is.
+    fn session_len(&self, session: SessionId) -> Result<usize, StoreError> {
+        let path = self.path_for_reading(session)?;
+        let reader = BufReader::new(File::open(&path)?);
+        let mut count = 0_usize;
+        let mut last: Option<Vec<u8>> = None;
+        for line in reader.split(b'\n') {
+            let line = line?;
+            if line.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+            count += 1;
+            last = Some(line);
+        }
+        let Some(last) = last else {
+            return Ok(0);
+        };
+        // `read_session` reads through `lines()`, which fails the whole read on a line that
+        // is not UTF-8, so the same bytes fail here rather than count as torn.
+        let text = std::str::from_utf8(&last)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let decoded = sealing::decode(text.trim_end_matches('\r'), self.sealer.as_deref())
+            .and_then(|plain| journal::decode_line(&plain).map_err(StoreError::from));
+        match decoded {
+            Ok(_) => Ok(count),
+            Err(err @ StoreError::Sealing(_)) => Err(err),
+            Err(err) => {
+                tracing::warn!(session = session.0, %err, "not counting a torn final journal line");
+                Ok(count - 1)
+            }
+        }
     }
 
     fn sessions(&self) -> Result<Vec<SessionId>, StoreError> {
@@ -423,6 +480,7 @@ mod tests {
         TrackView,
     };
     use std::ops::RangeInclusive;
+    use std::time::Duration;
 
     fn temp_root(tag: &str) -> PathBuf {
         let dir =
@@ -450,6 +508,96 @@ mod tests {
         }
         assert_eq!(journal.read_session(session).expect("read"), written);
         assert_eq!(journal.sessions().expect("sessions"), vec![session]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// GAP-256: the length counted from the file's lines is the length `read_session`
+    /// returns, with the buffer still unflushed, with a torn final line, and for a session
+    /// that does not exist.
+    #[test]
+    fn session_len_is_what_read_session_would_return() {
+        let root = temp_root("session-len");
+        let mut journal = FileEventJournal::open_with_policy(
+            &root,
+            DurabilityPolicy::Buffered {
+                fsync_interval: Duration::from_secs(3600),
+            },
+        )
+        .expect("open");
+        let session = SessionId(7);
+        for seq in 0..5 {
+            journal.append(session, &envelope(seq)).expect("append");
+        }
+        // Still in the writer's buffer: the count has to see it, as the read does.
+        assert_eq!(journal.session_len(session).expect("len"), 5);
+        assert_eq!(journal.read_session(session).expect("read").len(), 5);
+
+        // A process that died mid-append leaves a partial line, which the read drops.
+        journal.sync().expect("sync");
+        {
+            let mut file = OpenOptions::new()
+                .append(true)
+                .open(journal.session_path(session))
+                .expect("open the session file");
+            file.write_all(b"{\"seq\":5,\"mission_t")
+                .expect("write a torn line");
+        }
+        assert_eq!(journal.read_session(session).expect("read").len(), 5);
+        assert_eq!(
+            journal.session_len(session).expect("len"),
+            5,
+            "a torn final line was counted as an envelope"
+        );
+
+        assert!(
+            matches!(
+                journal.session_len(SessionId(8)),
+                Err(StoreError::UnknownSession(SessionId(8)))
+            ),
+            "a session with no file must be unknown, not empty"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// GAP-256: a sealed journal read without its key fails the length as it fails the
+    /// read. The torn-line tolerance must not turn a missing key into "one fewer".
+    #[test]
+    fn session_len_without_the_key_is_an_error_not_a_shorter_count() {
+        struct Reversing;
+        impl sealing::JournalSealer for Reversing {
+            fn seal(&self, plaintext: &[u8]) -> Result<Vec<u8>, StoreError> {
+                Ok(plaintext.iter().rev().copied().collect())
+            }
+            fn unseal(&self, sealed: &[u8]) -> Result<Vec<u8>, StoreError> {
+                Ok(sealed.iter().rev().copied().collect())
+            }
+        }
+
+        let root = temp_root("session-len-sealed");
+        let session = SessionId(9);
+        {
+            let mut sealed = FileEventJournal::open(&root).expect("open");
+            sealed.seal_with(Box::new(Reversing));
+            for seq in 0..3 {
+                sealed.append(session, &envelope(seq)).expect("append");
+            }
+            assert_eq!(sealed.session_len(session).expect("len with the key"), 3);
+        }
+        let without_key = FileEventJournal::open(&root).expect("open again");
+        assert!(
+            matches!(
+                without_key.read_session(session),
+                Err(StoreError::Sealing(_))
+            ),
+            "the read without the key did not fail as sealing"
+        );
+        assert!(
+            matches!(
+                without_key.session_len(session),
+                Err(StoreError::Sealing(_))
+            ),
+            "the length without the key must fail as the read does"
+        );
         let _ = fs::remove_dir_all(&root);
     }
 
