@@ -385,6 +385,47 @@ schema change**: `SCHEMA_VERSION` stands. No `NotImplemented` is added or remove
      row order or the wrong origin, which no other check looks for. It cannot see an error
      of a metre or a cell; the placement's own tests (GAP-197, GAP-200) hold those.
 
+## Amendment 2, 2026-10-30: the fixture cut, and three statements in amendment 1 corrected
+
+The owner approved the download, and the clip is committed as
+`testdata/dem/usgs_1_n44w124_clip.tif`. `testdata/dem/SOURCE.md` gives its source, digests,
+bounds and how it was cut. Cutting it showed amendment 1 item 2 wrong in three places.
+
+1. **Marys Peak is outside the committed grids.** The GEOID18 and NADCON5 clips are named
+   `43n45n_124w122w`, but `../../testdata/geoid/SOURCE.md` and
+   `../../testdata/nadcon5/SOURCE.md` say they cover 43.5 to 44.5 N and 122.5 to 123.5 W.
+   Marys Peak, at 44.50 N, 123.55 W, lies just outside both. The clip is instead
+   south-west of Eugene, over the Coast Range foothills, from 43.53 to 43.81 N and 123.02
+   to 123.45 W. That is about 35 by 32 km, heights 54 to 1 013 m rising to the south-east.
+   It sits inside one USGS tile, `n44w124`, and at least 2.8 km inside the grids. D-158's
+   outcome, "the Oregon Coast Range, inside the committed NADCON5 and GEOID18 clips", still
+   holds for it.
+2. **Round 1's positions do not all move with the origin.** The baseline's sensors,
+   approach, geofence, boom, assets and resources are latitude, longitude and ellipsoidal
+   height, in radians. Only the laydowns and the rehearsal seed are in the local frame. So
+   the variant re-expresses each geodetic position at the same east, north and up offset
+   from the new origin. The new origin is 43.67 N, 123.25 W, which puts round 1's sector
+   inside the clip with about a kilometre to spare. Three heights follow from the real
+   ground, and the build states each choice in its record:
+   - **The origin's height is the ground's under it**, ellipsoidal. That way the seed's
+     local heights, 120 to 300 m, read as above the origin's ground, as round 1's read as
+     above the sea.
+   - **Each radar's height is the ground's under it plus its declared mast.** Round 1's 25
+     and 30 m are ellipsoidal heights at sea level. In Oregon they would put both radars
+     underground.
+   - **The approach's height is restated against the ground.** At round 1's 300 m
+     ellipsoidal it would run through every hill over about 300 m. The build chooses a
+     height above the ground along it, and the coverage report samples it there.
+3. **The clip has no no-data cell.** Real data was not punched with a hole for the look. So
+   §8.2 check 2, a hole in the same place in both renderers, cannot be made on this
+   fixture, and §8.1 rows a and d carry it on their synthetic grids alone. Amendment 1's
+   check 9 names no Marys Peak now: the ridge lines and the high ground in the south-east
+   fall where the USGS topographic map of the same area puts them.
+
+The vertical system and the NAD83 realisation are not in the file, so the variant
+declares them. The vertical system is NAVD88, which USGS publishes 3DEP heights in. The
+realisation is the build's to choose and record against USGS's metadata for the tile.
+
 ## Traceability
 
 GAP-252; D-154, D-155, D-156, D-157, D-158; DN-34 §13.1 rows 1 and 2, §13.2 step 1, §13.3,

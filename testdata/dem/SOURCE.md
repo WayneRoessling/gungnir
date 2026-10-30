@@ -52,3 +52,62 @@ gdal_translate -q -a_srs EPSG:32633+3855 small.tif small-egm2008.tif
 It lies inside the committed clip of the EGM2008 grid (`../geoid/SOURCE.md`), which is
 what lets `gungnir-app/tests/terrain.rs` convert it through the geoid without the 80 MB
 grid.
+
+## `usgs_1_n44w124_clip.tif` (GAP-252, D-156, D-158, 2026-10-30)
+
+Unlike the files above, this one is real data. It is the ground the owner looks at when the
+three-d scene draws terrain (`docs/design/DN-35-terrain-in-the-three-d-scene.md`
+amendments 1 and 2). It is test data only: never linked into, embedded in, or shipped
+with a binary.
+
+**The source.** USGS 3D Elevation Program (3DEP), the 1 arc-second seamless DEM, tile
+`n44w124`, from the National Map's own bucket. It was downloaded on 2026-10-30 with the
+owner's approval. A work of the United States Government, in the public domain; no
+attribution is owed.
+
+| Field | Value |
+|---|---|
+| URL | `https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1/TIFF/current/n44w124/USGS_1_n44w124.tif` |
+| `Last-Modified` when fetched | Tue, 05 Aug 2025 17:44:47 GMT |
+| Bytes | 61 425 260 |
+| SHA-256 | `aef61c1fb0674819a939dc134bbc14a8e534ccda3678c06ab44f21ce720b5db9` |
+| Raster | 3604 x 3604, Float32, a cloud-optimised GeoTIFF (LZW, predictor 3), `AREA_OR_POINT=Area`, no-data -999999 |
+| Grid | Origin (124.000556 W, 44.000556 N), cells 1/3600 degree: 43 to 44 N and 123 to 124 W with a two-cell overlap on each side |
+| Horizontal | **Unqualified NAD83** (EPSG:4269), latitude and longitude in degrees |
+| Vertical | **None stated in the file.** USGS publishes 3DEP heights in NAVD88 (EPSG:5703) |
+
+Neither the realisation nor the vertical system is in the file, so a baseline that names
+this DEM has to declare both: `nad83_realisation` and `vertical`. The loader refuses an
+unqualified NAD83 file, or a file with no vertical system, when the baseline does not
+declare them (GAP-108, GAP-200).
+
+**How it was cut.** With GDAL 3.11.3 from the OSGeo image
+`ghcr.io/osgeo/gdal:alpine-small-3.11.3`, the same tool the geoid clips used. It was run
+with no network, out of the tile whose digest is above, by cell offsets so no resampling
+can occur:
+
+```sh
+gdal_translate -q -srcwin 1985 671 1556 1038 -co COMPRESS=DEFLATE -co PREDICTOR=3 \
+    USGS_1_n44w124.tif usgs_1_n44w124_clip.tif
+```
+
+The clip runs from (123.449167 W, 43.814167 N) at its north-west corner to
+(123.016944 W, 43.525833 N) at its south-east corner. That is 1556 columns by 1038 rows,
+about 35 km east to west and 32 km north to south. It is centred south-west of Eugene,
+over the Coast Range foothills, rising to the south-east. Heights run from 54.3 m to
+1012.6 m, mean 326 m. **No cell is no-data**, so the clip has no hole in it.
+
+**Why there.** It lies inside the committed GEOID18 and NADCON5 clips (`../geoid/SOURCE.md`,
+`../nadcon5/SOURCE.md`). Despite their file names, those clips cover 43.5 to 44.5 N and
+122.5 to 123.5 W, not 43 to 45 N and 122 to 124 W. The DEM clip stays at least 2.8 km
+inside them on every side, the least of it at the south edge. It holds round 1's sector (two radars of 15 km and 12 km, the
+second about 6 km east of the first) around an origin at 43.67 N, 123.25 W, with about a
+kilometre to spare.
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `usgs_1_n44w124_clip.tif` | 4 351 944 | `0d00c04390c5738df1a3f896322ab37d15ccefc7800b8758ffa9cafa1673ab34` |
+
+The `tiff` crate the loader reads with (0.11.3, default features) decodes DEFLATE and the
+floating-point predictor for 32-bit floats. Nothing in the workspace loads this file yet;
+GAP-252's build is the first to.
