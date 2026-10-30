@@ -179,6 +179,29 @@ pub enum RehearsalFirstEngagement {
     },
 }
 
+/// A row's terrain dead spots (GAP-248, `docs/design/DN-34-sensor-dead-spots.md` §7 item
+/// 5): computed for the selected option only, because each is a full recompute.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RowDeadSpots {
+    /// Not the selected option; selecting it computes its field.
+    NotSelected,
+    /// Selected, and the field is being computed.
+    Computing,
+    /// Selected, and no field can be computed -- no DEM, no local frame -- and why. The
+    /// dead spots are unknown, never a zero.
+    NotComputed { reason: String },
+    /// The option's field, from its own placements.
+    Computed {
+        /// Areas, square kilometres: hidden by terrain, and claimed by its sensors at all.
+        shadow_km2: f64,
+        claimed_km2: f64,
+        /// The probe's height above ground the field was computed at.
+        height_agl_m: f64,
+        /// Its inputs changed and a newer field is on its way.
+        stale: bool,
+    },
+}
+
 /// One row of the options table.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LaydownRow {
@@ -187,6 +210,8 @@ pub struct LaydownRow {
     /// True for exactly one row: the placement actually in force.
     pub current: bool,
     pub coverage: LaydownCoverage,
+    /// The terrain's dead spots under this option's placements (GAP-248).
+    pub dead_spots: RowDeadSpots,
     /// Read from the last rehearsal of this laydown, not from its declared placements.
     pub rehearsal: RowRehearsal,
     /// Each approach's first-engagement range from that same rehearsal.
@@ -332,48 +357,61 @@ pub fn render_planning(
         // One first-engagement column per declared approach, or one that says why there
         // is none: a missing column would read as a comparison nobody thought to make.
         let engagement_columns = view.approaches.len().max(1);
-        egui::Grid::new("planning_laydown_options")
-            .num_columns(6 + engagement_columns)
-            .striped(true)
+        // Sideways scrolling, so a pane narrower than the table can still reach its last
+        // columns; a cell past the pane's edge is otherwise not drawn at all, and a
+        // comparison with its last column cut off unseen reads as complete.
+        egui::ScrollArea::horizontal()
+            .id_salt("planning_laydown_options_scroll")
             .show(ui, |ui| {
-                ui.strong("Option");
-                ui.strong("Intent");
-                ui.strong("Coverage");
-                ui.strong("Difference from current");
-                if view.approaches.is_empty() {
-                    ui.strong("First engagement (worst case)");
-                } else {
-                    for approach in view.approaches {
-                        ui.strong(format!("{approach}: first engagement (worst case)"));
-                    }
-                }
-                ui.strong("Rehearsed (re-observed)");
-                ui.strong("Rehearsal against current");
-                ui.end_row();
+                egui::Grid::new("planning_laydown_options")
+                    .num_columns(7 + engagement_columns)
+                    .striped(true)
+                    .show(ui, |ui| {
+                        ui.strong("Option");
+                        ui.strong("Intent");
+                        ui.strong("Coverage");
+                        ui.strong("Difference from current");
+                        ui.strong("Dead spots").on_hover_text(
+                            "The terrain's dead spots under the selected option's own placements: \
+                     the area its sensors claim and the terrain hides, at the height chosen \
+                     on PN-11. Computed for the selected option only.",
+                        );
+                        if view.approaches.is_empty() {
+                            ui.strong("First engagement (worst case)");
+                        } else {
+                            for approach in view.approaches {
+                                ui.strong(format!("{approach}: first engagement (worst case)"));
+                            }
+                        }
+                        ui.strong("Rehearsed (re-observed)");
+                        ui.strong("Rehearsal against current");
+                        ui.end_row();
 
-                for row in rows {
-                    let label = if row.current {
-                        format!("{} (current)", row.id.0)
-                    } else {
-                        row.id.0.clone()
-                    };
-                    if ui
-                        .selectable_label(view.selected == Some(&row.id), label)
-                        .clicked()
-                    {
-                        action = Some(PlanningAction::SelectLaydown(row.id.clone()));
-                    }
-                    ui.label(&row.intent);
-                    draw_row_coverage(ui, palette, &row.coverage);
-                    draw_row_first_engagement(
-                        ui,
-                        palette,
-                        &row.first_engagement,
-                        engagement_columns,
-                    );
-                    draw_row_rehearsal(ui, palette, &row.rehearsal);
-                    ui.end_row();
-                }
+                        for row in rows {
+                            let label = if row.current {
+                                format!("{} (current)", row.id.0)
+                            } else {
+                                row.id.0.clone()
+                            };
+                            if ui
+                                .selectable_label(view.selected == Some(&row.id), label)
+                                .clicked()
+                            {
+                                action = Some(PlanningAction::SelectLaydown(row.id.clone()));
+                            }
+                            ui.label(&row.intent);
+                            draw_row_coverage(ui, palette, &row.coverage);
+                            draw_row_dead_spots(ui, palette, &row.dead_spots);
+                            draw_row_first_engagement(
+                                ui,
+                                palette,
+                                &row.first_engagement,
+                                engagement_columns,
+                            );
+                            draw_row_rehearsal(ui, palette, &row.rehearsal);
+                            ui.end_row();
+                        }
+                    });
             });
 
         ui.separator();
@@ -453,6 +491,40 @@ fn draw_row_coverage(ui: &mut Ui, palette: &theme::Palette, coverage: &LaydownCo
         }
         LaydownCoverage::NotComputed { .. } => {
             ui.label(RichText::new("--").color(palette.muted_text_color()));
+        }
+    }
+}
+
+/// A row's dead-spot cell (GAP-248): the option's hidden area within what its sensors
+/// claim, or why there is none, or that selecting the option computes it.
+fn draw_row_dead_spots(ui: &mut Ui, palette: &theme::Palette, dead_spots: &RowDeadSpots) {
+    match dead_spots {
+        RowDeadSpots::NotSelected => {
+            ui.label(RichText::new("select to compute").color(palette.muted_text_color()));
+        }
+        RowDeadSpots::Computing => {
+            ui.label(RichText::new("computing").color(palette.muted_text_color()));
+        }
+        RowDeadSpots::NotComputed { reason } => {
+            ui.label(RichText::new(format!("Not computed: {reason}")).color(palette.warning_color));
+        }
+        RowDeadSpots::Computed {
+            shadow_km2,
+            claimed_km2,
+            height_agl_m,
+            stale,
+        } => {
+            let line = format!(
+                "{shadow_km2:.1} of {claimed_km2:.1} km\u{b2} hidden, {height_agl_m:.0} m \
+                 above ground"
+            );
+            if *stale {
+                ui.label(
+                    RichText::new(format!("{line}; recomputing")).color(palette.warning_color),
+                );
+            } else {
+                ui.label(line);
+            }
         }
     }
 }

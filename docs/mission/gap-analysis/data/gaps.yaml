@@ -13540,3 +13540,12 @@
     status: Open
     note: >-
       Split from GAP-246 when it was built: the only item of DN-34 §7 the build left out.
+  - date: 2026-10-29
+    status: Closed
+    note: >-
+      Built as DN-34 §7 item 5 reads: selecting an option on PN-16 computes its field on
+      the dead-spot worker from its own placements (`laydown_coverage_volumes`), one option
+      at a time, and the table's dead-spot column shows the selected row's hidden area
+      within what it claims, at its height. The map keeps the live field. Tested by
+      `gungnir-app/tests/dead_spots.rs` and PN-16's render test
+      (`../../record/2026-10-29/gap-248-a-laydown-option-s-dead-spots.md`).

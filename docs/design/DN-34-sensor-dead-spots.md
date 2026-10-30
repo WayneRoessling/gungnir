@@ -2,7 +2,8 @@
 
 Closes GAP-246, and GAP-247 on the way. Status: first draft, 2026-10-29; **built the same
 day**, with what the build changed in amendment 1 at the end. PN-16's per-option column
-(§7 item 5) was not built and is GAP-248. Raised outside the plan-11 set, from the owner's request of 2026-10-29: show
+(§7 item 5) was built after, as GAP-248 (amendment 3). Raised outside the plan-11 set,
+from the owner's request of 2026-10-29: show
 the places where the terrain blinds the sensors to an approaching UAS or aircraft, as a
 darkened area on the map an operator reads at a glance, and say what other three-dimensional
 elements should follow it. What the owner has signed of this note is in
@@ -562,6 +563,26 @@ from the text above, the code is right and this says why; §1 to §13 stand othe
    laid out from its sensors' reach, so a test reading the cells "along" a line must put a
    row of cell centres on that line, or it reads probes half a cell to one side. The wall
    and the valley do not vary across the line and could not show it; the cone could.
+
+## Amendment 3, 2026-10-29: a laydown option's dead spots (GAP-248)
+
+§7 item 5 is built as it reads. Selecting an option on PN-16 computes its field on the
+dead-spot worker, from the sensors it places that are searching or tracking, where it
+places them, through the same `laydown_coverage_volumes` its coverage column reads, at the
+height and cell the live field uses. The options table gains a "Dead spots" column, its
+meaning on the header's hover text. The selected row reads its hidden area within the area
+its sensors claim, at its height, and "recomputing" while its inputs change. The extra
+column pushed the table's last column past the edge of a 1 400 px pane, where a cell is not
+drawn at all, so the table now scrolls sideways rather than cutting a column off unseen. Every other row
+reads "select to compute", and a row with no DEM or no frame says why. One option is
+computed at a time and the field is dropped when the selection is cleared, so nothing is
+computed for options nobody is looking at.
+
+Two things it does not do. It draws nothing on the map: the map's layer stays the live
+field, and an option's preview there is its placements (GAP-087), so the map never shows
+two fields at once. And it shows no difference from the current laydown's dead spots: that
+needs the current option's field computed too, which item 5 left out for the same reason it
+computes on selection.
 
 ## Traceability
 
