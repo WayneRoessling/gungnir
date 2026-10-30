@@ -3905,4 +3905,11 @@
   raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` amendment 1"
   decider: Owner
   unblocks: GAP-227
-  outcome: ""
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default: only once pinned.** A
+    fill tile is drawn, marked and counted apart on PN-09, and enters line of sight, the
+    dead spots and every coverage claim only once it is staged into the pinned store. Past
+    the pinned store a sector's line of sight stays flat, and says so, as it does past the
+    one DEM today. Rejected: a fill tile entering line of sight once its digest is recorded.
+    See `../../design/DN-36-staged-terrain-and-map-tiles.md` amendment 2.

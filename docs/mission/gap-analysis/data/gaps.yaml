@@ -12875,6 +12875,12 @@
       staged first and fetched to fill gaps when connected, and a `terrain stage`
       subcommand in the binaries. GeoTIFF tiles and terrain first stand. DN-36 amendment 1
       says what they change and raises D-164, whether a fetched tile enters line of sight.
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      D-164 taken by the owner the same day, to the default: a fetched fill tile is drawn
+      and marked, and enters line of sight only once staged into the pinned store (DN-36
+      amendment 2). Every DN-36 decision is taken; nothing is built.
 
 - id: GAP-228
   name: No operator-initiated escalation
