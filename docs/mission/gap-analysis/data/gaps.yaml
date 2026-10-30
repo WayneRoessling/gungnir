@@ -13700,6 +13700,12 @@
       assignment over the scene's discs, through the function `render` uses. Tested by
       `gungnir-viewport3d/src/lib.rs`'s tests; what the owner should look at is in
       `../../record/2026-10-30/the-three-d-scene-draws-each-track-s.md`.
+  - date: 2026-10-30
+    status: Closed
+    note: >-
+      The owner looked at the overlay on a display and all nine checks passed; the disc
+      under the four-lobe frame was confirmed by a native-resolution capture, not by eye
+      (`../../record/2026-10-30/track-glyphs-over-the-three-d-scene-looked.md`).
 - id: GAP-252
   name: The three-d scene draws no terrain, and its one paint callback would cover every layer if it did
   type: Technical

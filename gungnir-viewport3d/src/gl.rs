@@ -28,7 +28,9 @@
 //!
 //! **The drawn result has been seen once: by the owner, on 2026-10-30** (GAP-226), with
 //! every check in `docs/record/2026-10-30/the-owner-s-look-at-the-three-d.md`
-//! passed. No test can see it again. Unlike the egui panels there is no headless probe
+//! passed; and again the same day with the track glyphs drawn over it (GAP-251,
+//! `docs/record/2026-10-30/track-glyphs-over-the-three-d-scene-looked.md`). No test can see
+//! it again. Unlike the egui panels there is no headless probe
 //! for a GL draw call -- `RenderProbe` reads egui's shape list, and three-d does not
 //! produce one -- so a change to this draw is unseen until somebody looks, and that
 //! record's checks are what to look for.
