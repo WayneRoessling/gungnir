@@ -123,7 +123,7 @@ pub fn draw_glyphs_2d(
             egui::Stroke::new(palette.stroke_emphasis, color),
         );
         painter.text(
-            center + egui::vec2(GLYPH_RADIUS_PX + 2.0, -GLYPH_RADIUS_PX),
+            id_label_anchor(center),
             egui::Align2::LEFT_BOTTOM,
             g.track_id.0.to_string(),
             egui::FontId::monospace(palette.small_font_size),
@@ -131,6 +131,15 @@ pub fn draw_glyphs_2d(
         );
     }
 }
+
+/// The bottom left of a track's label line, above and to the right of its glyph. The id
+/// starts here and the plan's assignments follow it on the same line ([`draw_plan_2d`]).
+fn id_label_anchor(center: egui::Pos2) -> egui::Pos2 {
+    center + egui::vec2(GLYPH_RADIUS_PX + 2.0, -GLYPH_RADIUS_PX)
+}
+
+/// The space between a track's id and its assignments, in egui points.
+const LABEL_GAP_PX: f32 = 4.0;
 
 /// The one-sigma outline: a rectangle whose corner radius is half its shorter side, so
 /// its short ends are semicircles, stroked outside the rectangle as egui 0.29 stroked
@@ -324,10 +333,16 @@ pub fn draw_bearing_rays_2d(
     }
 }
 
-/// The plan, in both renderers: label each assigned track with its resource. Resource
+/// The plan, in both renderers: label each assigned track with its resources. Resource
 /// positions are geodetic and the intercept geometry is not yet computed, so the
 /// pairing is shown as text at the track until `InterceptSolutionView` carries a
 /// point to draw a line to.
+///
+/// **On the id's line, after the id** (GAP-253). The label was a second line below the
+/// glyph, which is where the id of a track 10 to 38 points below sits: the owner's look
+/// found `R1` under track 55 drawn on the `54` of the track beneath it. One line per track
+/// keeps two tracks' text apart down to one line's height. A track with two resources has
+/// both on the line, where two labels at one place drew over each other.
 pub fn draw_plan_2d(
     painter: &egui::Painter,
     palette: &theme::Palette,
@@ -336,17 +351,35 @@ pub fn draw_plan_2d(
     glyphs: &[TrackGlyph],
     plan: &PlanView,
 ) {
-    for s in plan.solutions() {
-        if let Some(g) = glyphs.iter().find(|g| g.track_id == s.track) {
-            let p = view.project(g.position, rect);
-            painter.text(
-                p + egui::vec2(GLYPH_RADIUS_PX + 2.0, GLYPH_RADIUS_PX),
-                egui::Align2::LEFT_TOP,
-                format!("R{}", s.resource.0),
-                egui::FontId::monospace(palette.small_font_size),
-                palette.intercept_line_color,
-            );
+    let font = egui::FontId::monospace(palette.small_font_size);
+    for g in glyphs {
+        let resources: Vec<String> = plan
+            .solutions()
+            .iter()
+            .filter(|s| s.track == g.track_id)
+            .map(|s| format!("R{}", s.resource.0))
+            .collect();
+        if resources.is_empty() {
+            continue;
         }
+        // Measured rather than counted in characters, so the label follows the id in any
+        // font the palette names.
+        let id_width = painter
+            .layout_no_wrap(
+                g.track_id.0.to_string(),
+                font.clone(),
+                egui::Color32::PLACEHOLDER,
+            )
+            .size()
+            .x;
+        let center = view.project(g.position, rect);
+        painter.text(
+            id_label_anchor(center) + egui::vec2(id_width + LABEL_GAP_PX, 0.0),
+            egui::Align2::LEFT_BOTTOM,
+            resources.join(" "),
+            font.clone(),
+            palette.intercept_line_color,
+        );
     }
 }
 
@@ -599,5 +632,95 @@ mod tests {
                 point.distance(centre)
             );
         }
+    }
+
+    /// Tracks stacked `spacing_pt` apart up the screen, each assigned the resources given,
+    /// drawn as both renderers draw them; returns each text's words and painted bounds.
+    fn labels(spacing_pt: f64, assignments: &[(u64, u32)]) -> Vec<(String, egui::Rect)> {
+        let tracks: Vec<TrackView> = (0_u32..3)
+            .map(|i| {
+                let mut t = track(50 + u64::from(i), 0.0);
+                // One metre a point, so the northing is the spacing in points.
+                t.state[1] = spacing_pt * f64::from(i);
+                t
+            })
+            .collect();
+        let glyphs = update_track_symbols(&tracks);
+        let plan = PlanView::intercept(
+            gungnir_model::PlanId(1),
+            MissionTime(0.0),
+            assignments
+                .iter()
+                .map(|&(track, resource)| InterceptSolutionView {
+                    resource: gungnir_model::ResourceId(resource),
+                    track: TrackId(track),
+                    intercept_point: None,
+                    time_to_intercept_s: None,
+                })
+                .collect(),
+            1.0,
+        );
+        let view = TopDownView {
+            center_e: 0.0,
+            center_n: 0.0,
+            meters_per_px: 1.0,
+        };
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+        let palette = theme::Palette::day();
+        painted(|p| {
+            draw_glyphs_2d(p, &palette, rect, &view, &glyphs);
+            draw_plan_2d(p, &palette, rect, &view, &glyphs, &plan);
+        })
+        .into_iter()
+        .filter_map(|s| match s {
+            egui::Shape::Text(t) => Some((t.galley.text().to_owned(), t.visual_bounding_rect())),
+            _ => None,
+        })
+        .collect()
+    }
+
+    /// GAP-253: the owner's look found `R1` under track 55 drawn on the `54` of the track
+    /// below it. Tracks 20 points apart (the assignment line used to collide anywhere from 10
+    /// to 38) must paint no text over any other.
+    #[test]
+    fn an_assignment_does_not_cover_a_neighbouring_tracks_number() {
+        let painted = labels(20.0, &[(51, 1), (52, 2)]);
+        assert_eq!(
+            painted.len(),
+            5,
+            "three ids and two assignments: {painted:?}"
+        );
+        for (i, (a, a_rect)) in painted.iter().enumerate() {
+            for (b, b_rect) in &painted[i + 1..] {
+                assert!(
+                    !a_rect.intersects(*b_rect),
+                    "{a:?} at {a_rect:?} is drawn over {b:?} at {b_rect:?}"
+                );
+            }
+        }
+    }
+
+    /// GAP-253: the assignment is read as part of the track's own label, so it follows the
+    /// id on the id's line; and a track with two resources lists both there, where two
+    /// labels at one place drew over each other.
+    #[test]
+    fn a_tracks_assignments_follow_its_number_on_one_line() {
+        let painted = labels(60.0, &[(51, 1), (51, 4)]);
+        let find = |words: &str| {
+            painted.iter().find(|(t, _)| t == words).map_or_else(
+                || panic!("{words:?} is not drawn: {painted:?}"),
+                |(_, r)| *r,
+            )
+        };
+        let id = find("51");
+        let assigned = find("R1 R4");
+        assert!(
+            (id.center().y - assigned.center().y).abs() < 1.0,
+            "the assignment {assigned:?} is not on the id's line {id:?}"
+        );
+        assert!(
+            assigned.left() > id.right(),
+            "the assignment {assigned:?} does not follow the id {id:?}"
+        );
     }
 }
