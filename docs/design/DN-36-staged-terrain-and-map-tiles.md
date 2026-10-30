@@ -4,7 +4,8 @@ Part of GAP-227: its action's last item, "basemap tiles as the first consumer of
 streaming stubs", widened to the ground under the picture as well as the imagery over it.
 Status: design, 2026-10-30; **nothing is built**. Four choices were raised for the owner as
 D-160 to D-163 (§10), each with a recommended default; the owner took all four the same day,
-D-160 and D-162 past the default, and amendment 1 says what they change and raises D-164. What the owner has signed of this
+D-160 and D-162 past the default, and amendment 1 says what they change and raises D-164,
+which the owner took to its default (amendment 2). What the owner has signed of this
 note is in [`../signatures.md`](../signatures.md).
 
 ## 1. Why now, and what it is for
@@ -284,6 +285,22 @@ format would each need a §2.9 decision. The node reads the same store for its l
 
    §8.2 gains a check: with a fill source and a connection, ground beyond the store appears,
    marked, and the sentence for missing ground does not.
+
+## Amendment 2, 2026-10-30: D-164, a fill tile stays out of line of sight
+
+The owner took D-164 the same day, to the recommended default: **a fetched fill tile enters
+line of sight only once it is staged into the pinned store.** Until then it is ground drawn for
+context, marked as amendment 1 item 1 says, and nothing more.
+
+- **§5.2 stands as written.** Line of sight's height field is built from the pinned store
+  alone, over the coverage extent. Where that extent reaches past the pinned store, line of
+  sight there is flat, and the dead-spot layer's "no terrain data" pattern and PN-09 say so,
+  as they do past the one DEM today.
+- **Pinning a fill tile is staging it.** `terrain stage` can take the fill cache's tiles as
+  its source, writing a new manifest whose digest a revised baseline pins. Nothing moves a
+  tile from the cache into the store at run time.
+- **§8.1 gains row k:** with fill tiles resident over part of the coverage extent, the height
+  field and the dead-spot field are identical to those with no fill source at all.
 
 ## Traceability
 
