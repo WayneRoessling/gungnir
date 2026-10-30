@@ -85,7 +85,9 @@ const HEADING_VECTOR_SECONDS: f64 = 10.0;
 /// so a track is the same size on screen in either renderer.
 pub(crate) const GLYPH_RADIUS_PX: f32 = 5.0;
 
-/// 2D fallback: circle at the position, one-sigma ellipse, heading vector, id label.
+/// Classification frame round a lifecycle fill, one-sigma ellipse, heading vector, id
+/// label. Both renderers draw this: the projection alone, the three-d scene over its
+/// discs (GAP-251).
 pub fn draw_glyphs_2d(
     painter: &egui::Painter,
     palette: &theme::Palette,
@@ -322,7 +324,7 @@ pub fn draw_bearing_rays_2d(
     }
 }
 
-/// 2D fallback for the plan: label each assigned track with its resource. Resource
+/// The plan, in both renderers: label each assigned track with its resource. Resource
 /// positions are geodetic and the intercept geometry is not yet computed, so the
 /// pairing is shown as text at the track until `InterceptSolutionView` carries a
 /// point to draw a line to.
