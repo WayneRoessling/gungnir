@@ -100,6 +100,8 @@ pub struct DeadSpots {
     pub stale: bool,
     /// Set by [`tick`]: this desktop is linked to a node.
     pub linked: bool,
+    /// The selected laydown option's own field, for PN-16 (GAP-248).
+    pub option: OptionField,
 }
 
 impl DeadSpots {
@@ -130,12 +132,43 @@ impl DeadSpots {
     }
 }
 
-/// The inputs the field should be computed under now, or why there is none.
+/// The inputs the live field should be computed under now: the registry's searching and
+/// tracking sensors.
 ///
 /// # Errors
 ///
 /// In words, when there is no terrain or no frame to compute a field in.
 pub fn inputs(state: &AppState) -> Result<Inputs, String> {
+    let (terrain, frame) = context(state)?;
+    let sensors = gungnir_analytics::coverage_from_registry(
+        &state.sensors,
+        state.config.analytics.coverage_min_elevation_rad,
+        &frame,
+    );
+    inputs_for(state, terrain, sensors)
+}
+
+/// The inputs a laydown option's field should be computed under (GAP-248, DN-34 §7 item 5):
+/// the sensors it places that are searching or tracking, each where it places them, from
+/// the same `laydown_coverage_volumes` PN-16's coverage column reads, so the option's
+/// dead spots and its gaps are about the same placements.
+///
+/// # Errors
+///
+/// In words, when there is no terrain or no frame to compute a field in.
+pub fn option_inputs(state: &AppState, laydown: &gungnir_model::Laydown) -> Result<Inputs, String> {
+    let (terrain, frame) = context(state)?;
+    let sensors = crate::sustainment::laydown_coverage_volumes(
+        laydown,
+        &state.config.sensors,
+        state.config.analytics.coverage_min_elevation_rad,
+        &frame,
+    );
+    inputs_for(state, terrain, sensors)
+}
+
+/// The resampled terrain and the local frame every field needs, or why there are none.
+fn context(state: &AppState) -> Result<(Arc<HeightField>, gungnir_model::LocalFrame), String> {
     let terrain = match (&state.terrain, state.height_field.as_ref()) {
         (TerrainStatus::Loaded { .. }, Some(field)) => Arc::clone(field),
         (TerrainStatus::NotConfigured, _) => {
@@ -152,11 +185,16 @@ pub fn inputs(state: &AppState) -> Result<Inputs, String> {
     let Some(frame) = crate::sustainment::local_frame(state) else {
         return Err("this deployment has declared no local frame origin (origin)".to_owned());
     };
-    let sensors = gungnir_analytics::coverage_from_registry(
-        &state.sensors,
-        state.config.analytics.coverage_min_elevation_rad,
-        &frame,
-    );
+    Ok((terrain, frame))
+}
+
+/// A field's inputs for these sensors: the height PN-11 has chosen, and the cell the
+/// baseline states or the DEM's own, coarsened to the budget over these sensors' reach.
+fn inputs_for(
+    state: &AppState,
+    terrain: Arc<HeightField>,
+    sensors: Vec<(SensorId, CoverageVolume)>,
+) -> Result<Inputs, String> {
     let heights = &state.config.analytics.dead_spot_heights_agl_m;
     let Some(&height_agl_m) = heights
         .get(state.dead_spots.selected_height)
@@ -194,6 +232,7 @@ pub fn tick(state: &mut AppState) {
             }
             dead.folded = None;
             dead.not_computed = Some(reason);
+            tick_option(state);
             return;
         }
     };
@@ -232,6 +271,83 @@ pub fn tick(state: &mut AppState) {
 
     dead.stale = dead.pending.is_some() || !current;
     fold(dead);
+    tick_option(state);
+}
+
+/// The selected laydown option's field (GAP-248): one at a time, for the option PN-16 has
+/// selected, on the same worker as the live field. Nothing is computed while no option is
+/// selected, because every option is a full recompute (DN-34 §7 item 5).
+#[derive(Debug, Default)]
+pub struct OptionField {
+    /// The option this field is for.
+    pub laydown: Option<gungnir_model::LaydownId>,
+    /// The last field the worker finished for it.
+    pub computed: Option<Computed>,
+    pending: Option<(Inputs, Receiver<Computed>)>,
+    /// Why there is none, when there is none.
+    pub not_computed: Option<String>,
+    /// The option's inputs changed since `computed` and a newer field is on its way.
+    pub stale: bool,
+}
+
+impl OptionField {
+    /// Whether a worker is computing this option's field now.
+    #[must_use]
+    pub fn computing(&self) -> bool {
+        self.pending.is_some()
+    }
+}
+
+/// Start, poll and retire the selected option's worker.
+fn tick_option(state: &mut AppState) {
+    let selected = state.selected_laydown().cloned();
+    let laydown = selected
+        .as_ref()
+        .and_then(|id| state.config.laydowns.iter().find(|l| &l.id == id));
+    let Some(laydown) = laydown else {
+        state.dead_spots.option = OptionField::default();
+        return;
+    };
+    let wanted = option_inputs(state, laydown);
+    let option = &mut state.dead_spots.option;
+    if option.laydown.as_ref() != Some(&laydown.id) {
+        *option = OptionField {
+            laydown: Some(laydown.id.clone()),
+            ..OptionField::default()
+        };
+    }
+    let wanted = match wanted {
+        Ok(wanted) => wanted,
+        Err(reason) => {
+            option.pending = None;
+            option.computed = None;
+            option.not_computed = Some(reason);
+            return;
+        }
+    };
+    option.not_computed = None;
+    if let Some((_, results)) = &option.pending {
+        match results.try_recv() {
+            Ok(done) => {
+                option.computed = Some(done);
+                option.pending = None;
+            }
+            Err(TryRecvError::Empty) => {}
+            Err(TryRecvError::Disconnected) => {
+                option.pending = None;
+                option.not_computed = Some("the dead-spot worker stopped without an answer".into());
+            }
+        }
+    }
+    let current = option.computed.as_ref().is_some_and(|c| c.inputs == wanted);
+    let pending_matches = option.pending.as_ref().is_some_and(|(p, _)| *p == wanted);
+    if !current && !pending_matches {
+        match spawn(wanted.clone()) {
+            Ok(results) => option.pending = Some((wanted, results)),
+            Err(reason) => option.not_computed = Some(reason),
+        }
+    }
+    option.stale = option.pending.is_some() || !current;
 }
 
 /// Hand `inputs` to a worker thread.

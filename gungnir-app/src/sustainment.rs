@@ -2171,6 +2171,7 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
                 coverage: LaydownCoverage::NotComputed {
                     reason: reason.to_string(),
                 },
+                dead_spots: row_dead_spots(state, &l.id),
                 // A rehearsal is read from its run, whether or not coverage computes.
                 rehearsal: state.row_rehearsal(&l.id, l.current),
                 first_engagement: row_first_engagement(state, l),
@@ -2249,6 +2250,7 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
                     accepted_uncovered_m: measure.uncovered_accepted_m,
                     delta_uncovered_m,
                 },
+                dead_spots: row_dead_spots(state, &l.id),
                 rehearsal: state.row_rehearsal(&l.id, l.current),
                 first_engagement: row_first_engagement(state, l),
             }
@@ -2256,6 +2258,35 @@ pub fn planning_rows(state: &AppState) -> PlanningRows {
         .collect();
 
     PlanningRows::Rows(rows)
+}
+
+/// A PN-16 row's dead-spot cell (GAP-248, `docs/design/DN-34-sensor-dead-spots.md` §7 item
+/// 5): the selected option's own field from `crate::dead_spots`, or that selecting the
+/// option is what computes it.
+#[must_use]
+pub fn row_dead_spots(
+    state: &AppState,
+    laydown: &gungnir_model::LaydownId,
+) -> gungnir_ui::panels::planning::RowDeadSpots {
+    use gungnir_ui::panels::planning::RowDeadSpots;
+    let option = &state.dead_spots.option;
+    if option.laydown.as_ref() != Some(laydown) {
+        return RowDeadSpots::NotSelected;
+    }
+    if let Some(reason) = &option.not_computed {
+        return RowDeadSpots::NotComputed {
+            reason: reason.clone(),
+        };
+    }
+    match &option.computed {
+        Some(computed) => RowDeadSpots::Computed {
+            shadow_km2: computed.measure.shadow_m2 / 1.0e6,
+            claimed_km2: computed.measure.claimed_m2 / 1.0e6,
+            height_agl_m: computed.field.parameters.height_agl_m,
+            stale: option.stale,
+        },
+        None => RowDeadSpots::Computing,
+    }
 }
 
 /// The selected laydown's sensor and resource positions, owned so a caller can borrow

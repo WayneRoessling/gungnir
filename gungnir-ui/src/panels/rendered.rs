@@ -3932,6 +3932,94 @@ fn the_about_panel_paints_every_appropriate_legal_notice() {
     );
 }
 
+/// GAP-248 (DN-34 §7 item 5): PN-16's dead-spot cell is the selected option's hidden area
+/// within what it claims, at its height; a row not selected says selecting it computes it;
+/// one that cannot be computed says why, never a zero; and a stale one says it is
+/// recomputing.
+#[test]
+fn planning_draws_the_selected_options_dead_spots_and_why_the_others_have_none() {
+    use crate::panels::planning::{
+        render_planning, LaydownCoverage, LaydownRow, PlanningView, RowDeadSpots,
+    };
+    use gungnir_model::LaydownId;
+
+    let row = |id: &str, current: bool, dead_spots: RowDeadSpots| LaydownRow {
+        id: LaydownId(id.into()),
+        intent: format!("option {id}"),
+        current,
+        coverage: LaydownCoverage::Computed {
+            gap_segments: 0,
+            uncovered_m: 0.0,
+            delta_uncovered_m: None,
+            accepted_segments: 0,
+            accepted_uncovered_m: 0.0,
+        },
+        dead_spots,
+        rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
+        first_engagement: crate::panels::planning::RowFirstEngagement::NotRehearsed,
+    };
+    let computed = RowDeadSpots::Computed {
+        shadow_km2: 4.2,
+        claimed_km2: 17.9,
+        height_agl_m: 100.0,
+        stale: false,
+    };
+    let rows = vec![
+        row("current", true, RowDeadSpots::NotSelected),
+        row("ridge", false, computed),
+    ];
+    let view = PlanningView {
+        laydowns: Section::Present(&rows),
+        terrain_model: "terrain-masked line of sight",
+        approaches: &[],
+        rehearsal: crate::panels::planning::RehearsalSection::NotYetRun,
+        rehearsal_scenario: gungnir_model::TestTrackNumber(1),
+        selected: Some(&rows[1].id),
+        in_force: None,
+    };
+    let probe = RenderProbe::new();
+    let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));
+    for want in [
+        "Dead spots",
+        "4.2 of 17.9 km\u{b2} hidden, 100 m above ground",
+        "select to compute",
+    ] {
+        assert!(frame.says(want), "{want}: {}", frame.joined());
+    }
+    assert!(!frame.says("recomputing"), "{}", frame.joined());
+
+    let rows = vec![
+        row(
+            "current",
+            true,
+            RowDeadSpots::NotComputed {
+                reason: "no DEM is configured in this baseline (terrain)".into(),
+            },
+        ),
+        row(
+            "ridge",
+            false,
+            RowDeadSpots::Computed {
+                stale: true,
+                shadow_km2: 4.2,
+                claimed_km2: 17.9,
+                height_agl_m: 100.0,
+            },
+        ),
+    ];
+    let view = PlanningView {
+        laydowns: Section::Present(&rows),
+        ..view
+    };
+    let (_, frame) = probe.draw(|ui| render_planning(ui, &theme::Palette::day(), &view));
+    assert!(
+        frame.says("Not computed: no DEM is configured"),
+        "{}",
+        frame.joined()
+    );
+    assert!(frame.says("; recomputing"), "{}", frame.joined());
+}
+
 /// PN-16, the planning panel, actually paints the numbers a planner would read a
 /// laydown by -- not just that a view struct holds them (GAP-087).
 #[test]
@@ -3951,6 +4039,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
                 accepted_segments: 0,
                 accepted_uncovered_m: 0.0,
             },
+            dead_spots: crate::panels::planning::RowDeadSpots::NotSelected,
             rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
             first_engagement: crate::panels::planning::RowFirstEngagement::NotRehearsed,
         },
@@ -3965,6 +4054,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
                 accepted_segments: 0,
                 accepted_uncovered_m: 0.0,
             },
+            dead_spots: crate::panels::planning::RowDeadSpots::NotSelected,
             rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
             first_engagement: crate::panels::planning::RowFirstEngagement::NotRehearsed,
         },
@@ -3975,6 +4065,7 @@ fn planning_draws_computed_and_not_computed_rows_and_never_offers_to_adopt() {
             coverage: LaydownCoverage::NotComputed {
                 reason: "no terrain loaded for this sector".into(),
             },
+            dead_spots: crate::panels::planning::RowDeadSpots::NotSelected,
             rehearsal: crate::panels::planning::RowRehearsal::NotRehearsed,
             first_engagement: crate::panels::planning::RowFirstEngagement::NotRehearsed,
         },
@@ -4075,6 +4166,7 @@ fn a_rehearsal_is_labelled_re_observed_and_the_table_reads_the_run() {
             intent: "the deployment as sited".into(),
             current: true,
             coverage: coverage.clone(),
+            dead_spots: crate::panels::planning::RowDeadSpots::NotSelected,
             rehearsal: RowRehearsal::Rehearsed {
                 scenario: TestTrackNumber(1),
                 detections: 120,
@@ -4091,6 +4183,7 @@ fn a_rehearsal_is_labelled_re_observed_and_the_table_reads_the_run() {
             intent: "move S2 forward".into(),
             current: false,
             coverage,
+            dead_spots: crate::panels::planning::RowDeadSpots::NotSelected,
             rehearsal: RowRehearsal::Rehearsed {
                 scenario: TestTrackNumber(1),
                 detections: 168,
@@ -4221,6 +4314,7 @@ fn first_engagement_is_drawn_as_a_worst_case_with_its_count_and_never_as_zero() 
             intent: "the deployment as sited".into(),
             current: true,
             coverage: coverage.clone(),
+            dead_spots: crate::panels::planning::RowDeadSpots::NotSelected,
             rehearsal: rehearsed(VersusCurrent::IsCurrent),
             first_engagement: RowFirstEngagement::PerApproach(vec![
                 worst(9_000.0, 3, None),
@@ -4232,6 +4326,7 @@ fn first_engagement_is_drawn_as_a_worst_case_with_its_count_and_never_as_zero() 
             intent: "sea-weighted".into(),
             current: false,
             coverage: coverage.clone(),
+            dead_spots: crate::panels::planning::RowDeadSpots::NotSelected,
             rehearsal: rehearsed(VersusCurrent::Difference {
                 detections: 0,
                 sensors: Vec::new(),
@@ -4246,6 +4341,7 @@ fn first_engagement_is_drawn_as_a_worst_case_with_its_count_and_never_as_zero() 
             intent: "never rehearsed".into(),
             current: false,
             coverage,
+            dead_spots: crate::panels::planning::RowDeadSpots::NotSelected,
             rehearsal: RowRehearsal::NotRehearsed,
             first_engagement: RowFirstEngagement::NotRehearsed,
         },

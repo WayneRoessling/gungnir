@@ -81,6 +81,31 @@ fn radar() -> SensorConfig {
 }
 
 fn desktop(name: &str, terrain: bool) -> (AppState, PathBuf) {
+    desktop_with(name, terrain, Vec::new())
+}
+
+/// The radar searching where `position_enu` puts it, as a laydown places it.
+fn placed(id: &str, intent: &str, current: bool, position_enu: [f64; 3]) -> gungnir_model::Laydown {
+    gungnir_model::Laydown {
+        id: gungnir_model::LaydownId(id.into()),
+        intent: intent.into(),
+        sensors: vec![gungnir_model::laydown::SensorPlacement {
+            sensor: gungnir_model::SensorId(1),
+            position_enu,
+            mode: SensorMode::Search,
+            azimuth_sector: None,
+            elevation_band: None,
+        }],
+        resources: Vec::new(),
+        current,
+    }
+}
+
+fn desktop_with(
+    name: &str,
+    terrain: bool,
+    laydowns: Vec<gungnir_model::Laydown>,
+) -> (AppState, PathBuf) {
     let dir = scratch(name);
     let terrain = terrain.then(|| TerrainConfig {
         path: ridge_dem(&dir),
@@ -109,6 +134,7 @@ fn desktop(name: &str, terrain: bool) -> (AppState, PathBuf) {
             corridor_half_width_m: None,
         }],
         terrain,
+        laydowns,
         geoid_grid_dir: Some(dir.join("no-grid-here").to_string_lossy().into_owned()),
         ..ConfigBaseline::default()
     };
@@ -356,6 +382,100 @@ fn the_ridge_casts_the_dead_spots_and_the_map_says_so() {
         standby.gap_length_m(gungnir_model::GapSeverity::SingleSensor) < f64::EPSILON,
         "a standby radar watches nothing"
     );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// GAP-248 (DN-34 §7 item 5): a laydown option's dead spots are computed when it is
+/// selected on PN-16, from its own placements and not the live registry, one option at a
+/// time. The radar west of the ridge leaves the valley behind it dark; the same radar on
+/// the ridge top sees over it. Unselecting drops the field; with no DEM a selected option
+/// says why it has none.
+#[test]
+fn a_selected_options_dead_spots_come_from_its_own_placements() {
+    use gungnir_ui::panels::planning::RowDeadSpots;
+    let laydowns = vec![
+        placed(
+            "west",
+            "the radar where it stands",
+            true,
+            [0.0, 0.0, RADAR_UP],
+        ),
+        placed(
+            "ridge",
+            "the radar on the ridge top",
+            false,
+            [1_020.0, 0.0, RIDGE_HEIGHT + RADAR_UP],
+        ),
+    ];
+    let (mut state, dir) = desktop_with("options", true, laydowns.clone());
+    settle(&mut state, "the DEM loading", |s| {
+        !matches!(
+            s.terrain,
+            TerrainStatus::Loading { .. } | TerrainStatus::NotConfigured
+        )
+    });
+    let row = |state: &AppState, id: &str| {
+        sustainment::row_dead_spots(state, &gungnir_model::LaydownId(id.into()))
+    };
+    assert_eq!(row(&state, "west"), RowDeadSpots::NotSelected);
+    assert_eq!(row(&state, "ridge"), RowDeadSpots::NotSelected);
+
+    let settled = |state: &mut AppState, id: &str| -> f64 {
+        settle(state, &format!("option {id}'s field"), |s| {
+            matches!(row(s, id), RowDeadSpots::Computed { stale: false, .. })
+        });
+        match row(state, id) {
+            RowDeadSpots::Computed {
+                shadow_km2,
+                claimed_km2,
+                height_agl_m,
+                ..
+            } => {
+                assert!((height_agl_m - 100.0).abs() < f64::EPSILON);
+                assert!(claimed_km2 > 10.0, "{id}: {claimed_km2} km² claimed");
+                shadow_km2
+            }
+            other => panic!("{id}: {other:?}"),
+        }
+    };
+
+    state.select_laydown(gungnir_model::LaydownId("ridge".into()));
+    let on_the_ridge = settled(&mut state, "ridge");
+    assert_eq!(
+        row(&state, "west"),
+        RowDeadSpots::NotSelected,
+        "one option at a time"
+    );
+    state.select_laydown(gungnir_model::LaydownId("west".into()));
+    let behind_it = settled(&mut state, "west");
+    assert_eq!(row(&state, "ridge"), RowDeadSpots::NotSelected);
+    assert!(
+        behind_it > 1.0 && behind_it > on_the_ridge + 1.0,
+        "behind the ridge {behind_it} km², on it {on_the_ridge} km²"
+    );
+    // From the option's placements: the live radar is at standby, so the live field is empty.
+    assert!(state
+        .dead_spots
+        .computed
+        .as_ref()
+        .is_some_and(|c| c.inputs.sensors.is_empty()));
+
+    // Selecting the selected option again clears it, and its field with it.
+    state.select_laydown(gungnir_model::LaydownId("west".into()));
+    update::tick(&mut state);
+    assert_eq!(row(&state, "west"), RowDeadSpots::NotSelected);
+    assert!(state.dead_spots.option.laydown.is_none());
+    let _ = std::fs::remove_dir_all(dir);
+
+    let (mut flat, dir) = desktop_with("options-no-dem", false, laydowns);
+    flat.select_laydown(gungnir_model::LaydownId("ridge".into()));
+    update::tick(&mut flat);
+    match row(&flat, "ridge") {
+        RowDeadSpots::NotComputed { reason } => {
+            assert!(reason.contains("no DEM is configured"), "{reason}");
+        }
+        other => panic!("{other:?}"),
+    }
     let _ = std::fs::remove_dir_all(dir);
 }
 

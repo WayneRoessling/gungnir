@@ -242,7 +242,7 @@ history, and an entry is never edited once it has merged.
 | GAP-245 | Two feed parsers panicked on input the fuzzer found on its first night | Technical | CAP-1.2 | 2 | 9 | S | 18 | I3 | Services engineer | Closed |
 | GAP-246 | Sensor dead spots are not computed or drawn | Mission | CAP-1.4, CAP-2.11, CAP-5.9 | 3 | 10 | L | 30 | I4 | Services engineer | Closed |
 | GAP-247 | Terrain line of sight scans every DEM vertex per sample, on a report computed every frame | Technical | CAP-2.11, CAP-1.4 | 3 | 4 | S | 12 | I4 | Services engineer | Closed |
-| GAP-248 | A laydown option's dead spots are not computed on PN-16 | Mission | CAP-1.4, CAP-2.11 | 2 | 4 | M | 8 | I4 | Services engineer | Open |
+| GAP-248 | A laydown option's dead spots are not computed on PN-16 | Mission | CAP-1.4, CAP-2.11 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
 
 Counts: 230 gaps, 5 mission, 225 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
@@ -3528,11 +3528,12 @@ Counts: 230 gaps, 5 mission, 225 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.4 Coverage and gaps; CAP-2.11 Geometric questions.
 - History:
   - 2026-10-29, Open: Split from GAP-246 when it was built: the only item of DN-34 §7 the build left out.
+  - 2026-10-29, Closed: Built as DN-34 §7 item 5 reads: selecting an option on PN-16 computes its field on the dead-spot worker from its own placements (`laydown_coverage_volumes`), one option at a time, and the table's dead-spot column shows the selected row's hidden area within what it claims, at its height. The map keeps the live field. Tested by `gungnir-app/tests/dead_spots.rs` and PN-16's render test (`../../record/2026-10-29/gap-248-a-laydown-option-s-dead-spots.md`).
 - Evidence: `gungnir-app/src/dead_spots.rs` computes the field from the live registry's searching and tracking sensors only; `gungnir-app/src/sustainment.rs::planning_rows` has no shadow column; `../../design/DN-34-sensor-dead-spots.md` §7 item 5.
 - Severity: 2. Reach: 4 threads. Effort: M. Priority: 8.
 - Impact: A planner comparing laydown options on PN-16 sees each option's gaps along the approaches but not the area its terrain would hide, so two options with the same approach coverage and very different blind valleys read the same.
 - Closing action: Per DN-34 §7 item 5: on selecting an option, compute its field on the same worker from `laydown_coverage_volumes`, and show the shadow area in a column beside its coverage cell, filled on selection rather than for every row, since every row is a full recompute.
-- Target: I4. Owner: Services engineer. Status: Open.
+- Target: I4. Owner: Services engineer. Status: Closed.
 - Reference: `../../design/DN-34-sensor-dead-spots.md` §7 item 5 and its amendment 1; GAP-087 (the laydown preview).
 - Depends on: GAP-246.
 
