@@ -13797,3 +13797,55 @@
       The assignment follows the id on one line, and a track with two resources lists both.
       Tested in `gungnir-viewport3d/src/tracks.rs`
       (`../../record/2026-10-30/an-assignment-label-no-longer-covers-the-next.md`).
+
+- id: GAP-254
+  name: The viewport rebuilt GPU and egui geometry every frame, outside every budget
+  type: Technical
+  caps: [CAP-5.10, CAP-2.10]
+  layer: UI and data ecosystem
+  sev: 2
+  effort: S
+  target: I4
+  owner: UI engineer
+  deps: [GAP-251, GAP-252]
+  impact: >-
+    Two rebuilds `rust-ui-architecture-coding-standards.md` §5 forbids ran on every frame
+    whether or not anything had changed: the scene's glyph pass re-created its four
+    instance buffers on the GPU, and the overlay re-projected a terrain mesh of up to
+    16 384 vertices. Neither was inside a budget, because the egui gate timed the dock
+    tree only; the viewport, its glyphs and the layer assembly around it were the part of
+    the frame no test measured.
+  evidence: >-
+    `docs/review/2026-10-30-ui-review.md` §4.3 findings 14, 15 and 17.
+    `gungnir-viewport3d/src/gl.rs::SceneRenderer::paint_glyphs` called `set_instances`
+    unconditionally, and three-d 0.19.0's `InstancedMesh::set_instances` allocates fresh
+    `InstanceBuffer`s on every call (`src/renderer/geometry/instanced_mesh.rs`); the
+    struct's documentation said both GPU objects were created once.
+    `gungnir-viewport3d/src/layers.rs::draw_terrain_2d` built the egui mesh per frame with
+    no key on the view or the terrain. `gungnir-app/tests/frame_budgets.rs::egui_pass_samples`
+    drew `tree.ui` and nothing else.
+  action: >-
+    Key the instance upload on a glyph revision and the zoom; cache the overlay's terrain
+    mesh on the surface, the view and the rect, as the dead-spot texture is; and draw the
+    viewport, from the layers the binary assembles, inside the egui gate, with the
+    criterion unchanged.
+  ref: >-
+    `../../review/2026-10-30-ui-review.md` §4.3; GAP-251; GAP-252; the
+    `gungnir-viewport3d` "Glyph rebuild only on change" and `gungnir-ui` rows of
+    `../../verification-capability-table.md`
+  history:
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      Filed from the review's findings 14, 15 and 17, which its §6 item 2 puts together as
+      one change.
+  - date: 2026-10-30
+    status: Closed
+    note: >-
+      The glyph pass uploads only when `ViewportState::glyph_revision` or the zoom changed
+      (`gl::GlyphUploadKey`, tested without GL); the overlay's terrain mesh is held on
+      `ViewportState::terrain_mesh_2d` and reprojected only when the surface, the view or
+      the rect changes; `egui_pass_samples` draws the dashboard and the viewport as the
+      desktop lays them out, from the layers `draw_picture` assembles, against the row's
+      unchanged 8 ms
+      (`../../record/2026-10-30/the-viewport-s-two-per-frame-rebuilds-and.md`).

@@ -86,13 +86,22 @@ pub enum AttachError {
 
 /// The three-d side of the viewport, once attached.
 ///
-/// Holds the context and the one instanced mesh every glyph is drawn from. Both are
-/// created once: `rust-ui-architecture-coding-standards.md` §5 forbids building GPU
-/// objects per frame, and an instanced mesh is the shape that lets one buffer serve
-/// however many tracks there are.
+/// Holds the context and the one instanced mesh every glyph is drawn from. The context
+/// and the mesh's vertex buffers are created once; **its instance buffers are not**:
+/// three-d 0.19's `InstancedMesh::set_instances` allocates four fresh `InstanceBuffer`s
+/// on every call (three transform rows and the colours), so the glyph pass calls it only
+/// when the glyph list or the zoom has changed, keyed by [`GlyphUploadKey`] (GAP-254).
+/// `rust-ui-architecture-coding-standards.md` §5 forbids building GPU objects per frame,
+/// and until GAP-254 this pass did, on every frame, whether or not any track had moved.
+/// An instanced mesh is still the shape that lets one draw call serve however many
+/// tracks there are.
 pub struct SceneRenderer {
     context: three_d::Context,
     glyph_mesh: three_d::Gm<three_d::InstancedMesh, three_d::ColorMaterial>,
+    /// What the instance buffers hold: the glyph revision and the zoom they were built
+    /// for, or `None` before the first upload (GAP-254). A frame whose key is this one
+    /// draws the buffers as they are.
+    uploaded: Option<GlyphUploadKey>,
     /// The terrain's mesh and the surface revision it was built from (GAP-252, DN-35 §6):
     /// built the first time the ground pass is handed a revision it does not hold, and
     /// dropped when handed none, so the upload is once per load.
@@ -129,6 +138,7 @@ impl SceneRenderer {
         Ok(Self {
             context,
             glyph_mesh,
+            uploaded: None,
             ground: None,
             palette,
         })
@@ -192,6 +202,12 @@ impl SceneRenderer {
     /// The glyph pass: draw the glyphs for this frame into the region egui has given the
     /// viewport.
     ///
+    /// `glyph_revision` is `ViewportState::glyph_revision`, which changes whenever the
+    /// glyph list is rebuilt. The instance buffers are uploaded only when it or the zoom
+    /// differs from what they hold (GAP-254; [`glyph_upload`] is the decision, and it is
+    /// tested): everything an instance carries is a function of the glyph list, the zoom
+    /// and the palette, and the palette is fixed at attach.
+    ///
     /// `viewport` and `clip` are in physical pixels with the origin at the bottom left,
     /// which is what OpenGL and three-d use; egui's rect is in points with the origin at
     /// the top left, so the caller converts. Getting that wrong draws the picture in the
@@ -200,15 +216,20 @@ impl SceneRenderer {
     pub fn paint_glyphs(
         &mut self,
         glyphs: &[TrackGlyph],
+        glyph_revision: u64,
         view: &TopDownView,
         viewport: three_d::Viewport,
         clip: three_d::Viewport,
         pixels_per_point: f32,
     ) {
         let camera = camera(view, viewport, pixels_per_point);
-        self.glyph_mesh
-            .geometry
-            .set_instances(&instances(&self.palette, glyphs, view));
+        let wanted = GlyphUploadKey::new(glyph_revision, view);
+        if glyph_upload(self.uploaded, wanted) {
+            self.glyph_mesh
+                .geometry
+                .set_instances(&instances(&self.palette, glyphs, view));
+            self.uploaded = Some(wanted);
+        }
         // `render` would clip to a box at the window's bottom-left corner the size of the
         // viewport, which is the viewport itself only when nothing sits left of or below
         // the picture. A role workspace docks panels around it, so the box is the one
@@ -217,11 +238,51 @@ impl SceneRenderer {
             .render_partially(clip.into(), &camera, [&self.glyph_mesh], &[]);
     }
 
-    /// How many instances the last frame uploaded, for the status line.
+    /// How many instances the buffers hold, for the status line. Since GAP-254 that is the
+    /// last upload's count, not necessarily the last frame's; the two differ only on the
+    /// frame before a rebuilt glyph list is first drawn.
     #[must_use]
     pub fn instance_count(&self) -> u32 {
         self.glyph_mesh.geometry.instance_count()
     }
+
+    /// The key the instance buffers were last uploaded under, for the binary's status
+    /// line and for a test; `None` before the first upload.
+    #[must_use]
+    pub fn uploaded(&self) -> Option<GlyphUploadKey> {
+        self.uploaded
+    }
+}
+
+/// What a glyph upload depends on (GAP-254): which glyph list, and at what zoom. The
+/// zoom is carried as the bits of `TopDownView::meters_per_px`, so the key is `Eq` and a
+/// NaN zoom compares equal to itself rather than forcing an upload every frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GlyphUploadKey {
+    /// `ViewportState::glyph_revision` when the list was last rebuilt.
+    pub revision: u64,
+    /// `TopDownView::meters_per_px`, as bits.
+    pub meters_per_px_bits: u64,
+}
+
+impl GlyphUploadKey {
+    /// The key for drawing `revision`'s glyphs at `view`'s zoom.
+    #[must_use]
+    pub fn new(revision: u64, view: &TopDownView) -> Self {
+        Self {
+            revision,
+            meters_per_px_bits: view.meters_per_px.to_bits(),
+        }
+    }
+}
+
+/// Whether the glyph pass uploads its instance buffers this frame: only when `wanted`
+/// differs from the key the buffers were last uploaded under, or nothing has been
+/// uploaded yet. Pure, so the decision is tested without a GL context, as
+/// [`ground_upload`] is for the ground pass.
+#[must_use]
+pub fn glyph_upload(held: Option<GlyphUploadKey>, wanted: GlyphUploadKey) -> bool {
+    held != Some(wanted)
 }
 
 /// What the ground pass does with its mesh, from the revision it holds and the revision
@@ -707,6 +768,68 @@ mod tests {
             }
         }
         assert_eq!(builds, 1);
+    }
+
+    /// GAP-254: two paints with the same glyph list and the same zoom upload the instance
+    /// buffers once. A hundred frames of a still picture are one upload; a rebuilt glyph
+    /// list is another; a zoom is another, because the radius is sized at the zoom; and
+    /// panning, which changes neither, is none. Before the first upload every key
+    /// uploads, so an empty picture is still drawn as empty rather than as whatever the
+    /// buffers held.
+    #[test]
+    fn the_instances_are_uploaded_once_per_glyph_list_and_zoom() {
+        let zoomed = |meters_per_px| TopDownView {
+            meters_per_px,
+            ..TopDownView::default()
+        };
+        let first = GlyphUploadKey::new(1, &zoomed(10.0));
+        assert!(glyph_upload(None, first), "nothing uploaded yet");
+        assert!(
+            !glyph_upload(Some(first), first),
+            "the same list at the same zoom"
+        );
+        assert!(
+            glyph_upload(Some(first), GlyphUploadKey::new(2, &zoomed(10.0))),
+            "a rebuilt glyph list"
+        );
+        assert!(
+            glyph_upload(Some(first), GlyphUploadKey::new(1, &zoomed(20.0))),
+            "a zoom changes the radius"
+        );
+        let panned = TopDownView {
+            center_e: 5_000.0,
+            center_n: -2_000.0,
+            meters_per_px: 10.0,
+        };
+        assert!(
+            !glyph_upload(Some(first), GlyphUploadKey::new(1, &panned)),
+            "a pan moves the camera, not the instances"
+        );
+
+        // A hundred frames of one picture: one upload.
+        let mut held = None;
+        let mut uploads = 0;
+        for _ in 0..100 {
+            let wanted = GlyphUploadKey::new(7, &zoomed(12.5));
+            if glyph_upload(held, wanted) {
+                uploads += 1;
+                held = Some(wanted);
+            }
+        }
+        assert_eq!(uploads, 1);
+    }
+
+    /// A NaN zoom is one key, not a different key every frame: `meters_per_px` is held
+    /// as bits, so the degenerate view a collapsed region produces does not become an
+    /// upload per frame.
+    #[test]
+    fn a_nan_zoom_does_not_upload_every_frame() {
+        let view = TopDownView {
+            meters_per_px: f64::NAN,
+            ..TopDownView::default()
+        };
+        let key = GlyphUploadKey::new(1, &view);
+        assert!(!glyph_upload(Some(key), GlyphUploadKey::new(1, &view)));
     }
 
     /// A glyph is the 2D glyph's size on screen at every zoom, not a fixed size in

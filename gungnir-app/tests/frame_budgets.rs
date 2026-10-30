@@ -17,7 +17,7 @@
 //! | Startup to first frame, under 3 s | **yes** | Every stage it covers is implemented. |
 //! | Journal append, under 1 ms for 50 envelopes | **yes** since GAP-085 | Implemented, and now meets its budget under the D-04 desktop profile. |
 //! | Per-frame `update()`, p99 under 4 ms | **yes** since 2026-09-15 | Gated in the GAP-067 walk, on measurements the owner read first: p99 16 microseconds release, 189 microseconds debug, against 4 ms. Release only, the convention this file already applies to the journal budget. Those frames held no track; since 2026-10-30 the convoy is in the picture first. |
-//! | egui pass, p99 under 8 ms at Scenario 4 counts | **yes** since 2026-09-16 | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured from 2026-09-15 and gated by the owner in the same walk on reading the figures. Release only. Over the operator's workspace as well as the commander's since GAP-226, because only the operator's has the track table. |
+//! | egui pass, p99 under 8 ms at Scenario 4 counts | **yes** since 2026-09-16 | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured from 2026-09-15 and gated by the owner in the same walk on reading the figures. Release only. Over the operator's workspace as well as the commander's since GAP-226, because only the operator's has the track table. Over the viewport and its layer assembly as well as the dock tree since GAP-254, because until then the picture was outside every budget. |
 //! | `tracks()`/`is_healthy()`, p99 under 1 ms | **yes** since 2026-09-15 | Gated in the same walk. Both calls measure p99 100 ns against a 1 ms budget -- four orders of magnitude -- so this one is asserted in **both** profiles; see its own documentation for why the usual release-only rule is not what protects it. |
 //!
 //! | MOP-14, coverage recompute over terrain under 10 s | **yes** since 2026-10-29 | GAP-246's dead-spot field, the first coverage computed over terrain as an area. Measured on a 1 000 by 1 000 DEM at 363 ms, 645 ms once the line of sight became exact, and gated the same day when the owner agreed `docs/design/DN-34-sensor-dead-spots.md` §11's rows, this one's included. Release only, the convention the rows above follow. |
@@ -465,13 +465,18 @@ fn snapshot_calls_meet_their_budget() {
 /// egui pass. The GAP-067 walk found that on 2026-09-15 by going looking for the test,
 /// and this is the measurement it was missing.
 ///
-/// **What is timed is a full workspace tree**, not one panel: `tree.ui` over the
+/// **What is timed is the frame an operator sees**, not one panel: the dock tree over the
 /// commander's arrangement and, since GAP-226, the operator's, which is the one with the
-/// track table, through `RenderProbe`, which runs a real egui pass headlessly
-/// -- layout, paint and all -- which is the quantity the row names. The state is driven
-/// by Scenario 4 first, so the panels draw against a populated picture rather than an
-/// empty one; measuring an empty workspace and calling it the row's figure is the same
-/// mistake `snapshot_calls_meet_their_budget` documents for its own row.
+/// track table, and **since GAP-254 the viewport beside it**, drawn through
+/// `gungnir_viewport3d::render` from the layers `main.rs` assembles every frame, through
+/// `RenderProbe`, which runs a real egui pass headlessly -- layout, paint and all -- which
+/// is the quantity the row names. Until GAP-254 the viewport, the layer assembly and every
+/// glyph were outside every budget (`docs/review/2026-10-30-ui-review.md` §4.3 finding 17).
+/// The state is driven by Scenario 4 first, so the panels and the picture draw against a
+/// populated picture rather than an empty one; measuring an empty workspace and calling it
+/// the row's figure is the same mistake `snapshot_calls_meet_their_budget` documents for
+/// its own row. The criterion is the row's, unchanged; what moved is how much of the frame
+/// it is held to.
 ///
 /// **Asserted in release, printed in debug**, since the GAP-067 walk of 2026-09-16: the
 /// budget is a release figure, and `ci.yml`'s release step enforces it with `--release`,
@@ -522,9 +527,13 @@ fn the_egui_pass_meets_its_budget() {
     }
 }
 
-/// Time `EGUI_PASSES` full passes over `role`'s default workspace. `must_say` is text a
-/// panel the measurement is about draws, so a workspace that left that panel out, or
-/// tabbed it out of sight, fails rather than timing something smaller.
+/// Time `EGUI_PASSES` full passes over `role`'s frame as the desktop lays it out: the
+/// dock tree in the dashboard on the left, as `main.rs`'s `draw_workspace` puts it, and
+/// the picture in the centre, drawn through `gungnir_viewport3d::render` from the layer
+/// inputs `draw_picture` assembles, assembled here as there on every pass (GAP-254).
+/// `must_say` is text a panel the measurement is about draws, so a workspace that left
+/// that panel out, or tabbed it out of sight, fails rather than timing something smaller;
+/// the viewport's own status line is held to the same rule.
 fn egui_pass_samples(
     state: &AppState,
     role: gungnir_security::Role,
@@ -535,19 +544,32 @@ fn egui_pass_samples(
     let layout = gungnir_workflow::WorkspaceLayout::for_role(role);
     let arrangement = gungnir_app::dock::default_arrangement(&layout);
     let mut tree = gungnir_app::dock::tree_from(&arrangement);
+    let mut viewport = gungnir_viewport3d::ViewportState::new();
+    let palette = state.palette;
 
     let mut samples = Vec::with_capacity(EGUI_PASSES);
     let mut drew_text = false;
     let mut said = must_say.is_none();
+    let mut drew_picture = false;
     for _ in 0..EGUI_PASSES {
         let start = Instant::now();
         let (_, frame) = probe.draw(|ui| {
-            let mut behavior = gungnir_app::dock::PanelBehavior::new(state, &mut sustainment);
-            tree.ui(&mut behavior, ui);
+            egui::Panel::left("dashboard")
+                .resizable(true)
+                .default_size(palette.dashboard_default_width)
+                .show_inside(ui, |ui| {
+                    let mut behavior =
+                        gungnir_app::dock::PanelBehavior::new(state, &mut sustainment);
+                    tree.ui(&mut behavior, ui);
+                });
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                draw_picture(ui, state, &mut viewport);
+            });
         });
         samples.push(start.elapsed());
         drew_text |= !frame.texts.is_empty();
         said |= must_say.is_some_and(|text| frame.says(text));
+        drew_picture |= frame.says("Top-down projection (");
     }
     assert!(
         drew_text,
@@ -557,7 +579,82 @@ fn egui_pass_samples(
         said,
         "the {role:?} workspace never drew {must_say:?}, so the panel this measures was not in it"
     );
+    assert!(
+        drew_picture,
+        "the {role:?} frame never drew the viewport's status line, so the picture was not in \
+         what was timed"
+    );
+    assert!(
+        viewport.glyphs.len() >= SCENARIO_4_TARGETS,
+        "the picture held {} glyphs, short of Scenario 4's {SCENARIO_4_TARGETS}",
+        viewport.glyphs.len()
+    );
     samples
+}
+
+/// The picture as `main.rs`'s `draw_picture` draws it in the projection: every layer
+/// assembled from the state, per frame, as the desktop assembles it, and `render` over
+/// them. Kept in step with that function by hand; the layer set it names is the frame an
+/// operator sees, and a layer left out here is a cost left out of the gate (GAP-254).
+fn draw_picture(
+    ui: &mut egui::Ui,
+    state: &AppState,
+    viewport: &mut gungnir_viewport3d::ViewportState,
+) {
+    use gungnir_app::sustainment;
+    let circles = sustainment::coverage_circles(state);
+    let coverage = sustainment::coverage_layer(state, &circles);
+    let report = sustainment::coverage_report(state);
+    let names = sustainment::approach_names(state);
+    let gaps = report
+        .as_ref()
+        .map(|r| sustainment::gap_polylines(&names, r, &sustainment::live_accepted(state, r)))
+        .unwrap_or_default();
+    let placed = gungnir_app::hazards::placed(state);
+    let hazards = gungnir_app::hazards::outlines(&placed);
+    let fences = gungnir_app::geofences::placed(state);
+    let geofences = gungnir_app::geofences::outlines(&fences);
+    let predicted = gungnir_app::prediction::paths(&gungnir_app::prediction::predict(state));
+    let predictions: Vec<gungnir_viewport3d::layers::PredictedPath> = predicted
+        .iter()
+        .map(|p| gungnir_viewport3d::layers::PredictedPath {
+            track: p.track,
+            points: &p.points,
+            uncertainty_drawable: p.uncertainty_drawable,
+        })
+        .collect();
+    let preview = sustainment::laydown_preview(state);
+    let laydown_preview = preview
+        .as_ref()
+        .map(|p| gungnir_viewport3d::layers::LaydownPreview {
+            intent: &p.intent,
+            sensors: &p.sensor_positions,
+            resources: &p.resource_positions,
+        });
+    let point_clouds = gungnir_app::pointcloud::layers(&state.point_cloud, &state.data);
+    let shown = gungnir_app::dead_spots::shown_label(state);
+    let dead_spots = gungnir_app::dead_spots::layer(&state.dead_spots, &shown);
+    let layers = gungnir_viewport3d::layers::LayerInputs {
+        coverage,
+        gaps: &gaps,
+        hazards: &hazards,
+        geofences: &geofences,
+        predictions: &predictions,
+        terrain: gungnir_app::terrain::layer(&state.terrain, &state.data),
+        point_clouds: &point_clouds,
+        laydown_preview,
+        dense_group: state.tracking.dense_group(),
+        dead_spots,
+    };
+    gungnir_viewport3d::render(
+        ui,
+        &state.palette,
+        viewport,
+        state.tracking.tracks(),
+        state.tracking.bearing_rays(),
+        &state.last_plan,
+        layers,
+    );
 }
 
 /// **Gated.** Journal append: 50 envelopes in under 1 ms, under the D-04 desktop

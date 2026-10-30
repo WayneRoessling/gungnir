@@ -892,8 +892,10 @@ pub fn sync_terrain_surface(
     true
 }
 
-/// The surface projected into the top-down view as an egui mesh. Only the projection is
-/// per frame; the colours and triangles were decided once, in [`terrain_surface`].
+/// The surface projected into the top-down view as an egui mesh. The colours and
+/// triangles were decided once, in [`terrain_surface`]; the projection is done when the
+/// surface, the view or the rect changes, by [`sync_terrain_mesh_2d`], and not per frame
+/// (GAP-254).
 #[must_use]
 pub fn terrain_mesh_2d(
     rect: egui::Rect,
@@ -910,20 +912,98 @@ pub fn terrain_mesh_2d(
     mesh
 }
 
-/// Draw the terrain as a shaded surface in the top-down view. Nothing is drawn for
-/// `None`, and nothing is written either: the health panel is where the absence of
-/// terrain is said (PN-09), and a label on every empty map would be noise.
+/// What the overlay's terrain mesh was projected under (GAP-254): which surface, at which
+/// view, into which rect. Any change to one of them is a reprojection; nothing else is.
+/// `PartialEq` and not `Eq` because a view holds floats: a NaN view rebuilds every frame,
+/// which errs towards drawing, as `glyphs_need_rebuild` does.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TerrainMeshKey {
+    /// [`TerrainSurface::revision`].
+    pub revision: u64,
+    pub view: TopDownView,
+    pub rect: egui::Rect,
+}
+
+impl TerrainMeshKey {
+    #[must_use]
+    pub fn new(surface: &TerrainSurface, view: &TopDownView, rect: egui::Rect) -> Self {
+        Self {
+            revision: surface.revision,
+            view: *view,
+            rect,
+        }
+    }
+}
+
+/// The overlay's terrain mesh the viewport keeps across frames, and what it was projected
+/// under (GAP-254), the model being [`DeadSpotTexture`]. Held behind an `Arc` because
+/// `egui::Shape::Mesh` takes one, so drawing it each frame clones a pointer and not up to
+/// [`TERRAIN_VERTEX_BUDGET`] vertices.
+#[derive(Debug, Clone)]
+pub struct TerrainMesh2d {
+    key: TerrainMeshKey,
+    pub mesh: std::sync::Arc<egui::Mesh>,
+}
+
+impl TerrainMesh2d {
+    /// What the mesh was projected under.
+    #[must_use]
+    pub fn key(&self) -> TerrainMeshKey {
+        self.key
+    }
+}
+
+/// Bring `slot` up to date for a frame that draws `surface` into `rect` at `view`: project
+/// the mesh when the surface, the view or the rect differs from what the slot holds, and
+/// drop it when there is no surface to draw. Called once a frame before the layers are
+/// drawn, as [`sync_dead_spot_texture`] is; costs nothing when nothing changed. Returns
+/// whether it projected (GAP-254; before it, `draw_terrain_2d` projected every frame).
+pub fn sync_terrain_mesh_2d(
+    slot: &mut Option<TerrainMesh2d>,
+    surface: Option<&TerrainSurface>,
+    view: &TopDownView,
+    rect: egui::Rect,
+) -> bool {
+    let Some(surface) = surface else {
+        *slot = None;
+        return false;
+    };
+    if surface.indices.is_empty() {
+        *slot = None;
+        return false;
+    }
+    let key = TerrainMeshKey::new(surface, view, rect);
+    if slot.as_ref().is_some_and(|m| m.key == key) {
+        return false;
+    }
+    *slot = Some(TerrainMesh2d {
+        key,
+        mesh: std::sync::Arc::new(terrain_mesh_2d(rect, view, surface)),
+    });
+    true
+}
+
+/// Draw the terrain as a shaded surface in the top-down view: the mesh
+/// [`sync_terrain_mesh_2d`] projected for this frame. Nothing is drawn for no surface, and
+/// nothing is written either: the health panel is where the absence of terrain is said
+/// (PN-09), and a label on every empty map would be noise. A mesh projected for another
+/// surface, view or rect is not drawn, as a dead-spot texture built for an older field is
+/// not: the paint-order tests see a missing ground, where a silent reprojection here would
+/// put the per-frame build back.
 pub fn draw_terrain_2d(
     painter: &egui::Painter,
     rect: egui::Rect,
     view: &TopDownView,
     surface: Option<&TerrainSurface>,
+    mesh: Option<&TerrainMesh2d>,
 ) {
-    let Some(surface) = surface else { return };
-    if surface.indices.is_empty() {
+    let (Some(surface), Some(mesh)) = (surface, mesh) else {
+        return;
+    };
+    if mesh.key != TerrainMeshKey::new(surface, view, rect) {
         return;
     }
-    painter.add(egui::Shape::mesh(terrain_mesh_2d(rect, view, surface)));
+    painter.add(egui::Shape::mesh(std::sync::Arc::clone(&mesh.mesh)));
 }
 
 /// The most points a frame draws per cloud, the same reasoning as
@@ -1713,6 +1793,85 @@ mod tests {
             }
         }
         (!mesh.indices.is_empty()).then_some(mesh)
+    }
+
+    /// GAP-254: an unchanged view does not reproject the terrain. The mesh is projected
+    /// when the surface first appears, held through a hundred frames whose surface, view
+    /// and rect are the same (the same `Arc`, not an equal copy), reprojected when any one
+    /// of the three changes, and dropped when the surface goes. What it holds is what
+    /// `terrain_mesh_2d` would project this frame, so caching changes nothing drawn.
+    #[test]
+    fn the_terrain_mesh_is_projected_only_when_its_inputs_change() {
+        let palette = theme::Palette::day();
+        let positions = grid(20, 24, rolling, |_, _| false);
+        let surface = terrain_surface(&palette, layer_of(&positions, 20, 24)).expect("a surface");
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(800.0, 600.0));
+        let view = TopDownView {
+            center_e: 120.0,
+            center_n: -40.0,
+            meters_per_px: 7.5,
+        };
+        let held = |slot: &Option<TerrainMesh2d>| {
+            std::sync::Arc::clone(&slot.as_ref().expect("a mesh is held").mesh)
+        };
+
+        let mut slot = None;
+        assert!(
+            sync_terrain_mesh_2d(&mut slot, Some(&surface), &view, rect),
+            "the first frame projects"
+        );
+        let first = held(&slot);
+        assert_eq!(*first, terrain_mesh_2d(rect, &view, &surface));
+        for _ in 0..100 {
+            assert!(
+                !sync_terrain_mesh_2d(&mut slot, Some(&surface), &view, rect),
+                "an unchanged frame reprojected"
+            );
+        }
+        assert!(std::sync::Arc::ptr_eq(&first, &held(&slot)));
+
+        let panned = TopDownView {
+            center_e: 500.0,
+            ..view
+        };
+        assert!(
+            sync_terrain_mesh_2d(&mut slot, Some(&surface), &panned, rect),
+            "a pan"
+        );
+        assert_eq!(*held(&slot), terrain_mesh_2d(rect, &panned, &surface));
+        let zoomed = TopDownView {
+            meters_per_px: 15.0,
+            ..panned
+        };
+        assert!(
+            sync_terrain_mesh_2d(&mut slot, Some(&surface), &zoomed, rect),
+            "a zoom"
+        );
+        let resized = rect.expand(40.0);
+        assert!(
+            sync_terrain_mesh_2d(&mut slot, Some(&surface), &zoomed, resized),
+            "a resize"
+        );
+        let reloaded = TerrainSurface {
+            revision: 4,
+            ..surface.clone()
+        };
+        assert!(
+            sync_terrain_mesh_2d(&mut slot, Some(&reloaded), &zoomed, resized),
+            "a new load"
+        );
+        assert_eq!(held(&slot).vertices.len(), reloaded.positions.len());
+        assert!(!sync_terrain_mesh_2d(
+            &mut slot,
+            Some(&reloaded),
+            &zoomed,
+            resized
+        ));
+        assert!(
+            !sync_terrain_mesh_2d(&mut slot, None, &zoomed, resized),
+            "no terrain projects nothing"
+        );
+        assert!(slot.is_none(), "no terrain drops the mesh");
     }
 
     /// A grid of `rows` by `columns` 30 m cells, north row first, its heights from
