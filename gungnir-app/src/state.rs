@@ -520,6 +520,11 @@ pub struct AppState {
     /// selection whose track has since been deleted resolves to `None`, so the card
     /// closes rather than showing the last state of a track that no longer exists.
     selected_track: Option<TrackId>,
+    /// The order and filter PN-03 shows its rows by (GAP-226, WF-03). Session state, like
+    /// the selection: how an operator is reading the table now, not a fact about the
+    /// deployment, so the next launch starts by id with nothing hidden.
+    pub track_order: gungnir_ui::panels::track_table::TrackOrder,
+    pub track_filter: gungnir_ui::panels::track_table::TrackFilter,
 
     /// Which laydown option PN-16 has selected for PN-11's before-and-after preview
     /// (GAP-087's own remaining item). Session state, not baseline: a comparison an
@@ -919,6 +924,8 @@ impl AppState {
             selected_approval: None,
             dialog: gungnir_ui::panels::decision_dialog::DecisionDialogState::default(),
             selected_track: None,
+            track_order: gungnir_ui::panels::track_table::TrackOrder::default(),
+            track_filter: gungnir_ui::panels::track_table::TrackFilter::default(),
             selected_laydown: None,
             rehearsal_scenario: gungnir_model::TestTrackNumber(1),
             rehearsal_records: std::collections::HashMap::new(),

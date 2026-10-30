@@ -17,7 +17,7 @@
 //! | Startup to first frame, under 3 s | **yes** | Every stage it covers is implemented. |
 //! | Journal append, under 1 ms for 50 envelopes | **yes** since GAP-085 | Implemented, and now meets its budget under the D-04 desktop profile. |
 //! | Per-frame `update()`, p99 under 4 ms | **yes** since 2026-09-15 | Gated in the GAP-067 walk, on measurements the owner read first: p99 16 microseconds release, 189 microseconds debug, against 4 ms. Release only, the convention this file already applies to the journal budget. |
-//! | egui pass, p99 under 8 ms at Scenario 4 counts | measured since 2026-09-15, **not asserted** | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured here now; the owner gates it after reading a figure, which is the same rule the two rows above were held to. |
+//! | egui pass, p99 under 8 ms at Scenario 4 counts | **yes** since 2026-09-16 | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured from 2026-09-15 and gated by the owner in the same walk on reading the figures. Release only. Over the operator's workspace as well as the commander's since GAP-226, because only the operator's has the track table. |
 //! | `tracks()`/`is_healthy()`, p99 under 1 ms | **yes** since 2026-09-15 | Gated in the same walk. Both calls measure p99 100 ns against a 1 ms budget -- four orders of magnitude -- so this one is asserted in **both** profiles; see its own documentation for why the usual release-only rule is not what protects it. |
 //!
 //! | MOP-14, coverage recompute over terrain under 10 s | **yes** since 2026-10-29 | GAP-246's dead-spot field, the first coverage computed over terrain as an area. Measured on a 1 000 by 1 000 DEM at 363 ms, 645 ms once the line of sight became exact, and gated the same day when the owner agreed `docs/design/DN-34-sensor-dead-spots.md` §11's rows, this one's included. Release only, the convention the rows above follow. |
@@ -154,6 +154,54 @@ fn state_for(timeline: &GeneratedTimeline, name: &str) -> AppState {
 
 fn generate(scenario: &Scenario, seed: u64) -> GeneratedTimeline {
     ScenarioGenerator::new(StdRng::seed_from_u64(seed)).generate(scenario)
+}
+
+/// Scenario 4's target count: the dense swarm the budgets below are stated at.
+const SCENARIO_4_TARGETS: usize = 200;
+
+/// Replay `timeline` into `state` until the picture holds Scenario 4's track count.
+///
+/// **The budgets are stated "at Scenario 4 track counts", and until GAP-226 the tests
+/// measured at four.** They ticked ten seconds of the replay and stopped waiting at the
+/// first track, so the egui pass and the snapshot calls were timed against a picture of
+/// a handful of tracks. On this seed the picture passes 200 tracks about 45 s in, and
+/// settles near 340 with the swarm's false tracks. This drives the replay until it holds
+/// 200, giving the asynchronous pipeline a moment every two seconds of mission time, as
+/// the desktop's own frames would. Bounded twice: by the timeline's own end, then by a
+/// minute of wall time for a pipeline still working through it, as `sample_set_replay.rs`
+/// allows. A replay that never reaches the count fails here rather than letting a budget
+/// pass on a smaller picture.
+fn drive_to_scenario_4_counts(
+    timeline: &GeneratedTimeline,
+    state: &mut AppState,
+    clock: &mut ReplayClockAuthority,
+) {
+    let end = timeline
+        .observations
+        .iter()
+        .map(|o| o.receipt_time_s)
+        .fold(0.0_f64, f64::max);
+    while clock.current.0 < end && state.tracking.tracks().len() < SCENARIO_4_TARGETS {
+        for _ in 0..60 {
+            clock.advance(FRAME_S);
+            state.clock = Box::new(*clock);
+            update::tick(state);
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    for _ in 0..12_000 {
+        if state.tracking.tracks().len() >= SCENARIO_4_TARGETS {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+        state.tracking.poll(clock.current);
+    }
+    assert!(
+        state.tracking.tracks().len() >= SCENARIO_4_TARGETS,
+        "the replay ended with {} tracks, short of Scenario 4's {SCENARIO_4_TARGETS}, so \
+         a budget measured now would be measured on a smaller picture",
+        state.tracking.tracks().len()
+    );
 }
 
 /// The p99 of a sorted-in-place sample. Nearest-rank, which for the sample sizes here
@@ -305,35 +353,13 @@ fn snapshot_calls_meet_their_budget() {
     let mut clock = ReplayClockAuthority {
         current: MissionTime(0.0),
     };
-    for _ in 0..300 {
-        clock.advance(FRAME_S);
-        state.clock = Box::new(clock);
-        update::tick(&mut state);
-    }
-
-    // The pipeline task has the detections these frames submitted; give it time to
-    // produce a picture, polling as the desktop does. Bounded, so a pipeline that
-    // never answers fails the assertion below rather than hanging.
-    //
-    // **This bound is the guard and not the budget.** The budgets asserted further down
-    // are what this test measures; two seconds of patience for a background task was a
-    // timing assumption sitting inside a performance test, which is the worst place for
-    // one -- it would fail the budget suite for a reason that has nothing to do with a
-    // budget. A minute, on the same reasoning as `sample_set_replay.rs`.
-    for _ in 0..12_000 {
-        if !state.tracking.tracks().is_empty() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(5));
-        clock.advance(FRAME_S);
-        state.clock = Box::new(clock);
-        state.tracking.poll(clock.current);
-    }
-    assert!(
-        !state.tracking.tracks().is_empty(),
-        "the pipeline produced no tracks from a dense-swarm replay, so what follows \
-         would measure an empty snapshot"
-    );
+    // **The wall-time bound inside is the guard and not the budget.** The budgets
+    // asserted further down are what this test measures; two seconds of patience for a
+    // background task was a timing assumption sitting inside a performance test, which is
+    // the worst place for one -- it would fail the budget suite for a reason that has
+    // nothing to do with a budget. A minute, on the same reasoning as
+    // `sample_set_replay.rs`.
+    drive_to_scenario_4_counts(&timeline, &mut state, &mut clock);
 
     let mut tracks_samples = Vec::with_capacity(10_000);
     let mut health_samples = Vec::with_capacity(10_000);
@@ -377,7 +403,8 @@ fn snapshot_calls_meet_their_budget() {
 /// and this is the measurement it was missing.
 ///
 /// **What is timed is a full workspace tree**, not one panel: `tree.ui` over the
-/// commander's arrangement through `RenderProbe`, which runs a real egui pass headlessly
+/// commander's arrangement and, since GAP-226, the operator's, which is the one with the
+/// track table, through `RenderProbe`, which runs a real egui pass headlessly
 /// -- layout, paint and all -- which is the quantity the row names. The state is driven
 /// by Scenario 4 first, so the panels draw against a populated picture rather than an
 /// empty one; measuring an empty workspace and calling it the row's figure is the same
@@ -394,72 +421,80 @@ fn the_egui_pass_meets_its_budget() {
     let mut clock = ReplayClockAuthority {
         current: MissionTime(0.0),
     };
-    for _ in 0..300 {
-        clock.advance(FRAME_S);
-        state.clock = Box::new(clock);
-        update::tick(&mut state);
-    }
-    // Same bounded wait as the snapshot budget, and for the same reason: the pipeline is
-    // asynchronous, and a workspace drawn against an empty picture is not this row.
-    for _ in 0..12_000 {
-        if !state.tracking.tracks().is_empty() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(5));
-        clock.advance(FRAME_S);
-        state.clock = Box::new(clock);
-        state.tracking.poll(clock.current);
-    }
-    assert!(
-        !state.tracking.tracks().is_empty(),
-        "the pipeline produced no tracks, so the workspace below would be drawn empty"
-    );
+    // A workspace drawn against a handful of tracks is not this row.
+    drive_to_scenario_4_counts(&timeline, &mut state, &mut clock);
 
-    let mut sustainment = gungnir_app::sustainment::SustainmentState::default();
-    let probe = gungnir_ui::harness::RenderProbe::new();
-    let layout = gungnir_workflow::WorkspaceLayout::for_role(gungnir_security::Role::Commander);
-    let arrangement = gungnir_app::dock::default_arrangement(&layout);
-    let mut tree = gungnir_app::dock::tree_from(&arrangement);
-
-    let mut samples = Vec::with_capacity(EGUI_PASSES);
-    let mut drew_text = false;
-    for _ in 0..EGUI_PASSES {
-        let start = Instant::now();
-        let (_, frame) = probe.draw(|ui| {
-            let mut behavior = gungnir_app::dock::PanelBehavior::new(&state, &mut sustainment);
-            tree.ui(&mut behavior, ui);
-        });
-        samples.push(start.elapsed());
-        drew_text |= !frame.texts.is_empty();
-    }
-    assert!(
-        drew_text,
-        "the workspace drew no text at all, so what was timed was not a real pass"
-    );
-
-    let worst = samples.iter().copied().max().unwrap_or_default();
-    let p = p99(&mut samples);
     let profile = if cfg!(debug_assertions) {
         "debug"
     } else {
         "release"
     };
-    println!(
-        "egui pass (commander workspace, {} tracks): p99 {p:?}, worst {worst:?} over {} passes \
-         (budget {BUDGET_EGUI_P99:?}, {profile} profile)",
-        state.tracking.tracks().len(),
-        samples.len()
-    );
-    if cfg!(debug_assertions) {
+    // GAP-226: the commander's workspace has no track table, so the operator's is timed
+    // too. It is the one that draws PN-03 against the whole picture, the panel whose cost
+    // grows with the track count.
+    for (role, must_say) in [
+        (gungnir_security::Role::Commander, None),
+        (gungnir_security::Role::Operator, Some(" tracks, ")),
+    ] {
+        let mut samples = egui_pass_samples(&state, role, must_say);
+        let worst = samples.iter().copied().max().unwrap_or_default();
+        let p = p99(&mut samples);
         println!(
-            "  not asserted in debug; the budget is a release figure and ci.yml enforces it with --release"
+            "egui pass ({role:?} workspace, {} tracks): p99 {p:?}, worst {worst:?} over {} \
+             passes (budget {BUDGET_EGUI_P99:?}, {profile} profile)",
+            state.tracking.tracks().len(),
+            samples.len()
         );
-    } else {
-        assert!(
-            p < BUDGET_EGUI_P99,
-            "the egui pass took p99 {p:?} over {EGUI_PASSES} passes, over the {BUDGET_EGUI_P99:?} budget"
-        );
+        if cfg!(debug_assertions) {
+            println!(
+                "  not asserted in debug; the budget is a release figure and ci.yml enforces it with --release"
+            );
+        } else {
+            assert!(
+                p < BUDGET_EGUI_P99,
+                "the egui pass over the {role:?} workspace took p99 {p:?} over {EGUI_PASSES} \
+                 passes, over the {BUDGET_EGUI_P99:?} budget"
+            );
+        }
     }
+}
+
+/// Time `EGUI_PASSES` full passes over `role`'s default workspace. `must_say` is text a
+/// panel the measurement is about draws, so a workspace that left that panel out, or
+/// tabbed it out of sight, fails rather than timing something smaller.
+fn egui_pass_samples(
+    state: &AppState,
+    role: gungnir_security::Role,
+    must_say: Option<&str>,
+) -> Vec<Duration> {
+    let mut sustainment = gungnir_app::sustainment::SustainmentState::default();
+    let probe = gungnir_ui::harness::RenderProbe::new();
+    let layout = gungnir_workflow::WorkspaceLayout::for_role(role);
+    let arrangement = gungnir_app::dock::default_arrangement(&layout);
+    let mut tree = gungnir_app::dock::tree_from(&arrangement);
+
+    let mut samples = Vec::with_capacity(EGUI_PASSES);
+    let mut drew_text = false;
+    let mut said = must_say.is_none();
+    for _ in 0..EGUI_PASSES {
+        let start = Instant::now();
+        let (_, frame) = probe.draw(|ui| {
+            let mut behavior = gungnir_app::dock::PanelBehavior::new(state, &mut sustainment);
+            tree.ui(&mut behavior, ui);
+        });
+        samples.push(start.elapsed());
+        drew_text |= !frame.texts.is_empty();
+        said |= must_say.is_some_and(|text| frame.says(text));
+    }
+    assert!(
+        drew_text,
+        "the {role:?} workspace drew no text at all, so what was timed was not a real pass"
+    );
+    assert!(
+        said,
+        "the {role:?} workspace never drew {must_say:?}, so the panel this measures was not in it"
+    );
+    samples
 }
 
 /// **Gated.** Journal append: 50 envelopes in under 1 ms, under the D-04 desktop

@@ -220,7 +220,7 @@ history, and an entry is never edited once it has merged.
 | GAP-223 | The alert lifecycle is not wired, and PN-08 is a list of strings | Technical | CAP-5.5, CAP-5.9 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
 | GAP-224 | The desktop has no keyboard operation | Technical | CAP-5.9 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
 | GAP-225 | The map cannot hook a track and draws no defended assets or effectors | Technical | CAP-5.9, CAP-3.1, CAP-4.1 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
-| GAP-226 | The three-d scene is the default and has never been seen; the track table is not virtualised | Technical | CAP-5.10, CAP-5.9 | 2 | 10 | S | 20 | I4 | UI engineer | In progress |
+| GAP-226 | The three-d scene is the default and has never been seen; the track table is not virtualised | Technical | CAP-5.10, CAP-5.9 | 2 | 10 | S | 20 | I4 | UI engineer | Closed |
 | GAP-227 | No basemap, no standard symbology, no declutter, no geographic readout | Technical | CAP-2.10, CAP-5.9 | 3 | 10 | L | 30 | I4 | UI engineer | Open |
 | GAP-228 | No operator-initiated escalation | Technical | CAP-3.7, CAP-3.6 | 3 | 7 | S | 21 | I4 | Security engineer (human-owned crate) | Open |
 | GAP-229 | No system safety assessment for the engagement authority path | Technical | CAP-4.3, CAP-3.6 | 4 | 7 | L | 28 | I4 | Owner | Open |
@@ -3231,11 +3231,12 @@ Counts: 232 gaps, 6 mission, 226 technical; 1 already covered by a plan in `../.
   - 2026-10-26, Open: Filed by plan 12.
   - 2026-10-30, In progress: D-153 taken by the owner: the scene stays the default and the owner looks at it. Reading the draw path first found three defects that would have spoiled the look, fixed before it: the camera showed the overlay's ground times the aspect ratio and the display scaling, three-d clipped its draw to a box at the window's corner, and a glyph was 120 m whatever the zoom. The two comments and the IA sentence already agreed. The owner's look and the track table remain.
   - 2026-10-30, In progress: The owner looked at the scene the same day and reported all eight checks passed: it attached, the tracks sat where the projection puts them through pan, zoom, resizing and 100 % and 150 % scaling, and the colours matched (`../../record/2026-10-30/the-owner-s-look-at-the-three-d.md`). The scene half is done; no test can see the GL draw, so it stays one look. The track table remains.
+  - 2026-10-30, Closed: PN-03 lays out only the rows in view, sorts by any column and filters by class, status and staleness, as WF-03 draws it. The egui gate now times the operator's workspace, the one with the table, and both it and the snapshot gate drive the Scenario 4 replay to 200 tracks first: they had been measuring about four. At 212 tracks the operator's pass is p99 0.92 ms, 6.86 ms with the old grid (`../../record/2026-10-30/gap-226-the-track-table-draws-only-the.md`).
 - Evidence: `gungnir-viewport3d/src/gl.rs:29-31`; `gungnir-model/src/ui_settings.rs:232`; `gungnir-app/src/main.rs:575` against `gungnir-viewport3d/src/lib.rs:18-20`; `gungnir-ui/src/panels/track_table.rs:99-106`; `../../ux/information-architecture.md:135-136`.
 - Severity: 2. Reach: 10 threads. Effort: S. Priority: 20.
 - Impact: The scene's own comment says the drawn result has not been looked at, the setting defaults it on, and two comments disagree about which path is the default. PN-03 is a grid in a fixed scroll area laid out every frame, the information architecture says it is virtualised, and the frame-budget gate renders a workspace that has no table.
 - Closing action: Per D-153, the scene stays the default and the owner looks at it on a display; `show_rows` virtualisation with sort and filter; the operator workspace added to the 8 ms gate.
-- Target: I4. Owner: UI engineer. Status: In progress.
+- Target: I4. Owner: UI engineer. Status: Closed.
 - Reference: GAP-022; GAP-056; D-153; `../../review/2026-10-26-comprehensive-review.md` §8 findings 5 and 7.
 
 **GAP-227 No basemap, no standard symbology, no declutter, no geographic readout**

@@ -886,6 +886,8 @@ fn the_track_table_draws_the_score_column_as_unavailable() {
         msl_heights: &[],
         unknown_heights: &[],
         vocabulary: &vocab,
+        order: crate::panels::track_table::TrackOrder::default(),
+        filter: crate::panels::track_table::TrackFilter::default(),
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &view));
@@ -1078,6 +1080,8 @@ fn the_panels_survive_a_narrow_slot() {
         msl_heights: &[],
         unknown_heights: &[],
         vocabulary: &vocab,
+        order: crate::panels::track_table::TrackOrder::default(),
+        filter: crate::panels::track_table::TrackFilter::default(),
     };
     let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &table));
     assert!(!frame.texts.is_empty(), "the table drew nothing at 220 px");
@@ -1130,6 +1134,8 @@ fn the_track_table_draws_the_deployments_words() {
         msl_heights: &[],
         unknown_heights: &[],
         vocabulary: &defaults,
+        order: crate::panels::track_table::TrackOrder::default(),
+        filter: crate::panels::track_table::TrackFilter::default(),
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &view));
@@ -1204,6 +1210,8 @@ fn the_track_table_marks_a_height_above_mean_sea_level() {
         msl_heights: &flagged,
         unknown_heights: &unknown,
         vocabulary: &vocab,
+        order: crate::panels::track_table::TrackOrder::default(),
+        filter: crate::panels::track_table::TrackFilter::default(),
     };
     let probe = RenderProbe::new();
     let (_, frame) = probe.draw(|ui| render_track_table(ui, &theme::Palette::day(), &view));
