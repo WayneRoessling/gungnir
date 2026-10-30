@@ -13661,3 +13661,42 @@
       Fixed in `queue_empty_reason` and `degraded_conditions`; the health flag is unchanged.
       Tested by `gungnir-app/tests/rehearsal.rs`
       (`../../record/2026-10-30/an-empty-queue-in-a-rehearsal-blamed-a.md`).
+
+- id: GAP-251
+  name: The three-d scene draws each track as a bare disc, with no number, frame or assignment
+  type: Technical
+  caps: [CAP-2.10, CAP-5.9]
+  layer: UI and data ecosystem
+  sev: 3
+  effort: S
+  target: I4
+  owner: UI engineer
+  deps: [GAP-022, GAP-226]
+  impact: >-
+    In the default renderer an operator cannot tell one track from another, read its
+    affiliation, heading or uncertainty, or see which resource a plan assigns to it, while
+    the status line counts the assignments. Switching to the projection is the only way to
+    read any of them.
+  evidence: >-
+    `gungnir-viewport3d/src/lib.rs::prepare_3d` drew the map and the bearing rays but not
+    `tracks::draw_glyphs_2d` or `tracks::draw_plan_2d`, which only `render` called; the
+    owner's look at the scene recorded the omission
+    (`../../record/2026-10-30/the-owner-s-look-at-the-three-d.md`).
+  action: >-
+    Draw both through one function in both renderers, over the scene's discs, with the
+    paint callback set into a slot under them; a test in the crate holding the overlay to
+    the projection's shapes; the owner looks again.
+  ref: >-
+    GAP-226; D-153
+  history:
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      Filed from the owner's look at the three-d scene, which named the missing details.
+  - date: 2026-10-30
+    status: Closed
+    note: >-
+      `prepare_3d` draws each track's frame, sigma outline, heading vector, id and
+      assignment over the scene's discs, through the function `render` uses. Tested by
+      `gungnir-viewport3d/src/lib.rs`'s tests; what the owner should look at is in
+      `../../record/2026-10-30/the-three-d-scene-draws-each-track-s.md`.

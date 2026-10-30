@@ -19,7 +19,9 @@
 //! the fallback when no context could be attached. The owner looked at the GL draw on
 //! 2026-10-30 and it passed (GAP-226, D-153), but there is no headless probe for one, so
 //! between looks the status line and the runtime toggle are what stand in for a test:
-//! see `ARCHITECTURE.md` §10 items 52 and 53.
+//! see `ARCHITECTURE.md` §10 items 52 and 53. Each track's frame, labels and assignment
+//! are drawn by egui over the scene's discs (GAP-251), which a test can see; the discs
+//! under them it cannot.
 
 pub mod gl;
 
@@ -247,6 +249,25 @@ fn draw_layers(
     }
 }
 
+/// Draw each track's glyph and the plan's assignments: the id label, the heading vector,
+/// the one-sigma outline, the classification frame and the resource each track is
+/// assigned to (GAP-251).
+///
+/// One function for both renderers, for `draw_layers`'s reason: the three-d scene drew
+/// each track as a bare disc while the projection drew all of this, so the scene's status
+/// line counted assignments the operator could not see. In the scene these sit over the
+/// disc, which is the lifecycle fill the projection draws small inside each frame.
+fn draw_tracks(
+    painter: &egui::Painter,
+    palette: &theme::Palette,
+    rect: egui::Rect,
+    state: &ViewportState,
+    plan: &PlanView,
+) {
+    tracks::draw_glyphs_2d(painter, palette, rect, &state.view, &state.glyphs);
+    tracks::draw_plan_2d(painter, palette, rect, &state.view, &state.glyphs, plan);
+}
+
 pub fn draw_renderer_toggle(
     ui: &mut egui::Ui,
     palette: &theme::Palette,
@@ -278,13 +299,24 @@ pub fn draw_renderer_toggle(
     false
 }
 
-/// Prepare the viewport region for a three-d frame, and return the rectangle the
-/// caller should hand to its paint callback (GAP-022).
+/// Where [`prepare_3d`] put the three-d scene.
+#[derive(Debug, Clone, Copy)]
+pub struct Prepared3d {
+    /// The region the paint callback draws into.
+    pub rect: egui::Rect,
+    /// The place in the paint order the callback goes, with `egui::Painter::set`: after
+    /// the map and before the glyphs, so each track's frame and labels draw over its disc
+    /// rather than under it (GAP-251). A slot nobody fills draws nothing.
+    pub scene_slot: egui::layers::ShapeIdx,
+}
+
+/// Prepare the viewport region for a three-d frame, and return where the caller's paint
+/// callback goes (GAP-022).
 ///
 /// Everything except the OpenGL draw call lives here: input, the glyph rebuild, the
-/// background, and the status line saying which renderer is in use. The caller adds the
-/// paint callback, because the callback type belongs to `egui_glow` and only the binary
-/// depends on eframe.
+/// background, the per-track glyphs over the scene, and the status line saying which
+/// renderer is in use. The caller sets the paint callback into [`Prepared3d::scene_slot`],
+/// because the callback type belongs to `egui_glow` and only the binary depends on eframe.
 ///
 /// Returns `None` when there is nothing to draw into.
 pub fn prepare_3d(
@@ -295,7 +327,7 @@ pub fn prepare_3d(
     bearing_rays: &[BearingRayView],
     plan: &PlanView,
     layers: layers::LayerInputs<'_>,
-) -> Option<egui::Rect> {
+) -> Option<Prepared3d> {
     let (rect, response) =
         ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
     if rect.width() < 1.0 || rect.height() < 1.0 {
@@ -314,10 +346,9 @@ pub fn prepare_3d(
     // Coverage is drawn by egui rather than in the GL pass: it is a flat overlay on
     // the ground plane, and drawing it here means it survives whatever the callback
     // does -- the same reason the status line is here (GAP-022 item 53). Bearing rays
-    // join it for the same reason: there is no GL geometry for anything yet, tracks
-    // included (GAP-022's own open item), so this overlay is where a ray is drawn until
-    // there is. The dead spots join it too (GAP-246, DN-34 §8.2): the same texture, the
-    // same toggle, on whichever renderer is in front.
+    // join it for the same reason: the scene's only GL geometry is the track disc, so
+    // this overlay is where a ray is drawn. The dead spots join it too (GAP-246, DN-34
+    // §8.2): the same texture, the same toggle, on whichever renderer is in front.
     layers::sync_dead_spot_texture(
         ui.ctx(),
         palette,
@@ -349,7 +380,12 @@ pub fn prepare_3d(
         egui::FontId::proportional(palette.small_font_size),
         palette.viewport_text_color,
     );
-    Some(rect)
+
+    // The scene's discs go here, and everything each track carries beyond its lifecycle
+    // colour is drawn over them by the function the projection uses (GAP-251).
+    let scene_slot = painter.add(egui::Shape::Noop);
+    draw_tracks(&painter, palette, rect, state, plan);
+    Some(Prepared3d { rect, scene_slot })
 }
 
 /// Per-frame entry point, called once from gungnir-app's `eframe::App::update()`
@@ -392,8 +428,7 @@ pub fn render(
     // under the tracks it has not (yet) been folded into (DN-27 §7).
     draw_layers(&painter, palette, rect, state, &layers);
     tracks::draw_bearing_rays_2d(&painter, palette, rect, &state.view, &state.bearing_rays);
-    tracks::draw_glyphs_2d(&painter, palette, rect, &state.view, &state.glyphs);
-    tracks::draw_plan_2d(&painter, palette, rect, &state.view, &state.glyphs, plan);
+    draw_tracks(&painter, palette, rect, state, plan);
 
     // Says which renderer is running and why, because those are different situations:
     // a deployment that opted out of the scene, and a desktop that could not attach one.
@@ -422,4 +457,174 @@ pub fn render(
 
     // Drawn from here too, or switching to the projection would be one-way.
     draw_renderer_toggle(ui, palette, rect, state);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gungnir_model::{
+        Classification, InterceptSolutionView, MissionTime, PlanId, Provenance, Quality,
+        ResourceId, TrackId, TrackStatus,
+    };
+    use nalgebra::{SMatrix, SVector};
+    use std::sync::Arc;
+
+    fn track(id: u64, e: f64, classification: Classification) -> TrackView {
+        TrackView {
+            id: TrackId(id),
+            status: TrackStatus::Confirmed,
+            state: SVector::<f64, 6>::new(e, 0.0, 0.0, 3.0, 4.0, 0.0),
+            covariance: SMatrix::<f64, 6, 6>::identity() * 400.0,
+            classification,
+            provenance: Provenance::default(),
+            quality: Quality::default(),
+            mission_time: MissionTime(0.0),
+            releasability: gungnir_model::Releasability::default(),
+        }
+    }
+
+    fn no_layers() -> layers::LayerInputs<'static> {
+        layers::LayerInputs {
+            coverage: layers::CoverageLayer::Circles {
+                circles: &[],
+                nominal: None,
+            },
+            gaps: &[],
+            hazards: &[],
+            geofences: &[],
+            predictions: &[],
+            terrain: None,
+            point_clouds: &[],
+            laydown_preview: None,
+            dense_group: None,
+            dead_spots: layers::DeadSpotLayer::NotComputed { reason: "test" },
+        }
+    }
+
+    fn screen() -> egui::RawInput {
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(800.0, 600.0),
+            )),
+            ..egui::RawInput::default()
+        }
+    }
+
+    /// The shapes `prepare_3d` painted after the scene's callback, with the callback set
+    /// into its slot as the binary sets it, and the state it left.
+    fn painted_over_the_scene(
+        tracks: &[TrackView],
+        plan: &PlanView,
+    ) -> (Vec<egui::Shape>, ViewportState, egui::Rect) {
+        let palette = theme::Palette::day();
+        let mut state = ViewportState::new();
+        let mut rect = egui::Rect::NOTHING;
+        let output = egui::Context::default().run_ui(screen(), |ui| {
+            let prepared = prepare_3d(ui, &palette, &mut state, tracks, &[], plan, no_layers())
+                .expect("an 800 by 600 screen has room for the scene");
+            rect = prepared.rect;
+            ui.painter().set(
+                prepared.scene_slot,
+                egui::PaintCallback {
+                    rect: prepared.rect,
+                    callback: Arc::new(()),
+                },
+            );
+        });
+        let shapes: Vec<egui::Shape> = output.shapes.into_iter().map(|c| c.shape).collect();
+        let scene = shapes
+            .iter()
+            .position(|s| matches!(s, egui::Shape::Callback(_)))
+            .expect("the scene's callback is in the paint order");
+        (shapes[scene + 1..].to_vec(), state, rect)
+    }
+
+    fn texts(shapes: &[egui::Shape]) -> Vec<String> {
+        shapes
+            .iter()
+            .filter_map(|s| match s {
+                egui::Shape::Text(t) => Some(t.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn plan_assigning(resource: u32, track: u64) -> PlanView {
+        PlanView::intercept(
+            PlanId(1),
+            MissionTime(0.0),
+            vec![InterceptSolutionView {
+                resource: ResourceId(resource),
+                track: TrackId(track),
+                intercept_point: None,
+                time_to_intercept_s: None,
+            }],
+            1.0,
+        )
+    }
+
+    /// GAP-251: the scene drew each track as a bare disc, so its status line counted an
+    /// assignment the operator could not see. Each track's id and each assignment must be
+    /// painted, and painted after the scene's callback, or the disc would draw over them.
+    #[test]
+    fn the_scene_labels_each_track_and_assignment_over_its_disc() {
+        let tracks = [
+            track(41, 0.0, Classification::Hostile),
+            track(42, 300.0, Classification::Unknown),
+        ];
+        let (over, _, _) = painted_over_the_scene(&tracks, &plan_assigning(7, 41));
+        let over = texts(&over);
+        for expected in ["41", "42", "R7"] {
+            assert!(
+                over.iter().any(|t| t == expected),
+                "{expected:?} is not painted over the scene; over it are {over:?}"
+            );
+        }
+    }
+
+    /// GAP-251: what the scene draws over its discs is exactly what the projection draws
+    /// for each track -- frame, sigma outline, heading vector, id and assignment -- so the
+    /// two renderers cannot show different details for the same track.
+    #[test]
+    fn the_scene_draws_every_track_detail_the_projection_does() {
+        let tracks = [
+            track(41, 0.0, Classification::Hostile),
+            track(42, 300.0, Classification::Friendly),
+        ];
+        let plan = plan_assigning(7, 42);
+        let (over, state, rect) = painted_over_the_scene(&tracks, &plan);
+
+        let palette = theme::Palette::day();
+        let projection: Vec<egui::Shape> = egui::Context::default()
+            .run_ui(screen(), |ui| {
+                draw_tracks(&ui.painter_at(rect), &palette, rect, &state, &plan);
+            })
+            .shapes
+            .into_iter()
+            .map(|c| c.shape)
+            .collect();
+        assert!(!projection.is_empty());
+        assert_eq!(described(&over), described(&projection));
+    }
+
+    /// A shape as a comparable string. Text is its position, words and colour: a galley
+    /// also carries where its glyphs sit in the context's font atlas, which differs
+    /// between two contexts drawing the same words.
+    fn described(shapes: &[egui::Shape]) -> Vec<String> {
+        shapes
+            .iter()
+            .map(|s| match s {
+                egui::Shape::Text(t) => {
+                    format!(
+                        "text {:?} {:?} {:?}",
+                        t.pos,
+                        t.galley.text(),
+                        t.fallback_color
+                    )
+                }
+                other => format!("{other:?}"),
+            })
+            .collect()
+    }
 }
