@@ -243,8 +243,9 @@ history, and an entry is never edited once it has merged.
 | GAP-246 | Sensor dead spots are not computed or drawn | Mission | CAP-1.4, CAP-2.11, CAP-5.9 | 3 | 10 | L | 30 | I4 | Services engineer | Closed |
 | GAP-247 | Terrain line of sight scans every DEM vertex per sample, on a report computed every frame | Technical | CAP-2.11, CAP-1.4 | 3 | 4 | S | 12 | I4 | Services engineer | Closed |
 | GAP-248 | A laydown option's dead spots are not computed on PN-16 | Mission | CAP-1.4, CAP-2.11 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
+| GAP-249 | A sensor change cannot be tried against the dead spots without editing the baseline | Mission | CAP-1.4, CAP-2.11, CAP-3.9 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
 
-Counts: 230 gaps, 5 mission, 225 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 231 gaps, 6 mission, 225 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3536,4 +3537,19 @@ Counts: 230 gaps, 5 mission, 225 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: Services engineer. Status: Closed.
 - Reference: `../../design/DN-34-sensor-dead-spots.md` §7 item 5 and its amendment 1; GAP-087 (the laydown preview).
 - Depends on: GAP-246.
+
+**GAP-249 A sensor change cannot be tried against the dead spots without editing the baseline**
+
+- Type: Mission.
+- Capability: CAP-1.4 Coverage and gaps; CAP-2.11 Geometric questions; CAP-3.9 Sensor re-tasking.
+- History:
+  - 2026-10-30, Open: Found reviewing whether PN-10 should hold the one-sensor chooser: the chooser's placement mattered less than what neither panel could answer. D-149 to D-152 taken by the owner the same day.
+  - 2026-10-30, Closed: Built: `gungnir-app::what_if` runs the change on a worker over one grid with the live field (`gungnir_analytics::shadow_field_over`, `compare_fields`), the map marks what would clear and darken, PN-11 holds the controls and figures, and each run is recorded once as `PlanningEvent::DeadSpotWhatIf` with who ran it, so a run needs somebody signed in. Tested by `gungnir-app/tests/dead_spots.rs` and the comparison test in `gungnir-analytics/tests/shadow_geometry.rs` (`../../record/2026-10-30/gap-249-a-sensor-what-if-against-the.md`).
+- Evidence: `gungnir-app/src/workspace.rs` (the chooser offers the computed field's sensors, which `coverage_from_registry` limits to searching and tracking ones); `gungnir-app/src/dead_spots.rs` (the live field is the registry's, as it stands); `../../design/DN-34-sensor-dead-spots.md` §7 item 6 and amendment 1 item 5.
+- Severity: 2. Reach: 4 threads. Effort: M. Priority: 8.
+- Impact: DN-34 §7 item 6 wanted the one-sensor view so a sensor manager could see what re-aiming or raising a mast would do. PN-11's chooser shows only a searching or tracking sensor's shadow where it stands, so a standby sensor cannot be tried switched on, and a raised mast, a turned sector or a move can be seen only by declaring a laydown option and selecting it on PN-16: a baseline edit, not a quick check.
+- Closing action: Per DN-34 amendment 4: a what-if on PN-11 (D-152) trying one declared sensor switched on whatever its mode, its mast raised or lowered, its sector turned and moved (D-149); the live sensors' field and the field with the change computed over one grid off the tick and compared cell by cell; the map marking what the change would clear and darken over the live dead spots under a what-if line (D-150); each run recorded on the journal with who ran it (D-151).
+- Target: I4. Owner: Services engineer. Status: Closed.
+- Reference: `../../design/DN-34-sensor-dead-spots.md` amendment 4; GAP-246; GAP-248 (laydown options, the other way to ask).
+- Depends on: GAP-246, D-149, D-150, D-151, D-152.
 

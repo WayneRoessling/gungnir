@@ -404,7 +404,10 @@ fn count_events(envelopes: &[gungnir_eventing::Envelope]) -> EventCounts {
             Event::Planning(gungnir_model::events::PlanningEvent::LaydownRehearsed(_)) => {
                 counts.laydown_rehearsals += 1;
             }
-            Event::Tracking(_)
+            // GAP-249: a dead-spot what-if is a question somebody asked of the terrain, not
+            // a piece of the watch's work; it changed nothing a report counts.
+            Event::Planning(gungnir_model::events::PlanningEvent::DeadSpotWhatIf(_))
+            | Event::Tracking(_)
             | Event::Intercept(
                 InterceptEvent::PlanSuperseded(_)
                 | InterceptEvent::PlanEvaluated { .. }

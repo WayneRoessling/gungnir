@@ -105,6 +105,69 @@ pub enum DeadSpotStatus<'a> {
     },
 }
 
+/// The change a dead-spot what-if will try, as the operator is setting it (GAP-249, D-149,
+/// `docs/design/DN-34-sensor-dead-spots.md` amendment 4). Held by the desktop and edited
+/// here; nothing is computed until it is run.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct WhatIfDraft {
+    /// The sensor to try, by identifier: any declared sensor, whatever its mode.
+    pub sensor: Option<u32>,
+    /// Metres added to its declared height; negative lowers it.
+    pub mast_m: f64,
+    /// Degrees its sector is turned clockwise; ignored for a sensor with no sector.
+    pub turn_deg: f64,
+    /// Metres it is moved east and north.
+    pub east_m: f64,
+    pub north_m: f64,
+}
+
+/// A sensor a what-if may be run on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WhatIfSensor<'a> {
+    pub id: u32,
+    /// Its name and its mode now, so a standby sensor reads as one.
+    pub label: &'a str,
+    /// Whether it declares a sector, so there is something to turn.
+    pub sectored: bool,
+}
+
+/// Where a what-if stands.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WhatIfStatus<'a> {
+    /// None has been run, or the last was cleared.
+    NotRun,
+    /// The last run was refused before anything was computed, and why.
+    Refused { reason: &'a str },
+    /// It cannot be computed -- no DEM, no frame -- and why.
+    NotComputed { reason: &'a str },
+    /// It is being computed.
+    Computing { describes: &'a str },
+    /// Its answer, on the map and here.
+    Shown {
+        describes: &'a str,
+        /// Square kilometres of dead spots now and with the change, cleared by it and left
+        /// newly dark by it, and watched now and with it.
+        before_shadow_km2: f64,
+        after_shadow_km2: f64,
+        cleared_km2: f64,
+        darkened_km2: f64,
+        watched_before_km2: f64,
+        watched_after_km2: f64,
+        /// The live sensors, the terrain or the height changed and it is being recomputed.
+        stale: bool,
+    },
+}
+
+/// PN-11's what-if controls (GAP-249, D-152: on PN-11, beside the chooser).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WhatIfView<'a> {
+    pub sensors: &'a [WhatIfSensor<'a>],
+    pub draft: WhatIfDraft,
+    pub status: WhatIfStatus<'a>,
+    /// A what-if is recorded with who ran it (D-151), so nobody signed in may run one.
+    pub signed_in: bool,
+}
+
 /// PN-11's dead-spot controls (DN-34 §7 item 1).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DeadSpotsView<'a> {
@@ -118,6 +181,8 @@ pub struct DeadSpotsView<'a> {
     /// The sensor whose shadow alone is shown, or `None` for every active sensor's.
     pub for_sensor: Option<u32>,
     pub status: DeadSpotStatus<'a>,
+    /// Trying a change to one sensor against the dead spots (GAP-249).
+    pub what_if: WhatIfView<'a>,
 }
 
 /// Everything PN-11 draws.
@@ -139,7 +204,7 @@ pub struct CoverageLayersView<'a> {
 }
 
 /// What the operator toggled this frame.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LayerAction {
     ShowRings(bool),
     ShowGaps(bool),
@@ -153,6 +218,12 @@ pub enum LayerAction {
     DeadSpotsFor(Option<u32>),
     /// Compute the field again now.
     RecomputeDeadSpots,
+    /// GAP-249: the what-if being set changed.
+    EditWhatIf(WhatIfDraft),
+    /// Run the what-if as set.
+    RunWhatIf,
+    /// Take the what-if off the map.
+    ClearWhatIf,
 }
 
 /// Render the coverage layer controls.
@@ -308,7 +379,183 @@ fn draw_dead_spots(
     if ui.small_button("Recompute dead spots").clicked() {
         action = Some(LayerAction::RecomputeDeadSpots);
     }
+    ui.separator();
+    if let Some(a) = draw_what_if(ui, palette, &view.what_if) {
+        action = Some(a);
+    }
     action
+}
+
+/// The what-if controls (GAP-249, DN-34 amendment 4): which sensor, what change, run and
+/// clear, and what the last run found.
+fn draw_what_if(
+    ui: &mut Ui,
+    palette: &theme::Palette,
+    view: &WhatIfView<'_>,
+) -> Option<LayerAction> {
+    let mut action = None;
+    ui.label(RichText::new("What if").small().strong());
+    ui.label(
+        RichText::new(
+            "Try one sensor switched on, its mast raised or lowered, its sector turned, or \
+             moved. Each run is recorded with who ran it; nothing is commanded.",
+        )
+        .small()
+        .color(palette.muted_text_color()),
+    );
+    let mut draft = view.draft;
+    let mut changed = false;
+    let chosen = draft
+        .sensor
+        .and_then(|id| view.sensors.iter().find(|s| s.id == id));
+    egui::ComboBox::from_id_salt("dead_spot_what_if_sensor")
+        .selected_text(chosen.map_or("choose a sensor", |s| s.label))
+        .show_ui(ui, |ui| {
+            for s in view.sensors {
+                if ui
+                    .selectable_label(draft.sensor == Some(s.id), s.label)
+                    .clicked()
+                {
+                    draft.sensor = Some(s.id);
+                    changed = true;
+                }
+            }
+        });
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Mast").small());
+        changed |= ui
+            .add(
+                egui::DragValue::new(&mut draft.mast_m)
+                    .range(-200.0..=500.0)
+                    .suffix(" m"),
+            )
+            .changed();
+        if chosen.is_some_and(|s| s.sectored) {
+            ui.label(RichText::new("Turn").small());
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut draft.turn_deg)
+                        .range(-180.0..=180.0)
+                        .suffix(" deg"),
+                )
+                .changed();
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Move east").small());
+        changed |= ui
+            .add(
+                egui::DragValue::new(&mut draft.east_m)
+                    .range(-50_000.0..=50_000.0)
+                    .suffix(" m"),
+            )
+            .changed();
+        ui.label(RichText::new("north").small());
+        changed |= ui
+            .add(
+                egui::DragValue::new(&mut draft.north_m)
+                    .range(-50_000.0..=50_000.0)
+                    .suffix(" m"),
+            )
+            .changed();
+    });
+    if changed {
+        action = Some(LayerAction::EditWhatIf(draft));
+    }
+    ui.horizontal(|ui| {
+        let may_run = view.signed_in && draft.sensor.is_some();
+        if ui
+            .add_enabled(may_run, egui::Button::new("Run what-if"))
+            .clicked()
+        {
+            action = Some(LayerAction::RunWhatIf);
+        }
+        let shown = !matches!(view.status, WhatIfStatus::NotRun);
+        if ui
+            .add_enabled(shown, egui::Button::new("Clear what-if"))
+            .clicked()
+        {
+            action = Some(LayerAction::ClearWhatIf);
+        }
+    });
+    if !view.signed_in {
+        ui.label(
+            RichText::new("Sign in to run a what-if: each is recorded with who ran it.")
+                .small()
+                .color(palette.muted_text_color()),
+        );
+    }
+    draw_what_if_status(ui, palette, view.status);
+    action
+}
+
+/// What the last what-if found, or why it has nothing.
+fn draw_what_if_status(ui: &mut Ui, palette: &theme::Palette, status: WhatIfStatus<'_>) {
+    match status {
+        WhatIfStatus::NotRun => {}
+        WhatIfStatus::Refused { reason } => {
+            ui.label(
+                RichText::new(format!("Not run: {reason}"))
+                    .small()
+                    .color(palette.warning_color),
+            );
+        }
+        WhatIfStatus::NotComputed { reason } => {
+            ui.label(
+                RichText::new(format!("Not computed: {reason}"))
+                    .small()
+                    .color(palette.warning_color),
+            );
+        }
+        WhatIfStatus::Computing { describes } => {
+            ui.label(
+                RichText::new(format!("Computing what-if: {describes}"))
+                    .small()
+                    .color(palette.muted_text_color()),
+            );
+        }
+        WhatIfStatus::Shown {
+            describes,
+            before_shadow_km2,
+            after_shadow_km2,
+            cleared_km2,
+            darkened_km2,
+            watched_before_km2,
+            watched_after_km2,
+            stale,
+        } => {
+            ui.label(
+                RichText::new(format!("What-if: {describes}"))
+                    .small()
+                    .strong(),
+            );
+            ui.label(
+                RichText::new(format!(
+                    "Dead spots from {before_shadow_km2:.1} to {after_shadow_km2:.1} km\u{b2}: \
+                 {cleared_km2:.1} km\u{b2} cleared, {darkened_km2:.1} km\u{b2} newly dark. \
+                 Watched from {watched_before_km2:.1} to {watched_after_km2:.1} km\u{b2}."
+                ))
+                .small(),
+            );
+            ui.label(
+                RichText::new(
+                    "On the map: the live dead spots, with what the change would clear and \
+                     darken marked over them. Not the live picture until the change is made.",
+                )
+                .small()
+                .color(palette.muted_text_color()),
+            );
+            if stale {
+                ui.label(
+                    RichText::new(
+                        "Recomputing: the live sensors, the terrain or the height changed.",
+                    )
+                    .small()
+                    .color(palette.warning_color),
+                );
+            }
+        }
+    }
 }
 
 /// What the dead-spot field is, or why there is none.

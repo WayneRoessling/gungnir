@@ -76,6 +76,8 @@ pub fn recover(journal: &dyn gungnir_store::EventJournal) -> PlanningRecord {
                         session: Some(session),
                     });
                 }
+                // GAP-249: a what-if is history, not standing state; nothing is restored.
+                PlanningEvent::DeadSpotWhatIf(_) => {}
             }
         }
     }

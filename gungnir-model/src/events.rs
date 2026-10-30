@@ -1249,6 +1249,10 @@ pub enum PlanningEvent {
     },
     /// A laydown was rehearsed against a recording, under what the stamp names (D-120).
     LaydownRehearsed(crate::RehearsalStamp),
+    /// Somebody tried a sensor change against the terrain's dead spots (GAP-249, D-151).
+    /// Changes nothing; it records what was asked and what it found. Additive, like the
+    /// rest of this enum.
+    DeadSpotWhatIf(crate::DeadSpotWhatIf),
 }
 
 /// A seeded session for a usability round (GAP-089). **The first record of a seeded

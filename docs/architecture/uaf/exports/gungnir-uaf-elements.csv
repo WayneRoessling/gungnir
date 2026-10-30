@@ -309,6 +309,8 @@ IE-conflict-side,Information Elements,InformationElement,ConflictSide,"One side 
 IE-control-status-change,Information Elements,InformationElement,ControlStatusChange,"One live change to a layer's weapons control status, as it is journaled, audited and shown (GAP-203; docs/design/DN-09-authority-and-control-status.md \u00a710).",Class
 IE-control-status-settings,Information Elements,InformationElement,ControlStatusSettings,Weapons control status per effector layer.,Class
 IE-cooperative-settings,Information Elements,InformationElement,CooperativeSettings,"Tuning for the cooperative detector: when a cooperative report counts as lost, and how far it may sit from the track it claims to be before the two disagree.",Class
+IE-dead-spot-areas,Information Elements,InformationElement,DeadSpotAreas,"A dead-spot field's areas as the record holds them, square metres.",Class
+IE-dead-spot-what-if,Information Elements,InformationElement,DeadSpotWhatIf,"A dead-spot what-if as the record holds it (GAP-249, D-151): who tried which change, under which baseline, at which height, and what it would do to the dead spots.",Class
 IE-decision-attribution,Information Elements,InformationElement,DecisionAttribution,"Who decided, when, and on what basis.",Class
 IE-decision-id,Information Elements,InformationElement,DecisionId,Identifies one recorded decision.,Class
 IE-decision-settings,Information Elements,InformationElement,DecisionSettings,Timeouts and escalation for pending decisions. DN-10 implements against this.,Class
@@ -403,6 +405,7 @@ IE-sensor-mode,Information Elements,InformationElement,SensorMode,What a sensor 
 IE-sensor-placement,Information Elements,InformationElement,SensorPlacement,"Where one sensor sits in a laydown, and what it is doing there.",Class
 IE-sensor-task-event,Information Elements,InformationElement,SensorTaskEvent,"The life of one command to a sensor (docs/design/DN-11-sensor-control-and-tasking.md \u00a76, GAP-004).",Class
 IE-sensor-task-id,Information Elements,InformationElement,SensorTaskId,Identifier of one command issued to a sensor.,Class
+IE-sensor-what-if,Information Elements,InformationElement,SensorWhatIf,"One sensor as a dead-spot what-if would have it (GAP-249, D-149, docs/design/DN-34-sensor-dead-spots.md amendment 4): counted as searching whatever mode it is in, its mast raised or lowered, its sector turned, and moved. A change of nothing at all is the sensor switched on where it stands.",Class
 IE-session-id,Information Elements,InformationElement,SessionId,Identifier of one recorded mission session.,Class
 IE-side-outcome,Information Elements,InformationElement,SideOutcome,"How one side of a conflict ended a plan's approval, as far as a journal can tell.",Class
 IE-source-authentication,Information Elements,InformationElement,SourceAuthentication,"The strength of a source's authentication at admission (GAP-002, D-02).",Class

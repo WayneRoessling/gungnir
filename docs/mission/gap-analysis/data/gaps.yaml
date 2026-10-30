@@ -13549,3 +13549,52 @@
       within what it claims, at its height. The map keeps the live field. Tested by
       `gungnir-app/tests/dead_spots.rs` and PN-16's render test
       (`../../record/2026-10-29/gap-248-a-laydown-option-s-dead-spots.md`).
+
+- id: GAP-249
+  name: A sensor change cannot be tried against the dead spots without editing the baseline
+  type: Mission
+  caps: [CAP-1.4, CAP-2.11, CAP-3.9]
+  layer: "Productization: picture and identity"
+  sev: 2
+  effort: M
+  target: I4
+  owner: Services engineer
+  deps: [GAP-246, D-149, D-150, D-151, D-152]
+  impact: >-
+    DN-34 §7 item 6 wanted the one-sensor view so a sensor manager could see what re-aiming
+    or raising a mast would do. PN-11's chooser shows only a searching or tracking sensor's
+    shadow where it stands, so a standby sensor cannot be tried switched on, and a raised
+    mast, a turned sector or a move can be seen only by declaring a laydown option and
+    selecting it on PN-16: a baseline edit, not a quick check.
+  evidence: >-
+    `gungnir-app/src/workspace.rs` (the chooser offers the computed field's sensors, which
+    `coverage_from_registry` limits to searching and tracking ones);
+    `gungnir-app/src/dead_spots.rs` (the live field is the registry's, as it stands);
+    `../../design/DN-34-sensor-dead-spots.md` §7 item 6 and amendment 1 item 5
+  action: >-
+    Per DN-34 amendment 4: a what-if on PN-11 (D-152) trying one declared sensor switched on
+    whatever its mode, its mast raised or lowered, its sector turned and moved (D-149); the
+    live sensors' field and the field with the change computed over one grid off the tick
+    and compared cell by cell; the map marking what the change would clear and darken over
+    the live dead spots under a what-if line (D-150); each run recorded on the journal with
+    who ran it (D-151).
+  ref: >-
+    `../../design/DN-34-sensor-dead-spots.md` amendment 4; GAP-246; GAP-248 (laydown
+    options, the other way to ask)
+  history:
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      Found reviewing whether PN-10 should hold the one-sensor chooser: the chooser's
+      placement mattered less than what neither panel could answer. D-149 to D-152 taken by
+      the owner the same day.
+  - date: 2026-10-30
+    status: Closed
+    note: >-
+      Built: `gungnir-app::what_if` runs the change on a worker over one grid with the live
+      field (`gungnir_analytics::shadow_field_over`, `compare_fields`), the map marks what
+      would clear and darken, PN-11 holds the controls and figures, and each run is recorded
+      once as `PlanningEvent::DeadSpotWhatIf` with who ran it, so a run needs somebody signed
+      in. Tested by `gungnir-app/tests/dead_spots.rs` and the comparison test in
+      `gungnir-analytics/tests/shadow_geometry.rs`
+      (`../../record/2026-10-30/gap-249-a-sensor-what-if-against-the.md`).

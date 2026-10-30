@@ -505,3 +505,174 @@ fn with_no_dem_the_dead_spots_are_unknown_and_nothing_is_dark() {
     assert!(dead_spots::health_line(&state).contains("not computed"));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// GAP-249 (DN-34 amendment 4, D-149 to D-152): a sensor change tried against the dead
+/// spots from PN-11. Nobody signed in is refused and nothing is recorded. Signed in, the
+/// standby radar switched on where it stands leaves the valley behind the ridge newly dark
+/// and clears nothing; the live radar with its mast raised over the ridge clears that
+/// valley; each run is recorded once, with who ran it, even when a live change recomputes
+/// it; the map draws it as a what-if over the live dead spots; and clearing it puts the
+/// live field back with nothing more recorded.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn a_what_if_shows_what_a_sensor_change_would_clear_and_is_recorded() {
+    use gungnir_security::{
+        hash_passphrase, Account, InMemoryAccountStore, LocalAccountAuthority, OperatorId, Role,
+    };
+    use gungnir_ui::panels::coverage_layers::{LayerAction, WhatIfDraft};
+    use gungnir_viewport3d::layers::DeadSpotCell;
+
+    const MANAGER: OperatorId = OperatorId(7);
+    const PASSPHRASE: &str = "correct horse battery staple";
+    let (mut state, dir) = desktop("what-if", true);
+    state.set_session_authority(Box::new(LocalAccountAuthority::new(Box::new(
+        InMemoryAccountStore::new(vec![Account {
+            operator: MANAGER,
+            role: Role::SensorManager,
+            phc: hash_passphrase(PASSPHRASE).expect("hashed"),
+        }]),
+    ))));
+    let events = state.events.subscribe();
+    let what_ifs = || -> Vec<gungnir_model::DeadSpotWhatIf> {
+        events
+            .try_iter()
+            .filter_map(|env| match env.event {
+                gungnir_eventing::Event::Planning(
+                    gungnir_model::events::PlanningEvent::DeadSpotWhatIf(w),
+                ) => Some(w),
+                _ => None,
+            })
+            .collect()
+    };
+    settle(&mut state, "the DEM loading", |s| {
+        !matches!(
+            s.terrain,
+            TerrainStatus::Loading { .. } | TerrainStatus::NotConfigured
+        )
+    });
+    let set = |state: &mut AppState, draft: WhatIfDraft| {
+        dead_spots::apply(state, LayerAction::EditWhatIf(draft));
+        dead_spots::apply(state, LayerAction::RunWhatIf);
+    };
+    let answered = |state: &mut AppState, what: &str| {
+        settle(state, what, |s| {
+            s.dead_spots.what_if.answer.is_some() && !s.dead_spots.what_if.stale
+        });
+    };
+
+    // Nobody signed in: refused in words, nothing run, nothing recorded.
+    set(
+        &mut state,
+        WhatIfDraft {
+            sensor: Some(1),
+            ..WhatIfDraft::default()
+        },
+    );
+    let refused = state.dead_spots.what_if.refused.clone().expect("refused");
+    assert!(refused.contains("nobody is signed in"), "{refused}");
+    assert!(state.dead_spots.what_if.describes().is_none());
+    update::tick(&mut state);
+    assert!(what_ifs().is_empty(), "a refusal was recorded");
+
+    // Signed in: the standby radar, switched on where it stands.
+    state
+        .sign_in(&LocalAccountAuthority::credential(MANAGER, PASSPHRASE))
+        .expect("signed in");
+    set(
+        &mut state,
+        WhatIfDraft {
+            sensor: Some(1),
+            ..WhatIfDraft::default()
+        },
+    );
+    assert!(state.dead_spots.what_if.refused.is_none());
+    answered(&mut state, "the switched-on what-if");
+    let answer = state.dead_spots.what_if.answer.as_ref().expect("an answer");
+    assert!(
+        answer.comparison.darkened_m2 > 1.0e6,
+        "switching the radar on leaves the valley behind the ridge dark: {} m²",
+        answer.comparison.darkened_m2
+    );
+    assert!(
+        answer.comparison.cleared_m2 < f64::EPSILON,
+        "nothing was dark to clear"
+    );
+    assert!(answer.comparison.watched_after_m2 > 5.0e6);
+    assert!(answer.codes.contains(&DeadSpotCell::WouldDarken));
+    // From the live picture's own sensors: the live field is still the standby one's.
+    assert!(state
+        .dead_spots
+        .computed
+        .as_ref()
+        .is_some_and(|c| c.inputs.sensors.is_empty()));
+    let recorded = what_ifs();
+    assert_eq!(recorded.len(), 1, "{recorded:?}");
+    let first = &recorded[0];
+    assert_eq!(first.operator, "7");
+    assert_eq!(first.role, "SensorManager");
+    assert_eq!(first.change.sensor, gungnir_model::SensorId(1));
+    assert!((first.after.watched_m2 - answer.comparison.watched_after_m2).abs() < 1.0);
+    assert!((first.height_agl_m - 100.0).abs() < f64::EPSILON);
+    let line = state
+        .dead_spots
+        .what_if
+        .describes()
+        .expect("running")
+        .to_owned();
+    assert!(line.contains("switched on from standby"), "{line}");
+
+    // The map: the what-if over the live dead spots, under a line saying what it is.
+    let frame = draw_viewport(&mut state);
+    assert!(
+        frame.says("WHAT-IF, not the live picture"),
+        "{}",
+        frame.joined()
+    );
+    assert!(frame.says("switched on from standby"), "{}", frame.joined());
+
+    // The live radar searching, and the same radar's mast raised over the ridge.
+    sustainment::record_observed_mode(&mut state, 1, SensorMode::Search).expect("searching");
+    set(
+        &mut state,
+        WhatIfDraft {
+            sensor: Some(1),
+            mast_m: 300.0,
+            ..WhatIfDraft::default()
+        },
+    );
+    answered(&mut state, "the raised-mast what-if");
+    let answer = state.dead_spots.what_if.answer.as_ref().expect("an answer");
+    assert!(
+        answer.comparison.cleared_m2 > 1.0e6,
+        "a mast 300 m up sees over a 200 m ridge: {} m² cleared",
+        answer.comparison.cleared_m2
+    );
+    assert!(answer.after_measure.shadow_m2 < answer.before_measure.shadow_m2);
+    assert!(answer.codes.contains(&DeadSpotCell::WouldClear));
+    let recorded = what_ifs();
+    assert_eq!(recorded.len(), 1, "{recorded:?}");
+    assert!((recorded[0].change.mast_m - 300.0).abs() < f64::EPSILON);
+
+    // A live change recomputes the run; it is the same run, and is not recorded again.
+    sustainment::record_observed_mode(&mut state, 1, SensorMode::Standby).expect("standby");
+    answered(&mut state, "the recomputed what-if");
+    assert!(state
+        .dead_spots
+        .what_if
+        .answer
+        .as_ref()
+        .is_some_and(|a| a.inputs.before.is_empty()));
+    assert!(
+        what_ifs().is_empty(),
+        "a recompute was recorded as a new run"
+    );
+
+    // Cleared: the live field is back on the map, and nothing more is recorded.
+    dead_spots::apply(&mut state, LayerAction::ClearWhatIf);
+    update::tick(&mut state);
+    assert!(state.dead_spots.what_if.describes().is_none());
+    let frame = draw_viewport(&mut state);
+    assert!(!frame.says("WHAT-IF"), "{}", frame.joined());
+    assert!(what_ifs().is_empty());
+    let _ = std::fs::remove_dir_all(dir);
+}

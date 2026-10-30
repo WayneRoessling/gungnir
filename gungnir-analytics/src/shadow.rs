@@ -202,6 +202,26 @@ pub fn dead_spot_cell_m(sensors: &[(SensorId, CoverageVolume)], wanted: f64) -> 
     }
 }
 
+/// The east-north box every sensor's range reaches into, `[[min_e, min_n], [max_e,
+/// max_n]]`: the extent [`shadow_field`] lays its cells over. `None` for no sensor with a
+/// range.
+#[must_use]
+pub fn dead_spot_extent(sensors: &[(SensorId, CoverageVolume)]) -> Option<[[f64; 2]; 2]> {
+    reach_box(sensors)
+}
+
+/// The smallest box holding both, either of which may be absent.
+#[must_use]
+pub fn union_extent(a: Option<[[f64; 2]; 2]>, b: Option<[[f64; 2]; 2]>) -> Option<[[f64; 2]; 2]> {
+    match (a, b) {
+        (Some([alo, ahi]), Some([blo, bhi])) => Some([
+            [alo[0].min(blo[0]), alo[1].min(blo[1])],
+            [ahi[0].max(bhi[0]), ahi[1].max(bhi[1])],
+        ]),
+        (one, other) => one.or(other),
+    }
+}
+
 /// The east-north box every sensor's range reaches into.
 fn reach_box(sensors: &[(SensorId, CoverageVolume)]) -> Option<[[f64; 2]; 2]> {
     let mut lo = [f64::INFINITY; 2];
@@ -250,7 +270,20 @@ pub fn shadow_field(
     terrain: &HeightField,
     parameters: ShadowParameters,
 ) -> ShadowField {
-    compute(sensors, terrain, parameters, Method::Sweep)
+    compute(sensors, terrain, parameters, Method::Sweep, None)
+}
+
+/// [`shadow_field`] laid over `extent` rather than these sensors' own reach, so two fields
+/// over different sensors share one grid and can be compared cell by cell
+/// ([`compare_fields`]; GAP-249's what-if). The cell is fitted to the budget over `extent`.
+#[must_use]
+pub fn shadow_field_over(
+    sensors: &[(SensorId, CoverageVolume)],
+    terrain: &HeightField,
+    parameters: ShadowParameters,
+    extent: [[f64; 2]; 2],
+) -> ShadowField {
+    compute(sensors, terrain, parameters, Method::Sweep, Some(extent))
 }
 
 /// The same field by the definition: a sampled line of sight from each claiming sensor to
@@ -262,7 +295,7 @@ pub fn shadow_field_reference(
     terrain: &HeightField,
     parameters: ShadowParameters,
 ) -> ShadowField {
-    compute(sensors, terrain, parameters, Method::Reference)
+    compute(sensors, terrain, parameters, Method::Reference, None)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -282,6 +315,7 @@ fn compute(
     terrain: &HeightField,
     parameters: ShadowParameters,
     method: Method,
+    extent: Option<[[f64; 2]; 2]>,
 ) -> ShadowField {
     let empty = |parameters| ShadowField {
         parameters,
@@ -296,7 +330,10 @@ fn compute(
     if !(valid(parameters.height_agl_m) && valid(parameters.cell_m)) {
         return empty(parameters);
     }
-    let Some([lo, hi]) = reach_box(sensors) else {
+    let Some([lo, hi]) = extent
+        .filter(|[lo, hi]| lo[0] < hi[0] && lo[1] < hi[1])
+        .or_else(|| reach_box(sensors))
+    else {
         return empty(parameters);
     };
     let asked = parameters.cell_m;
@@ -576,4 +613,73 @@ impl ShadowField {
                 .collect(),
         )
     }
+}
+
+/// What a change does to one cell of the field (GAP-249, D-150).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CellChange {
+    /// A dead spot before and after, or neither.
+    Same,
+    /// A dead spot now, and not with the change.
+    Cleared,
+    /// Not a dead spot now, and one with the change: a claim the change adds that the
+    /// terrain denies, or a watched place it loses to the terrain.
+    Darkened,
+}
+
+/// Two fields over the same grid, compared cell by cell (GAP-249).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldComparison {
+    pub cells: Vec<CellChange>,
+    /// Square metres the change would clear, and would leave newly dark.
+    pub cleared_m2: f64,
+    pub darkened_m2: f64,
+    /// Square metres seen by at least one sensor, before and after.
+    pub watched_before_m2: f64,
+    pub watched_after_m2: f64,
+}
+
+/// Compare `before` with `after`, cell by cell. `None` when they are not over the same grid,
+/// which [`shadow_field_over`] with one extent and one cell guarantees.
+#[must_use]
+pub fn compare_fields(before: &ShadowField, after: &ShadowField) -> Option<FieldComparison> {
+    #[allow(clippy::float_cmp)] // the same arithmetic on the same inputs, or not the same grid
+    let same_grid = before.rows == after.rows
+        && before.columns == after.columns
+        && before.origin_enu == after.origin_enu
+        && before.parameters.cell_m == after.parameters.cell_m
+        && before.cells.len() == after.cells.len();
+    if !same_grid {
+        return None;
+    }
+    let area = before.parameters.cell_m * before.parameters.cell_m;
+    let dark = |c: &CellSight| matches!(c, CellSight::Shadow { .. });
+    let watched = |c: &CellSight| matches!(c, CellSight::Single { .. } | CellSight::Fused { .. });
+    let mut out = FieldComparison {
+        cells: Vec::with_capacity(before.cells.len()),
+        cleared_m2: 0.0,
+        darkened_m2: 0.0,
+        watched_before_m2: 0.0,
+        watched_after_m2: 0.0,
+    };
+    for (b, a) in before.cells.iter().zip(&after.cells) {
+        out.cells.push(match (dark(b), dark(a)) {
+            (true, false) => {
+                out.cleared_m2 += area;
+                CellChange::Cleared
+            }
+            (false, true) => {
+                out.darkened_m2 += area;
+                CellChange::Darkened
+            }
+            _ => CellChange::Same,
+        });
+        if watched(b) {
+            out.watched_before_m2 += area;
+        }
+        if watched(a) {
+            out.watched_after_m2 += area;
+        }
+    }
+    Some(out)
 }

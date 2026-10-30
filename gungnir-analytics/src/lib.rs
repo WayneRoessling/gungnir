@@ -17,8 +17,9 @@ pub mod shadow;
 pub mod terrain;
 
 pub use shadow::{
-    dead_spot_cell_m, measure_cells, shadow_field, shadow_field_reference, CellSight, ShadowField,
-    ShadowMeasure, ShadowParameters, Sight, DEAD_SPOT_CELL_BUDGET,
+    compare_fields, dead_spot_cell_m, dead_spot_extent, measure_cells, shadow_field,
+    shadow_field_over, shadow_field_reference, union_extent, CellChange, CellSight,
+    FieldComparison, ShadowField, ShadowMeasure, ShadowParameters, Sight, DEAD_SPOT_CELL_BUDGET,
 };
 pub use terrain::{
     HeightField, HeightFieldError, HeightFieldLineOfSight, MeshSurface, SurfaceMiss,

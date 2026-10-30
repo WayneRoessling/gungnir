@@ -1169,6 +1169,14 @@ IE-cooperative-settings,uafId,IE-cooperative-settings
 IE-cooperative-settings,uafKind,InformationElement
 IE-cooperative-settings,registry.code,gungnir_model::CooperativeSettings
 IE-cooperative-settings,registry.domain,"Policy, authority & settings"
+IE-dead-spot-areas,uafId,IE-dead-spot-areas
+IE-dead-spot-areas,uafKind,InformationElement
+IE-dead-spot-areas,registry.code,gungnir_model::DeadSpotAreas
+IE-dead-spot-areas,registry.domain,Battle rhythm & mission records
+IE-dead-spot-what-if,uafId,IE-dead-spot-what-if
+IE-dead-spot-what-if,uafKind,InformationElement
+IE-dead-spot-what-if,registry.code,gungnir_model::DeadSpotWhatIf
+IE-dead-spot-what-if,registry.domain,Battle rhythm & mission records
 IE-decision-attribution,uafId,IE-decision-attribution
 IE-decision-attribution,uafKind,InformationElement
 IE-decision-attribution,registry.code,gungnir_model::DecisionAttribution
@@ -1545,6 +1553,10 @@ IE-sensor-task-id,uafId,IE-sensor-task-id
 IE-sensor-task-id,uafKind,InformationElement
 IE-sensor-task-id,registry.code,gungnir_model::SensorTaskId
 IE-sensor-task-id,registry.domain,Picture & tracking vocabulary
+IE-sensor-what-if,uafId,IE-sensor-what-if
+IE-sensor-what-if,uafKind,InformationElement
+IE-sensor-what-if,registry.code,gungnir_model::SensorWhatIf
+IE-sensor-what-if,registry.domain,Battle rhythm & mission records
 IE-session-id,uafId,IE-session-id
 IE-session-id,uafKind,InformationElement
 IE-session-id,registry.code,gungnir_model::SessionId

@@ -584,6 +584,54 @@ two fields at once. And it shows no difference from the current laydown's dead s
 needs the current option's field computed too, which item 5 left out for the same reason it
 computes on selection.
 
+## Amendment 4, 2026-10-30: trying a sensor change (GAP-249, D-149 to D-152)
+
+§7 item 6 gave the one-sensor view a purpose: a sensor manager seeing what re-aiming or
+raising a mast would do. Neither PN-10 nor PN-11's chooser answered that. The chooser shows
+a searching or tracking sensor's shadow where it stands, so a standby sensor cannot be tried
+switched on, and a changed sensor could be seen only through a laydown option on PN-16,
+which is a baseline edit. GAP-249 filed that, and the owner decided four things on
+2026-10-30.
+
+1. **What may change (D-149).** One declared sensor, whatever its mode, counted as searching:
+   its mast raised or lowered, its declared sector turned, and moved east and north in the
+   frame. Moving was the owner's addition to the recommended set. The bounds are PN-11's:
+   a mast from −200 to +500 m, a turn within 180 degrees, a move within 50 km.
+2. **What the map shows (D-150).** The live dead spots, with the cells the change would
+   clear hatched in the healthy colour over their dark fill, and the ground it would leave
+   newly dark cross-hatched in the alert colour. The line says "WHAT-IF, not the live
+   picture" first. A dead spot the change would clear is still drawn dark, because it is
+   dark until somebody makes the change.
+3. **The record (D-151).** Each run is recorded on the journal with who ran it, as
+   `PlanningEvent::DeadSpotWhatIf`: the change, the operator and role, the baseline
+   revision, the height and cell, the areas before and after, and what it clears and
+   darkens. This was the owner's choice over the recommended unrecorded default. Three
+   consequences the build drew from it:
+   - **A run needs somebody signed in**, since there is nobody to record otherwise. The
+     panel says so, and a refusal records nothing.
+   - **A run is recorded once, when its first answer arrives.** A run cleared before it has
+     an answer found nothing and leaves no record. One recomputed because the live sensors,
+     the terrain or the height moved is the same run, and is not recorded again.
+   - **It is not an audited action.** It changes nothing and gates nothing, so it writes no
+     audit entry; changing a sensor is still PN-10's, under its own authority. The event is
+     additive, `SCHEMA_VERSION` stands, the desktop and the node read past it on recovery,
+     and reports do not count it as the watch's work.
+4. **Where (D-152).** On PN-11, under the dead-spot controls: the sensor, named with its
+   mode; the mast, turn and move; Run and Clear; and the answer's figures, dead spots and
+   watched area before and after, what would clear and what would go dark.
+
+**How it is computed.** The live sensors' field and the field with the change are laid
+over one extent, both sets' reach together, at one cell (`shadow_field_over`), so they are
+one grid and `compare_fields` compares them cell by cell. Both run on a worker off the tick,
+recomputed when the live inputs change, as the live field is. The changed sensor's volume
+goes through `volume_in_frame`, the one place a volume is built from a declaration, at the
+moved and raised position, its sector turned before it is placed in the frame.
+
+**What it does not do.** It tries one sensor at a time; several changes at once is a
+laydown option (GAP-248). It does not task anything or offer to: a what-if that looked like
+a button for the change would be the wrong control on this panel. And the node computes
+none, as D-148 holds for every field.
+
 ## Traceability
 
 GAP-246, GAP-247; D-146, D-147, D-148; CAP-1.4, CAP-2.10, CAP-2.11, CAP-5.9; MT-07

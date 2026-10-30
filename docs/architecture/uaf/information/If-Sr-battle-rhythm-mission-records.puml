@@ -74,6 +74,31 @@ class "RehearsalStamp" as RehearsalStamp <<InformationElement>> {
   basis: RehearsalBasis
   ran_at: crate::MissionTime
 }
+class "SensorWhatIf" as SensorWhatIf <<InformationElement>> {
+  sensor: SensorId
+  mast_m: f64
+  turn_rad: f64
+  east_m: f64
+  north_m: f64
+}
+class "DeadSpotAreas" as DeadSpotAreas <<InformationElement>> {
+  claimed_m2: f64
+  shadow_m2: f64
+  watched_m2: f64
+}
+class "DeadSpotWhatIf" as DeadSpotWhatIf <<InformationElement>> {
+  change: SensorWhatIf
+  operator: String
+  role: String
+  revision: u32
+  height_agl_m: f64
+  cell_m: f64
+  before: DeadSpotAreas
+  after: DeadSpotAreas
+  cleared_m2: f64
+  darkened_m2: f64
+  at: crate::MissionTime
+}
 class "RequirementId" as RequirementId <<InformationElement>> {
   pub u64
 }
@@ -176,6 +201,10 @@ RehearsalStamp --> LaydownId : laydown
 RehearsalStamp --> MissionTime : ran_at
 RehearsalStamp --> RehearsalBasis : basis
 RehearsalStamp --> TestTrackNumber : scenario
+SensorWhatIf --> SensorId : sensor
+DeadSpotWhatIf --> DeadSpotAreas : before, after
+DeadSpotWhatIf --> MissionTime : at
+DeadSpotWhatIf --> SensorWhatIf : change
 CollectionRequirement --> AssetExtent : area
 CollectionRequirement --> AssetPriority : priority
 CollectionRequirement --> MissionTime : needed_by

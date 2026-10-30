@@ -102,6 +102,8 @@ pub struct DeadSpots {
     pub linked: bool,
     /// The selected laydown option's own field, for PN-16 (GAP-248).
     pub option: OptionField,
+    /// A sensor change being tried against the dead spots, from PN-11 (GAP-249).
+    pub what_if: crate::what_if::WhatIf,
 }
 
 impl DeadSpots {
@@ -168,7 +170,9 @@ pub fn option_inputs(state: &AppState, laydown: &gungnir_model::Laydown) -> Resu
 }
 
 /// The resampled terrain and the local frame every field needs, or why there are none.
-fn context(state: &AppState) -> Result<(Arc<HeightField>, gungnir_model::LocalFrame), String> {
+pub(crate) fn context(
+    state: &AppState,
+) -> Result<(Arc<HeightField>, gungnir_model::LocalFrame), String> {
     let terrain = match (&state.terrain, state.height_field.as_ref()) {
         (TerrainStatus::Loaded { .. }, Some(field)) => Arc::clone(field),
         (TerrainStatus::NotConfigured, _) => {
@@ -233,6 +237,7 @@ pub fn tick(state: &mut AppState) {
             dead.folded = None;
             dead.not_computed = Some(reason);
             tick_option(state);
+            crate::what_if::tick(state);
             return;
         }
     };
@@ -272,6 +277,7 @@ pub fn tick(state: &mut AppState) {
     dead.stale = dead.pending.is_some() || !current;
     fold(dead);
     tick_option(state);
+    crate::what_if::tick(state);
 }
 
 /// The selected laydown option's field (GAP-248): one at a time, for the option PN-16 has
@@ -449,6 +455,25 @@ pub fn layer<'a>(dead: &'a DeadSpots, label: &'a str) -> DeadSpotLayer<'a> {
     if let Some(reason) = &dead.not_computed {
         return DeadSpotLayer::NotComputed { reason };
     }
+    // GAP-249, D-150: a what-if with an answer is drawn as the live dead spots with what the
+    // change would clear and darken marked over them, under its own line.
+    if let (Some(answer), Some(describes)) = (&dead.what_if.answer, dead.what_if.describes()) {
+        let field = &answer.before;
+        return DeadSpotLayer::Field(DeadSpotField {
+            revision: dead.revision,
+            origin_enu: field.origin_enu,
+            cell_m: field.parameters.cell_m,
+            rows: field.rows,
+            columns: field.columns,
+            cells: &answer.codes,
+            height_agl_m: field.parameters.height_agl_m,
+            age_s: answer.at.elapsed().as_secs_f64(),
+            stale: dead.what_if.stale,
+            sensor: None,
+            linked: dead.linked,
+            what_if: Some(describes),
+        });
+    }
     let Some(computed) = &dead.computed else {
         return DeadSpotLayer::Computing;
     };
@@ -465,6 +490,7 @@ pub fn layer<'a>(dead: &'a DeadSpots, label: &'a str) -> DeadSpotLayer<'a> {
         stale: dead.stale,
         sensor: dead.for_sensor.map(|_| label),
         linked: dead.linked,
+        what_if: None,
     })
 }
 
@@ -524,6 +550,17 @@ pub fn apply(state: &mut AppState, action: gungnir_ui::panels::coverage_layers::
             fold(&mut state.dead_spots);
         }
         LayerAction::RecomputeDeadSpots => state.dead_spots.recompute_requested = true,
+        // GAP-249: the draft is the window's to edit; a run is refused in words, or starts.
+        LayerAction::EditWhatIf(draft) => state.dead_spots.what_if.draft = draft,
+        LayerAction::RunWhatIf => {
+            if let Err(reason) = crate::what_if::run(state) {
+                state.dead_spots.what_if.refused = Some(reason);
+            }
+        }
+        LayerAction::ClearWhatIf => {
+            state.dead_spots.what_if.clear();
+            state.dead_spots.revision += 1;
+        }
         LayerAction::ShowRings(on) => state.viewport.layers.rings = on,
         LayerAction::ShowGaps(on) => state.viewport.layers.gaps = on,
         LayerAction::ShowHazards(on) => state.viewport.layers.hazards = on,

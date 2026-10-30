@@ -976,8 +976,8 @@ pub fn render_coverage_layers(
     draft: &mut gungnir_ui::panels::coverage_layers::AcceptanceDraft,
 ) -> Option<PanelAction> {
     use gungnir_ui::panels::coverage_layers::{
-        CoverageLayersView, DeadSpotStatus, DeadSpotsView, LaydownComparison, LayerCounts,
-        NothingToDraw,
+        CoverageLayersView, DeadSpotsView, LaydownComparison, LayerCounts, NothingToDraw,
+        WhatIfSensor, WhatIfView,
     };
     use gungnir_viewport3d::layers::CoverageLayer;
 
@@ -1016,31 +1016,21 @@ pub fn render_coverage_layers(
 
     // GAP-246: the dead-spot controls (DN-34 §7 item 1).
     let dead = &state.dead_spots;
-    let labels: Vec<(u32, String)> = dead
-        .computed
-        .as_ref()
-        .map(|c| {
-            c.inputs
-                .sensors
-                .iter()
-                .map(|(id, _)| (id.0, crate::dead_spots::sensor_label(state, *id)))
-                .collect()
-        })
-        .unwrap_or_default();
+    let labels = chooser_labels(state);
     let sensor_choices: Vec<(u32, &str)> = labels.iter().map(|(id, l)| (*id, l.as_str())).collect();
     let measure = crate::dead_spots::measure_sentence(state);
-    let dead_status = match (&dead.not_computed, &dead.computed, measure.as_deref()) {
-        (Some(reason), _, _) => DeadSpotStatus::NotComputed { reason },
-        (None, Some(c), Some(measure)) => DeadSpotStatus::Computed {
-            measure,
-            age_s: c.at.elapsed().as_secs_f64(),
-            cell_m: c.field.parameters.cell_m,
-            stale: dead.stale,
-            clamped_from_m: c.field.clamped_from_m,
-            linked: dead.linked,
-        },
-        _ => DeadSpotStatus::Computing,
-    };
+    let dead_status = dead_spot_status(dead, measure.as_deref());
+    let what_if_labels = what_if_labels(state);
+    let what_if_sensors: Vec<WhatIfSensor<'_>> = what_if_labels
+        .iter()
+        .map(|(id, label, sectored)| WhatIfSensor {
+            id: *id,
+            label,
+            sectored: *sectored,
+        })
+        .collect();
+    let what_if = &dead.what_if;
+    let what_if_status = what_if_status(what_if);
     let view = CoverageLayersView {
         dead_spots: DeadSpotsView {
             visible: state.viewport.layers.dead_spots,
@@ -1049,6 +1039,12 @@ pub fn render_coverage_layers(
             sensors: &sensor_choices,
             for_sensor: dead.for_sensor.map(|s| s.0),
             status: dead_status,
+            what_if: WhatIfView {
+                sensors: &what_if_sensors,
+                draft: what_if.draft,
+                status: what_if_status,
+                signed_in: state.signed_in().is_some(),
+            },
         },
         rings_visible: state.viewport.layers.rings,
         gaps_visible: state.viewport.layers.gaps,
@@ -1076,6 +1072,91 @@ pub fn render_coverage_layers(
     // for each or the control to accept it.
     ui.separator();
     render_gap_acceptance_section(ui, state, report.as_ref(), &names, draft).or(layer_action)
+}
+
+/// The active sensors the one-sensor chooser offers (GAP-246), by identifier and name.
+fn chooser_labels(state: &AppState) -> Vec<(u32, String)> {
+    state
+        .dead_spots
+        .computed
+        .as_ref()
+        .map(|c| {
+            c.inputs
+                .sensors
+                .iter()
+                .map(|(id, _)| (id.0, crate::dead_spots::sensor_label(state, *id)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Where the live dead-spot field stands, for PN-11 (GAP-246).
+fn dead_spot_status<'a>(
+    dead: &'a crate::dead_spots::DeadSpots,
+    measure: Option<&'a str>,
+) -> gungnir_ui::panels::coverage_layers::DeadSpotStatus<'a> {
+    use gungnir_ui::panels::coverage_layers::DeadSpotStatus;
+    match (&dead.not_computed, &dead.computed, measure) {
+        (Some(reason), _, _) => DeadSpotStatus::NotComputed { reason },
+        (None, Some(c), Some(measure)) => DeadSpotStatus::Computed {
+            measure,
+            age_s: c.at.elapsed().as_secs_f64(),
+            cell_m: c.field.parameters.cell_m,
+            stale: dead.stale,
+            clamped_from_m: c.field.clamped_from_m,
+            linked: dead.linked,
+        },
+        _ => DeadSpotStatus::Computing,
+    }
+}
+
+/// Every declared sensor a what-if may try (GAP-249, D-149: whatever its mode), as
+/// `(identifier, its name and mode, whether it has a sector to turn)`.
+fn what_if_labels(state: &AppState) -> Vec<(u32, String, bool)> {
+    use gungnir_sensor_management::SensorRegistry as _;
+    state
+        .sensors
+        .sensors()
+        .iter()
+        .map(|s| {
+            (
+                s.id.0,
+                format!(
+                    "{} ({})",
+                    crate::dead_spots::sensor_label(state, s.id),
+                    format!("{:?}", s.mode).to_lowercase()
+                ),
+                s.azimuth_sector.is_some(),
+            )
+        })
+        .collect()
+}
+
+/// Where PN-11's what-if stands (GAP-249): refused, not run, not computable, computing, or
+/// its answer in square kilometres.
+fn what_if_status(
+    what_if: &crate::what_if::WhatIf,
+) -> gungnir_ui::panels::coverage_layers::WhatIfStatus<'_> {
+    use gungnir_ui::panels::coverage_layers::WhatIfStatus;
+    let km2 = |m2: f64| m2 / 1.0e6;
+    match (&what_if.refused, what_if.describes()) {
+        (Some(reason), _) => WhatIfStatus::Refused { reason },
+        (None, None) => WhatIfStatus::NotRun,
+        (None, Some(describes)) => match (&what_if.not_computed, &what_if.answer) {
+            (Some(reason), _) => WhatIfStatus::NotComputed { reason },
+            (None, Some(answer)) => WhatIfStatus::Shown {
+                describes,
+                before_shadow_km2: km2(answer.before_measure.shadow_m2),
+                after_shadow_km2: km2(answer.after_measure.shadow_m2),
+                cleared_km2: km2(answer.comparison.cleared_m2),
+                darkened_km2: km2(answer.comparison.darkened_m2),
+                watched_before_km2: km2(answer.comparison.watched_before_m2),
+                watched_after_km2: km2(answer.comparison.watched_after_m2),
+                stale: what_if.stale,
+            },
+            (None, None) => WhatIfStatus::Computing { describes },
+        },
+    }
 }
 
 /// For each gap of the report PN-11 lists, the acceptance that stands for it: the node's

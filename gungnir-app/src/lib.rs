@@ -71,6 +71,7 @@ pub mod terrain;
 pub mod uas;
 pub mod update;
 pub mod warnings;
+pub mod what_if;
 pub mod workspace;
 
 pub use state::{AppError, AppState, CONFIG_ENV_VAR};

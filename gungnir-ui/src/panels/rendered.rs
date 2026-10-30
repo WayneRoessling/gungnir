@@ -58,6 +58,18 @@ const DEAD_SPOTS: crate::panels::coverage_layers::DeadSpotsView<'static> =
         status: crate::panels::coverage_layers::DeadSpotStatus::NotComputed {
             reason: "no DEM is configured in this baseline (terrain)",
         },
+        what_if: crate::panels::coverage_layers::WhatIfView {
+            sensors: &[],
+            draft: crate::panels::coverage_layers::WhatIfDraft {
+                sensor: None,
+                mast_m: 0.0,
+                turn_deg: 0.0,
+                east_m: 0.0,
+                north_m: 0.0,
+            },
+            status: crate::panels::coverage_layers::WhatIfStatus::NotRun,
+            signed_in: false,
+        },
     };
 
 /// PN-06's whole reason for existing: an empty queue that says *why*. The reason has to
@@ -3930,6 +3942,112 @@ fn the_about_panel_paints_every_appropriate_legal_notice() {
         "{}",
         frame.joined()
     );
+}
+
+/// GAP-249 (DN-34 amendment 4): PN-11's what-if says a run is recorded and needs somebody
+/// signed in, offers a turn only for a sensor with a sector, and draws an answer's figures
+/// with the sentence that the map is not the live picture.
+#[test]
+fn the_what_if_controls_say_what_is_recorded_and_what_the_answer_is() {
+    use crate::panels::coverage_layers::{
+        render_coverage_layers, CoverageLayersView, DeadSpotsView, HazardCurrency, LayerCounts,
+        NothingToDraw, WhatIfDraft, WhatIfSensor, WhatIfStatus, WhatIfView,
+    };
+    let sensors = [
+        WhatIfSensor {
+            id: 1,
+            label: "S1 radar (standby)",
+            sectored: false,
+        },
+        WhatIfSensor {
+            id: 2,
+            label: "S2 radar (search)",
+            sectored: true,
+        },
+    ];
+    let view = |what_if: WhatIfView<'static>| CoverageLayersView {
+        rings_visible: true,
+        gaps_visible: true,
+        hazards_visible: true,
+        counts: LayerCounts {
+            rings: 1,
+            gaps: 0,
+            hazards: 0,
+            geofences: 0,
+            accepted_gaps: 0,
+        },
+        hazards: HazardCurrency {
+            declared: 0,
+            baseline_version: 1,
+        },
+        coverage: NothingToDraw::Available,
+        comparison: LAYDOWN_COMPARISON,
+        dead_spots: DeadSpotsView {
+            what_if,
+            ..DEAD_SPOTS
+        },
+        geofences_visible: true,
+    };
+    let sensors: &'static [WhatIfSensor<'static>] = Box::leak(Box::new(sensors));
+    let probe = RenderProbe::new();
+
+    let signed_out = view(WhatIfView {
+        sensors,
+        draft: WhatIfDraft {
+            sensor: Some(1),
+            ..WhatIfDraft::default()
+        },
+        status: WhatIfStatus::NotRun,
+        signed_in: false,
+    });
+    let (_, frame) =
+        probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &signed_out));
+    for want in [
+        "What if",
+        "recorded with who ran it",
+        "S1 radar (standby)",
+        "Sign in to run a what-if",
+        "Run what-if",
+    ] {
+        assert!(frame.says(want), "{want}: {}", frame.joined());
+    }
+    assert!(
+        !frame.says("Turn"),
+        "a sensor with no sector has nothing to turn"
+    );
+
+    let shown = view(WhatIfView {
+        sensors,
+        draft: WhatIfDraft {
+            sensor: Some(2),
+            mast_m: 300.0,
+            ..WhatIfDraft::default()
+        },
+        status: WhatIfStatus::Shown {
+            describes: "S2 radar mast +300 m",
+            before_shadow_km2: 12.3,
+            after_shadow_km2: 4.1,
+            cleared_km2: 8.6,
+            darkened_km2: 0.4,
+            watched_before_km2: 300.0,
+            watched_after_km2: 309.0,
+            stale: false,
+        },
+        signed_in: true,
+    });
+    let (_, frame) = probe.draw(|ui| render_coverage_layers(ui, &theme::Palette::day(), &shown));
+    for want in [
+        "Turn",
+        "What-if: S2 radar mast +300 m",
+        "from 12.3 to 4.1",
+        "8.6 km\u{b2} cleared",
+        "0.4 km\u{b2} newly dark",
+        "Not the live picture",
+        "Clear what-if",
+    ] {
+        assert!(frame.says(want), "{want}: {}", frame.joined());
+    }
+    assert!(!frame.says("Sign in to run"), "{}", frame.joined());
 }
 
 /// GAP-248 (DN-34 §7 item 5): PN-16's dead-spot cell is the selected option's hidden area
