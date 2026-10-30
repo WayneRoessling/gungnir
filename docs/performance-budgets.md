@@ -53,7 +53,7 @@ These are already gates in `verification-capability-table.md` §1 and are repeat
 here only so the budgets read as one set: zero PSD violations and zero NaN/Inf over
 10⁵+ cycles (Scenario 5), and the per-row tolerances against the named oracles.
 
-## What has been measured (2026-09-05, updated 2026-09-07)
+## What has been measured (2026-09-05, updated 2026-09-07 and 2026-10-30)
 
 The desktop tick harness exists: `gungnir-app/benches/app_tick.rs` for the `criterion`
 measurement and `gungnir-app/tests/frame_budgets.rs` for the assertions (GAP-056). The
@@ -61,8 +61,8 @@ figures below are from this development machine, release profile except where no
 
 | Budget | Value | Measured | Gate? |
 |---|---|---|---|
-| Per-frame `update()` | p99 under 4 ms | ~20 µs per frame (300 frames in 6.1 ms) on 2026-09-05, before the tracking stage was real; **22.3 µs p99, 375.3 µs worst over 3,000 frames, measured 2026-09-07** | **No.** Corrected 2026-09-07: the tracking stage stopped being a stub on 2026-09-06 (GAP-011), and this is now a measurement of the budgeted quantity. It stays ungated because promoting a Draft row is the owner's row-by-row walk (GAP-067, D-16), not a change a test can make alone. |
-| `tracks()` / `is_healthy()` | p99 under 1 ms | ~0.6 ns each on 2026-09-05, against an empty snapshot; **100 ns each against a 36-track snapshot, measured 2026-09-07** | **No.** Corrected 2026-09-07: the snapshot has been populated since `PIPELINE_IMPLEMENTED` went true (GAP-011); same reason as above for staying ungated. |
+| Per-frame `update()` | p99 under 4 ms, Scenario 3 | ~20 µs per frame (300 frames in 6.1 ms) on 2026-09-05, before the tracking stage was real; 22.3 µs p99, 375.3 µs worst over 3,000 frames on 2026-09-07, and the 16 µs read at gating. **All three were measured with no track in any timed frame**: the test ran its frames back to back, faster than the asynchronous pipeline delivers. **p99 85 to 103 µs over 4 to 10 tracks since 2026-10-30**, with Scenario 3's convoy in the picture and 1 ms between frames (`record/2026-10-30/the-per-frame-gate-timed-an-empty-picture.md`). At Scenario 4's count it measured 4.3 to 5.3 ms, then 1.7 to 2.1 ms once identity resolution was made cheap (`record/2026-10-30/the-slow-frames-at-scenario-4-were-identity.md`); under D-159 that figure is information, not a criterion | **Yes**, since 2026-09-15 (GAP-067 walk, `record/2026-09-15/132.md`), release only. Corrected 2026-10-30: this column said **No** for six weeks after the row was gated. |
+| `tracks()` / `is_healthy()` | p99 under 1 ms | ~0.6 ns each on 2026-09-05, against an empty snapshot; 100 ns each against a 36-track snapshot, measured 2026-09-07; **100 ns each against 212 tracks since 2026-10-30**, the gate having waited only for the first track until then (`record/2026-10-30/gap-226-the-track-table-draws-only-the.md`) | **Yes**, since 2026-09-15 (GAP-067 walk), in both profiles. Corrected 2026-10-30: this column said **No** after the row was gated. |
 | Journal append per frame | under 1 ms for 50 envelopes | **157 µs release (2026-09-05); 98.9 µs median, 875.4 µs worst over 9 runs, measured 2026-09-07** — see the timing-variance caution below | **Yes**, since GAP-085 — **in the release profile only** since 2026-09-07; see the note below. |
 | Startup to first frame | under 3 s | 16.5 ms release (2026-09-05); 15.8 ms best of 3, measured 2026-09-07 | **Yes.** |
 
