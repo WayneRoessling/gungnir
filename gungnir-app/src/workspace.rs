@@ -44,7 +44,7 @@ use gungnir_ui::panels::replay::ReplayAction;
 use gungnir_ui::panels::reports::ReportsAction;
 use gungnir_ui::panels::status_strip::DelegationLine;
 use gungnir_ui::panels::track_detail::{EvidenceCardView, FactorLine};
-use gungnir_ui::panels::track_table::TrackTableView;
+use gungnir_ui::panels::track_table::{TrackTableAction, TrackTableView};
 use gungnir_ui::panels::unavailable::{Section, Unavailable};
 use gungnir_workflow::PanelId;
 
@@ -537,6 +537,10 @@ pub fn about_view() -> gungnir_ui::panels::about::AboutView<'static> {
 pub enum PanelAction {
     /// PN-03: show this track in PN-04, or close the card if it is already shown.
     SelectTrack(gungnir_model::TrackId),
+    /// PN-03: show the rows in this order (GAP-226).
+    OrderTracks(gungnir_ui::panels::track_table::TrackOrder),
+    /// PN-03: show only the tracks this filter admits (GAP-226).
+    FilterTracks(gungnir_ui::panels::track_table::TrackFilter),
     /// PN-06: open PN-07 on this queued item, or close it if it is already open.
     SelectApproval(gungnir_ui::panels::approval_queue::PendingId),
     /// PN-07: the operator decided. Applied by `main.rs` after the frame is drawn, so
@@ -894,9 +898,16 @@ fn render_track_table(ui: &mut egui::Ui, state: &AppState) -> Option<PanelAction
         msl_heights: &msl_heights,
         unknown_heights: &unknown_heights,
         vocabulary: &state.config.vocabulary,
+        order: state.track_order,
+        filter: state.track_filter,
     };
-    gungnir_ui::panels::track_table::render_track_table(ui, &state.palette, &view)
-        .map(PanelAction::SelectTrack)
+    gungnir_ui::panels::track_table::render_track_table(ui, &state.palette, &view).map(|action| {
+        match action {
+            TrackTableAction::Select(id) => PanelAction::SelectTrack(id),
+            TrackTableAction::Order(order) => PanelAction::OrderTracks(order),
+            TrackTableAction::Filter(filter) => PanelAction::FilterTracks(filter),
+        }
+    })
 }
 
 /// PN-10. The registry is real (GAP-003); nothing here reaches a sensor (GAP-004).

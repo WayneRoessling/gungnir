@@ -12812,6 +12812,15 @@
       resizing and 100 % and 150 % scaling, and the colours matched
       (`../../record/2026-10-30/the-owner-s-look-at-the-three-d.md`). The scene half is
       done; no test can see the GL draw, so it stays one look. The track table remains.
+  - date: 2026-10-30
+    status: Closed
+    note: >-
+      PN-03 lays out only the rows in view, sorts by any column and filters by class,
+      status and staleness, as WF-03 draws it. The egui gate now times the operator's
+      workspace, the one with the table, and both it and the snapshot gate drive the
+      Scenario 4 replay to 200 tracks first: they had been measuring about four. At 212
+      tracks the operator's pass is p99 0.92 ms, 6.86 ms with the old grid
+      (`../../record/2026-10-30/gap-226-the-track-table-draws-only-the.md`).
 
 - id: GAP-227
   name: No basemap, no standard symbology, no declutter, no geographic readout

@@ -302,12 +302,15 @@ impl eframe::App for App {
 }
 
 /// What a locked console still does (D-143, GAP-212): sign in, and look. Selecting a track
-/// or a queue item changes what is shown and nothing else; every other action is refused.
+/// or a queue item, and ordering or filtering PN-03's rows (GAP-226), change what is shown
+/// and nothing else; every other action is refused.
 fn may_act_while_locked(action: &PanelAction) -> bool {
     matches!(
         action,
         PanelAction::Session(gungnir_ui::panels::audit::SessionAction::SignIn)
             | PanelAction::SelectTrack(_)
+            | PanelAction::OrderTracks(_)
+            | PanelAction::FilterTracks(_)
             | PanelAction::SelectApproval(_)
     )
 }
@@ -942,6 +945,8 @@ impl App {
         match action {
             PanelAction::Handover(a) => self.apply_handover(a),
             PanelAction::SelectTrack(id) => self.state.select_track(id),
+            PanelAction::OrderTracks(order) => self.state.track_order = order,
+            PanelAction::FilterTracks(filter) => self.state.track_filter = filter,
             PanelAction::SelectApproval(id) => self.state.select_approval(id),
             PanelAction::Decide(id, choice) => self.apply_decision(id, choice),
             PanelAction::CommandSensorMode(sensor, mode) => {

@@ -56,7 +56,7 @@ The strip is the one place principles 4 and 6 are enforced for every role.
 |---|---|---|---|---|---|
 | PN-01 | Status strip | all | yes (`status_strip.rs`, GAP-072) | see §2 | nothing |
 | PN-02 | Viewport | all | yes (`gungnir-viewport3d`): the three-d scene by default, the 2D projection as the opt-out and the fallback when no GL context attached (GAP-022); coverage GAP-007 | `TrackView`, `PlanView`, coverage regions, gaps, hazards (GAP-017), geofences as a rule layer (GAP-088), defended assets | selection, camera |
-| PN-03 | Track table | all live, analysts | yes (`track_table.rs`); score column unavailable until GAP-028; **sort and filter are still not implemented** | `TrackView` list with quality, classification, age, asset, score | selection (built); sort, filter |
+| PN-03 | Track table | all live, analysts | yes (`track_table.rs`); score column unavailable until GAP-028; only the rows in view are laid out, sortable by any column and filtered by class, status and staleness (GAP-226) | `TrackView` list with quality, classification, age, asset, score | selection, sort, filter (built) |
 | PN-04 | Track detail and identity evidence card | operator, supervisor, intelligence analyst, commander | yes (`track_detail.rs`, GAP-073); the factors name the threatened asset and the priority's weight (GAP-026); evidence and lineage unavailable until GAP-010 and GAP-019; no designation control drawn | one `TrackView`, `Provenance`, `Quality`, `IdentificationEvidence` list, `RiskScore` factors, `GlobalEntityId` lineage | identity designation (a decision) |
 | PN-05 | Recommendation panel | operator, supervisor, commander | partly (`intercept_panel.rs` shows the plan and, since GAP-030, the resources the planner withheld with the reason; a fires task's target, location error, firing unit and every deconfliction check with its result, GAP-036; each issued handoff's delivery state, manual stated plainly, GAP-040) | `PlanView`, `InterceptSolutionView`, `PolicyVerdict`, `CourseOfAction.rationale`, alternatives, cost, time remaining | opens PN-07 |
 | PN-06 | Approval queue | operator, supervisor, commander | yes (`approval_queue.rs`, GAP-038); says why whenever it is empty (`EmptyBecause`). Time remaining, expiry and escalation marks are real (GAP-034, GAP-035); the priority tie-break needs GAP-028 | pending approvals ordered by priority and time remaining; delegation marks | selection; opens PN-07 |
@@ -132,9 +132,11 @@ Differences from the code today (`WorkspaceLayout::for_role`):
   the rest are counted.
 - Text at `DEFAULT_FONT_SIZE` (14) for anything decided on; `SMALL_FONT_SIZE` (12)
   for provenance and history only.
-- Tables are not virtualised: `track_table.rs` draws every row in an `egui::Grid` inside
-  a `ScrollArea`. Whether Scenario 4's track count renders within the egui pass budget is
-  what `gungnir-app/tests/frame_budgets.rs` measures, against the `gungnir-ui` row of
+- The track table is virtualised (GAP-226): `track_table.rs` sizes its columns from their
+  headings and widest values rather than from the rows, and lays out only the rows in view
+  through `ScrollArea::show_rows`. That the operator's workspace, the one with the table,
+  renders Scenario 4's track count within the egui pass budget is what
+  `gungnir-app/tests/frame_budgets.rs` asserts, against the `gungnir-ui` row of
   `../verification-capability-table.md` §2.
 
 ## 7. Traceability
