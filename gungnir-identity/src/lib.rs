@@ -36,7 +36,7 @@ pub use similarity::{CorrelationSettings, LastSeen, Similarity};
 use gungnir_model::identity::GlobalEntityId;
 use gungnir_model::time::MissionTime;
 use gungnir_model::{SessionId, TrackId, TrackView};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// One session's track: what a lineage is built from, and what every lookup is keyed by.
 ///
@@ -103,18 +103,36 @@ struct Candidate {
     last: LastSeen,
 }
 
+/// The width, in mission seconds, of the buckets candidates are filed in by when they
+/// were last seen.
+const BUCKET_S: f64 = 10.0;
+
+/// Beyond this magnitude a mission time's rounding can approach [`BUCKET_S`], so a new
+/// track that far out is compared with every bucket rather than with a window.
+const WINDOWED_UP_TO_S: f64 = 1e15;
+
+/// The bucket a mission time is filed in. A time that is not finite saturates or lands in
+/// bucket 0; [`similarity::similarity`] compares nothing against it wherever it lands.
+#[allow(clippy::cast_possible_truncation)]
+fn bucket_of(time_s: f64) -> i64 {
+    (time_s / BUCKET_S).floor() as i64
+}
+
 #[derive(Debug, Default)]
 pub struct InMemoryIdentityResolver {
     by_sighting: HashMap<Sighting, GlobalEntityId>,
     lineages: HashMap<GlobalEntityId, EntityLineage>,
-    /// Every lineage's `last_seen`, packed (2026-10-30). [`Self::best_match`] reads only
-    /// these, and walking the lineages for them cost a dense raid's desktop most of its
-    /// frame: a new track id was compared with each of thousands of lineages, a few
-    /// hundred bytes apart. Written only through [`Self::see`], so it never parts from
+    /// Every lineage's `last_seen`, packed (2026-10-30) and filed by when it was seen, in
+    /// buckets of [`BUCKET_S`]. [`Self::best_match`] reads only these, and
+    /// walking the lineages for them cost a dense raid's desktop most of its frame: a new
+    /// track id was compared with each of thousands of lineages, a few hundred bytes apart.
+    /// Filed by time because [`similarity::similarity`] compares nothing outside its gap
+    /// window, so the buckets outside it are never read, and the cost of a new track stops
+    /// growing with the session. Written only through [`Self::see`], so it never parts from
     /// the lineage it copies.
-    candidates: Vec<Candidate>,
-    /// Where each lineage's candidate is in `candidates`.
-    slots: HashMap<GlobalEntityId, usize>,
+    candidates: BTreeMap<i64, Vec<Candidate>>,
+    /// Which bucket each lineage's candidate is filed in, and where in it.
+    slots: HashMap<GlobalEntityId, (i64, usize)>,
     /// How similar a new track must be to a known entity to be taken as it (GAP-019).
     settings: CorrelationSettings,
     /// Kept for nothing but the record of how many this resolver has minted.
@@ -154,12 +172,29 @@ impl InMemoryIdentityResolver {
 
     /// The most similar known entity to `track`, above the merge threshold.
     ///
-    /// A lineage [`similarity::may_match`] rules out could not have cleared the threshold,
-    /// so the answer is the one a comparison with every lineage gives.
+    /// Only the buckets that can hold a lineage last seen inside the gap window are read,
+    /// with one more on each side for rounding, and a lineage [`similarity::may_match`]
+    /// rules out could not have cleared the threshold, so the answer is the one a
+    /// comparison with every lineage gives.
     fn best_match(&self, track: &TrackView) -> Option<(GlobalEntityId, Similarity)> {
+        let t = track.mission_time.0;
+        let (earliest, latest) = (t - self.settings.max_gap_s, t - self.settings.min_gap_s);
+        // Also refused for a NaN anywhere, where no gap can be inside the window.
+        if earliest
+            .partial_cmp(&latest)
+            .is_none_or(std::cmp::Ordering::is_gt)
+        {
+            return None;
+        }
+        let buckets = if t.abs() < WINDOWED_UP_TO_S {
+            bucket_of(earliest).saturating_sub(1)..=bucket_of(latest).saturating_add(1)
+        } else {
+            i64::MIN..=i64::MAX
+        };
         let reach = similarity::reach(&self.settings);
         self.candidates
-            .iter()
+            .range(buckets)
+            .flat_map(|(_, bucket)| bucket)
             .filter(|c| similarity::may_match(track, &c.last, &self.settings, reach))
             .filter_map(|c| {
                 let s = similarity::similarity(track, &c.last, &self.settings)?;
@@ -175,22 +210,42 @@ impl InMemoryIdentityResolver {
             return;
         };
         lineage.last_seen = Some(last.clone());
-        if let Some(&slot) = self.slots.get(&id) {
-            self.candidates[slot].last = last;
-        } else {
-            self.slots.insert(id, self.candidates.len());
-            self.candidates.push(Candidate { id, last });
+        let bucket = bucket_of(last.mission_time.0);
+        if let Some((filed, index)) = self.slots.get(&id).copied() {
+            if filed == bucket {
+                if let Some(candidate) = self
+                    .candidates
+                    .get_mut(&filed)
+                    .and_then(|candidates| candidates.get_mut(index))
+                {
+                    candidate.last = last;
+                    return;
+                }
+            }
+            self.forget(id);
         }
+        let candidates = self.candidates.entry(bucket).or_default();
+        self.slots.insert(id, (bucket, candidates.len()));
+        candidates.push(Candidate { id, last });
     }
 
-    /// Drop lineage `id`'s candidate, when the lineage itself has gone.
+    /// Drop lineage `id`'s candidate: when the lineage itself has gone, or to file it again
+    /// in another bucket.
     fn forget(&mut self, id: GlobalEntityId) {
-        let Some(slot) = self.slots.remove(&id) else {
+        let Some((bucket, index)) = self.slots.remove(&id) else {
             return;
         };
-        self.candidates.swap_remove(slot);
-        if let Some(moved) = self.candidates.get(slot) {
-            self.slots.insert(moved.id, slot);
+        let Some(candidates) = self.candidates.get_mut(&bucket) else {
+            return;
+        };
+        if index < candidates.len() {
+            candidates.swap_remove(index);
+        }
+        if let Some(moved) = candidates.get(index) {
+            self.slots.insert(moved.id, (bucket, index));
+        }
+        if candidates.is_empty() {
+            self.candidates.remove(&bucket);
         }
     }
 
@@ -590,30 +645,45 @@ mod tests {
             .max_by(|a, b| a.1.total_cmp(&b.1))
     }
 
-    /// **The packed candidates answer exactly what a comparison with every lineage does**
-    /// (2026-10-30): the same entity at the same confidence, for every new track, across
-    /// mints, correlations, re-sightings and merges, under the default settings and two
-    /// others. Thousands of these merge and tens of thousands do not, so a prefilter that
-    /// refused one pair it should not have would show here.
+    /// The mission time of step `step`: past the 300 s window, then back to zero as a later
+    /// session's clock would be, then beyond the range the window is used for.
+    fn time_of(step: u32) -> f64 {
+        match step {
+            0..200 => f64::from(step) * 2.5,
+            200..250 => f64::from(step - 200) * 0.7,
+            _ => WINDOWED_UP_TO_S * 10.0 + f64::from(step - 250) * 3.0,
+        }
+    }
+
+    /// **The filed candidates answer exactly what a comparison with every lineage does**
+    /// (2026-10-30, and filed by time the same day): the same entity at the same confidence, for
+    /// every new track, across mints, correlations, re-sightings and merges, under the
+    /// default settings and two others with narrower windows. The clock runs past the
+    /// window, goes back to zero and jumps beyond the windowed range, so a bucket left out
+    /// that should have been read, or a prefilter that refused a pair it should not have,
+    /// would show here.
     #[test]
-    fn the_packed_candidates_answer_as_every_lineage_does() {
+    fn the_filed_candidates_answer_as_every_lineage_does() {
         let mut stream = Stream(0x5eed);
         let mut merged = 0;
         for settings in [
             CorrelationSettings::default(),
             CorrelationSettings {
                 merge_threshold: 0.05,
+                max_gap_s: 25.0,
                 ..CorrelationSettings::default()
             },
             CorrelationSettings {
-                merge_threshold: 0.999,
+                merge_threshold: 0.3,
+                min_gap_s: 0.0,
+                max_gap_s: 7.5,
                 ..CorrelationSettings::default()
             },
         ] {
             let mut r = InMemoryIdentityResolver::new().with_settings(settings);
             let mut id = 0;
-            for step in 0..250_u32 {
-                let t = f64::from(step) * 0.5;
+            for step in 0..300_u32 {
+                let t = time_of(step);
                 for _ in 0..8 {
                     id += 1;
                     let candidate = scattered(&mut stream, id, t);
@@ -623,8 +693,9 @@ mod tests {
                     merged += usize::from(expected.is_some());
                     r.resolve(S1, &candidate);
                 }
-                // A known track seen again moves its lineage's last state, and a merge
-                // takes a lineage away: the candidates must follow both.
+                // A known track seen again moves its lineage's last state, into another
+                // bucket when the clock has moved, and a merge takes a lineage away: the
+                // candidates must follow both.
                 let again = scattered(&mut stream, id, t);
                 r.resolve(S1, &again);
                 if step % 50 == 49 {
@@ -632,14 +703,40 @@ mod tests {
                     assert!(r.merge(ids[0], ids[1], MissionTime(t)));
                 }
             }
-            assert_eq!(r.candidates.len(), r.lineages.len());
-            for c in &r.candidates {
-                assert_eq!(r.lineages[&c.id].last_seen.as_ref(), Some(&c.last));
+            let filed: usize = r.candidates.values().map(Vec::len).sum();
+            assert_eq!(filed, r.lineages.len());
+            assert_eq!(r.slots.len(), r.lineages.len());
+            for (bucket, candidates) in &r.candidates {
+                assert!(!candidates.is_empty(), "bucket {bucket} was left empty");
+                for (index, c) in candidates.iter().enumerate() {
+                    assert_eq!(r.lineages[&c.id].last_seen.as_ref(), Some(&c.last));
+                    assert_eq!(r.slots[&c.id], (*bucket, index));
+                    assert_eq!(bucket_of(c.last.mission_time.0), *bucket);
+                }
             }
         }
         assert!(
-            merged > 1_000,
+            merged > 500,
             "only {merged} tracks merged, so little was tested"
         );
+    }
+
+    /// A new track compares nothing where the gap window is empty or not a number, as the
+    /// comparison with every lineage does, rather than reading a range backwards.
+    #[test]
+    fn an_empty_window_compares_nothing() {
+        for (min_gap_s, max_gap_s) in [(5.0, 1.0), (f64::NAN, 300.0), (1.0, f64::NAN)] {
+            let mut r = InMemoryIdentityResolver::new().with_settings(CorrelationSettings {
+                max_gap_s,
+                min_gap_s,
+                ..CorrelationSettings::default()
+            });
+            r.resolve(S1, &track(1));
+            let mut later = track(2);
+            later.mission_time = MissionTime(3.0);
+            assert!(r.best_match(&later).is_none());
+            later.mission_time = MissionTime(f64::NAN);
+            assert!(r.best_match(&later).is_none());
+        }
     }
 }
