@@ -220,7 +220,7 @@ history, and an entry is never edited once it has merged.
 | GAP-223 | The alert lifecycle is not wired, and PN-08 is a list of strings | Technical | CAP-5.5, CAP-5.9 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
 | GAP-224 | The desktop has no keyboard operation | Technical | CAP-5.9 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
 | GAP-225 | The map cannot hook a track and draws no defended assets or effectors | Technical | CAP-5.9, CAP-3.1, CAP-4.1 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
-| GAP-226 | The three-d scene is the default and has never been seen; the track table is not virtualised | Technical | CAP-5.10, CAP-5.9 | 2 | 10 | S | 20 | I4 | UI engineer | Open |
+| GAP-226 | The three-d scene is the default and has never been seen; the track table is not virtualised | Technical | CAP-5.10, CAP-5.9 | 2 | 10 | S | 20 | I4 | UI engineer | In progress |
 | GAP-227 | No basemap, no standard symbology, no declutter, no geographic readout | Technical | CAP-2.10, CAP-5.9 | 3 | 10 | L | 30 | I4 | UI engineer | Open |
 | GAP-228 | No operator-initiated escalation | Technical | CAP-3.7, CAP-3.6 | 3 | 7 | S | 21 | I4 | Security engineer (human-owned crate) | Open |
 | GAP-229 | No system safety assessment for the engagement authority path | Technical | CAP-4.3, CAP-3.6 | 4 | 7 | L | 28 | I4 | Owner | Open |
@@ -3228,12 +3228,13 @@ Counts: 231 gaps, 6 mission, 225 technical; 1 already covered by a plan in `../.
 - Capability: CAP-5.10 Performance budgets; CAP-5.9 Role workspaces and workflow.
 - History:
   - 2026-10-26, Open: Filed by plan 12.
-- Evidence: `gungnir-viewport3d/src/gl.rs:29-31`; `gungnir-app/src/ui_settings.rs:232`; `gungnir-app/src/main.rs:575` against `gungnir-viewport3d/src/lib.rs:18-20`; `gungnir-ui/src/panels/track_table.rs:99-106`; `../../ux/information-architecture.md:135-136`.
+  - 2026-10-30, In progress: D-153 taken by the owner: the scene stays the default and the owner looks at it. Reading the draw path first found three defects that would have spoiled the look, fixed before it: the camera showed the overlay's ground times the aspect ratio and the display scaling, three-d clipped its draw to a box at the window's corner, and a glyph was 120 m whatever the zoom. The two comments and the IA sentence already agreed. The owner's look and the track table remain.
+- Evidence: `gungnir-viewport3d/src/gl.rs:29-31`; `gungnir-model/src/ui_settings.rs:232`; `gungnir-app/src/main.rs:575` against `gungnir-viewport3d/src/lib.rs:18-20`; `gungnir-ui/src/panels/track_table.rs:99-106`; `../../ux/information-architecture.md:135-136`.
 - Severity: 2. Reach: 10 threads. Effort: S. Priority: 20.
 - Impact: The scene's own comment says the drawn result has not been looked at, the setting defaults it on, and two comments disagree about which path is the default. PN-03 is a grid in a fixed scroll area laid out every frame, the information architecture says it is virtualised, and the frame-budget gate renders a workspace that has no table.
-- Closing action: Default `scene_3d` off until it has been seen on a display, with a screenshot smoke check; `show_rows` virtualisation with sort and filter; the operator workspace added to the 8 ms gate; the two comments and the IA sentence corrected.
-- Target: I4. Owner: UI engineer. Status: Open.
-- Reference: GAP-022; GAP-056; `../../review/2026-10-26-comprehensive-review.md` §8 findings 5 and 7.
+- Closing action: Per D-153, the scene stays the default and the owner looks at it on a display; `show_rows` virtualisation with sort and filter; the operator workspace added to the 8 ms gate.
+- Target: I4. Owner: UI engineer. Status: In progress.
+- Reference: GAP-022; GAP-056; D-153; `../../review/2026-10-26-comprehensive-review.md` §8 findings 5 and 7.
 
 **GAP-227 No basemap, no standard symbology, no declutter, no geographic readout**
 

@@ -3681,3 +3681,18 @@
   outcome: >-
     **Taken by the owner, 2026-10-30, to the recommended default: on PN-11.** Rejected:
     PN-10 with row selection. See the record item.
+
+- id: D-153
+  decision: Whether the three-d scene stays the default while it is looked at
+  question: >-
+    GAP-226's action defaults `ui.scene_3d` off until the scene has been seen on a
+    display. The alternative: keep it on, as the owner decided on 2026-09-05, and have the
+    owner look at it on a display.
+  raised_in: "`../../review/2026-10-26-comprehensive-review.md` §8 finding 5"
+  decider: Owner
+  unblocks: GAP-226
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, against GAP-226's action: the scene stays the
+    default, and the owner looks at it on a display.** Rejected: defaulting it off until
+    it has been seen. See the record item.

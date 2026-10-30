@@ -33,8 +33,9 @@
 //! This path is nonetheless the **default** (`ui.scene_3d`, on), by the owner's decision
 //! of 2026-09-05. Two things carry the weight that a verified renderer would otherwise
 //! have carried, and both are deliberate: the viewport's status line is painted by egui
-//! *over* this callback's output, so a draw that produces nothing still reports how many
-//! tracks exist -- an empty viewport that says twelve tracks is a fault someone can
+//! and this callback draws after it without clearing anything, so a draw that produces
+//! nothing still leaves the line reporting how many tracks exist -- an empty viewport
+//! that says twelve tracks is a fault someone can
 //! report, an empty viewport that says nothing is an operator concluding the sector is
 //! clear; and the operator can switch to the projection at runtime, without editing a
 //! baseline and restarting during whatever is happening at the time.
@@ -47,13 +48,16 @@
 pub use three_d::context::Context as GlContext;
 
 use crate::interaction::TopDownView;
-use crate::tracks::TrackGlyph;
+use crate::tracks::{TrackGlyph, GLYPH_RADIUS_PX};
 use gungnir_ui::theme;
 use std::sync::Arc;
 
-/// Radius of a track glyph in metres. Large enough to see at sector scale; the symbol
-/// is a marker, not a model of the vehicle.
-pub const GLYPH_RADIUS_M: f32 = 120.0;
+/// How far above the ENU origin the camera sits, in metres.
+///
+/// The camera is orthographic, so its height changes nothing on screen; it only has to be
+/// above every track and below the far plane's reach under every one, which a track
+/// within 100 km of the origin's altitude is.
+const CAMERA_ALTITUDE_M: f32 = 100_000.0;
 
 /// Why the three-d scene could not be attached.
 #[derive(Debug, thiserror::Error)]
@@ -97,12 +101,9 @@ impl SceneRenderer {
         let context = three_d::Context::from_gl_context(gl)
             .map_err(|e| AttachError::Rejected(e.to_string()))?;
 
-        // A low-detail sphere: the glyph is a marker at sector scale, and a smoother
-        // one would cost vertices nobody can see.
-        let mut cpu_mesh = three_d::CpuMesh::sphere(8);
-        cpu_mesh
-            .transform(three_d::Mat4::from_scale(GLYPH_RADIUS_M))
-            .ok();
+        // A low-detail unit sphere: the glyph is a marker, and a smoother one would cost
+        // vertices nobody can see. Each instance scales it to the zoom (`instances`).
+        let cpu_mesh = three_d::CpuMesh::sphere(8);
         let glyph_mesh = three_d::Gm::new(
             three_d::InstancedMesh::new(&context, &three_d::Instances::default(), &cpu_mesh),
             three_d::ColorMaterial::default(),
@@ -117,25 +118,29 @@ impl SceneRenderer {
 
     /// Draw the glyphs for this frame into the region egui has given the viewport.
     ///
-    /// `viewport` is in physical pixels with the origin at the bottom left, which is
-    /// what OpenGL and three-d use; egui's rect is in points with the origin at the top
-    /// left, so the caller converts. Getting that wrong draws the picture in the wrong
-    /// half of the window, which is why the conversion is [`viewport_for`] and tested.
+    /// `viewport` and `clip` are in physical pixels with the origin at the bottom left,
+    /// which is what OpenGL and three-d use; egui's rect is in points with the origin at
+    /// the top left, so the caller converts. Getting that wrong draws the picture in the
+    /// wrong half of the window, which is why the conversion is [`viewport_from`] and
+    /// tested. `pixels_per_point` is egui's, because the 2D view's scale is in points.
     pub fn paint(
         &mut self,
         glyphs: &[TrackGlyph],
         view: &TopDownView,
         viewport: three_d::Viewport,
+        clip: three_d::Viewport,
+        pixels_per_point: f32,
     ) {
-        let camera = camera(view, viewport);
+        let camera = camera(view, viewport, pixels_per_point);
         self.glyph_mesh
             .geometry
             .set_instances(&instances(&self.palette, glyphs, view));
-        three_d::RenderTarget::screen(&self.context, viewport.width, viewport.height).render(
-            &camera,
-            [&self.glyph_mesh],
-            &[],
-        );
+        // `render` would clip to a box at the window's bottom-left corner the size of the
+        // viewport, which is the viewport itself only when nothing sits left of or below
+        // the picture. A role workspace docks panels around it, so the box is the one
+        // egui clips this callback to.
+        three_d::RenderTarget::screen(&self.context, viewport.width, viewport.height)
+            .render_partially(clip.into(), &camera, [&self.glyph_mesh], &[]);
     }
 
     /// How many instances the last frame uploaded, for the status line.
@@ -145,16 +150,14 @@ impl SceneRenderer {
     }
 }
 
-/// Half the vertical field of view, as a tangent. The camera is 45 degrees, matching
-/// the one `ViewportState` has always held.
-const FOV_HALF_TAN: f32 = 0.414_213_57; // tan(22.5 degrees)
-
 /// The instance data for the glyphs: one transform and colour per track.
 ///
 /// Pure, so it can be checked without a GL context. Positions come straight from the
 /// track's ENU state, which is the frame the whole picture is in; the colour is the
 /// lifecycle colour the 2D projection and the track table use, so the three surfaces
-/// cannot disagree about what a stale track looks like.
+/// cannot disagree about what a stale track looks like. Each sphere's radius is the 2D
+/// glyph's at the current zoom: a radius fixed in metres was a few pixels across at
+/// sector scale and filled the screen zoomed in.
 // The world is in metres and OpenGL is f32. A sector is tens of kilometres across, so
 // f32 holds a position to well under a millimetre; the tracking state stays f64 and only
 // the drawing is narrowed.
@@ -165,17 +168,18 @@ pub fn instances(
     glyphs: &[TrackGlyph],
     view: &TopDownView,
 ) -> three_d::Instances {
+    let radius_m = GLYPH_RADIUS_PX * view.meters_per_px as f32;
     let mut transformations = Vec::with_capacity(glyphs.len());
     let mut colors = Vec::with_capacity(glyphs.len());
     for glyph in glyphs {
         let [e, n, u] = glyph.position;
-        transformations.push(three_d::Mat4::from_translation(three_d::vec3(
-            e as f32, n as f32, u as f32,
-        )));
+        transformations.push(
+            three_d::Mat4::from_translation(three_d::vec3(e as f32, n as f32, u as f32))
+                * three_d::Mat4::from_scale(radius_m),
+        );
         let c = theme::track_color(palette, glyph.status, glyph.stale);
         colors.push(three_d::Srgba::new(c.r(), c.g(), c.b(), c.a()));
     }
-    let _ = view;
     three_d::Instances {
         transformations,
         colors: Some(colors),
@@ -188,25 +192,35 @@ pub fn instances(
 /// Pure. The 2D view's centre and zoom are the operator's chosen frame, and the 3D
 /// camera follows them rather than having controls of its own: two independent cameras
 /// would let the two renderers show different parts of the sector under one label.
+///
+/// **Orthographic, and sized in egui points**, because everything egui draws over the
+/// scene -- the rings, the dead spots, the bearing rays -- is placed by
+/// [`TopDownView::project`], which ignores altitude and counts in points. The camera
+/// this replaced was a perspective one sized from the viewport's width in physical
+/// pixels against a vertical field of view, so it showed `aspect * pixels_per_point`
+/// times the ground the overlay did, and a track at altitude drifted outward from the
+/// centre besides. `the_camera_puts_a_track_where_the_projection_does` holds it to the
+/// projection.
 #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 #[must_use]
-pub fn camera(view: &TopDownView, viewport: three_d::Viewport) -> three_d::Camera {
+pub fn camera(
+    view: &TopDownView,
+    viewport: three_d::Viewport,
+    pixels_per_point: f32,
+) -> three_d::Camera {
     let target = three_d::vec3(view.center_e as f32, view.center_n as f32, 0.0);
-    // The height that makes the visible ground width equal the 2D projection's, which
-    // is what makes "the same ground" true rather than approximately true. The 2D view
-    // shows `width * meters_per_px` metres across; a perspective camera at height `h`
-    // with a vertical field of view `f` shows `2h*tan(f/2)` vertically, so matching the
-    // half-width gives the height below.
-    let half_width_m = (viewport.width as f32 / 2.0) * view.meters_per_px.max(f64::EPSILON) as f32;
-    let height = half_width_m / FOV_HALF_TAN;
-    three_d::Camera::new_perspective(
+    let height_points = viewport.height as f32 / pixels_per_point.max(f32::EPSILON);
+    let height_m = height_points * view.meters_per_px.max(f64::EPSILON) as f32;
+    // three-d multiplies an orthographic height by the camera's distance from its
+    // target, so the figure it is given is per metre of that distance.
+    three_d::Camera::new_orthographic(
         viewport,
-        target + three_d::vec3(0.0, 0.0, height.max(1.0)),
+        target + three_d::vec3(0.0, 0.0, CAMERA_ALTITUDE_M),
         target,
         three_d::vec3(0.0, 1.0, 0.0),
-        three_d::degrees(45.0),
-        1.0,
-        height.max(1.0) * 4.0,
+        height_m / CAMERA_ALTITUDE_M,
+        0.0,
+        2.0 * CAMERA_ALTITUDE_M,
     )
 }
 
@@ -240,6 +254,7 @@ pub fn viewport_from(
 mod tests {
     use super::*;
     use gungnir_model::{Classification, TrackId, TrackStatus};
+    use three_d::Viewer;
 
     fn glyph(id: u64, enu: [f64; 3], status: TrackStatus, stale: bool) -> TrackGlyph {
         TrackGlyph {
@@ -330,7 +345,7 @@ mod tests {
             ..TopDownView::default()
         };
         let viewport = three_d::Viewport::new_at_origo(800, 600);
-        let camera = camera(&view, viewport);
+        let camera = camera(&view, viewport, 1.0);
 
         assert_eq!(camera.target().x, 1_500.0);
         assert_eq!(camera.target().y, -700.0);
@@ -347,25 +362,88 @@ mod tests {
         assert!(camera.z_near() < distance);
     }
 
-    /// Zooming in moves the camera closer. A camera whose height ignored the zoom would
-    /// leave the 3D view showing a different area from the 2D one under the same
-    /// controls.
+    /// Where the camera puts an ENU point, in egui points from the viewport's top left.
+    fn on_screen(camera: &three_d::Camera, enu: [f32; 3], size_points: egui::Vec2) -> egui::Pos2 {
+        let clip = camera.projection() * camera.view() * three_d::vec4(enu[0], enu[1], enu[2], 1.0);
+        let (x, y) = (clip.x / clip.w, clip.y / clip.w);
+        egui::pos2(
+            f32::midpoint(x, 1.0) * size_points.x,
+            f32::midpoint(-y, 1.0) * size_points.y,
+        )
+    }
+
+    /// **The scene and the overlay put a track in the same place.** egui draws the rings,
+    /// the dead spots and the bearing rays over the scene with [`TopDownView::project`],
+    /// so a camera that disagreed with it would draw every track off its own context --
+    /// which is what the perspective camera did, at every zoom, on any viewport that was
+    /// not square, and on any display scaled above 100 %. Checked at two zooms, a wide
+    /// and a tall viewport, a 150 % display, and a track at altitude, since the
+    /// projection ignores altitude and the camera must too.
     #[test]
-    fn zooming_in_lowers_the_camera() {
-        let viewport = three_d::Viewport::new_at_origo(800, 600);
-        // Smaller metres-per-pixel is more zoomed in.
-        let wide = TopDownView {
-            meters_per_px: 100.0,
-            ..TopDownView::default()
-        };
-        let close = TopDownView {
-            meters_per_px: 1.0,
-            ..TopDownView::default()
-        };
-        assert!(
-            camera(&close, viewport).position().z < camera(&wide, viewport).position().z,
-            "zooming in did not bring the camera down"
-        );
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "test figures: small positive pixel sizes and metre positions"
+    )]
+    fn the_camera_puts_a_track_where_the_projection_does() {
+        let points: [[f64; 3]; 4] = [
+            [1_500.0, -700.0, 0.0],
+            [9_000.0, 4_000.0, 300.0],
+            [-12_000.0, 2_500.0, 9_000.0],
+            [3_000.0, -6_000.0, -40.0],
+        ];
+        for (meters_per_px, size_points, pixels_per_point) in [
+            (10.0, egui::vec2(800.0, 600.0), 1.0),
+            (40.0, egui::vec2(1_200.0, 500.0), 1.5),
+            (2.5, egui::vec2(400.0, 900.0), 2.0),
+        ] {
+            let view = TopDownView {
+                center_e: 1_500.0,
+                center_n: -700.0,
+                meters_per_px,
+            };
+            let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, size_points);
+            let viewport = three_d::Viewport::new_at_origo(
+                (size_points.x * pixels_per_point) as u32,
+                (size_points.y * pixels_per_point) as u32,
+            );
+            let camera = camera(&view, viewport, pixels_per_point);
+            for enu in points {
+                let expected = view.project(enu, rect);
+                let drawn = on_screen(
+                    &camera,
+                    [enu[0] as f32, enu[1] as f32, enu[2] as f32],
+                    size_points,
+                );
+                assert!(
+                    (drawn - expected).length() < 0.05,
+                    "at {meters_per_px} m/pt, {size_points:?} points, {pixels_per_point} px/pt: \
+                     {enu:?} drawn at {drawn:?}, the overlay puts it at {expected:?}"
+                );
+            }
+        }
+    }
+
+    /// A glyph is the 2D glyph's size on screen at every zoom, not a fixed size in
+    /// metres: 120 m was two pixels across at sector scale and filled the view close in.
+    #[test]
+    #[allow(clippy::cast_possible_truncation)]
+    fn a_glyph_is_the_same_size_on_screen_at_every_zoom() {
+        let glyphs = [glyph(1, [0.0; 3], TrackStatus::Confirmed, false)];
+        for meters_per_px in [0.5, 10.0, 400.0] {
+            let view = TopDownView {
+                meters_per_px,
+                ..TopDownView::default()
+            };
+            let instances = instances(&theme::Palette::day(), &glyphs, &view);
+            let radius_m = instances.transformations[0].x.x;
+            let radius_points = radius_m / meters_per_px as f32;
+            assert!(
+                (radius_points - GLYPH_RADIUS_PX).abs() < 1e-3,
+                "at {meters_per_px} m/pt the glyph is {radius_points} points across, \
+                 not the 2D glyph's {GLYPH_RADIUS_PX}"
+            );
+        }
     }
 
     /// The conversion takes egui's own pixel figures, including the bottom-left origin
@@ -391,8 +469,9 @@ mod tests {
             meters_per_px: 0.0,
             ..TopDownView::default()
         };
-        let camera = camera(&view, viewport);
+        let camera = camera(&view, viewport, 0.0);
         assert!(camera.position().z.is_finite());
+        assert!(camera.projection().x.x.is_finite());
         assert!(camera.z_far() > camera.z_near());
     }
 }

@@ -81,7 +81,9 @@ pub fn glyphs_need_rebuild(glyphs: &[TrackGlyph], tracks: &[TrackView]) -> bool 
 
 /// Seconds of velocity drawn as the heading vector.
 const HEADING_VECTOR_SECONDS: f64 = 10.0;
-const GLYPH_RADIUS_PX: f32 = 5.0;
+/// In egui points. The three-d scene sizes its spheres from this too (`gl::instances`),
+/// so a track is the same size on screen in either renderer.
+pub(crate) const GLYPH_RADIUS_PX: f32 = 5.0;
 
 /// 2D fallback: circle at the position, one-sigma ellipse, heading vector, id label.
 pub fn draw_glyphs_2d(
