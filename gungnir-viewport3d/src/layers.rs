@@ -56,6 +56,16 @@ pub struct CoverageCircle {
 /// narrower sector gets proportionally fewer, never fewer than two.
 #[must_use]
 pub fn sector_outline(circle: &CoverageCircle, segments: u32) -> Option<Vec<[f64; 3]>> {
+    sector_outline_points(circle, segments).map(Iterator::collect)
+}
+
+/// [`sector_outline`]'s points in order, produced as they are read, so the frame projects
+/// them straight into the one vector egui's line shape owns rather than collecting them
+/// twice (GAP-257).
+fn sector_outline_points(
+    circle: &CoverageCircle,
+    segments: u32,
+) -> Option<impl Iterator<Item = [f64; 3]>> {
     let sector = circle.sector?;
     if sector.is_full_circle() || sector.validate().is_err() {
         return None;
@@ -68,19 +78,19 @@ pub fn sector_outline(circle: &CoverageCircle, segments: u32) -> Option<Vec<[f64
     )]
     let pieces = ((f64::from(segments) * sector.width_rad / tau).ceil() as u32).max(2);
     let start = sector.start_rad();
-    let [e, n, u] = circle.center;
-    let mut outline = Vec::with_capacity(pieces as usize + 3);
-    outline.push(circle.center);
-    for i in 0..=pieces {
-        let bearing = start + sector.width_rad * f64::from(i) / f64::from(pieces);
-        outline.push([
-            e + circle.radius_m * bearing.sin(),
-            n + circle.radius_m * bearing.cos(),
-            u,
-        ]);
-    }
-    outline.push(circle.center);
-    Some(outline)
+    let width = sector.width_rad;
+    let center = circle.center;
+    let [e, n, u] = center;
+    let radius = circle.radius_m;
+    let arc = (0..=pieces).map(move |i| {
+        let bearing = start + width * f64::from(i) / f64::from(pieces);
+        [e + radius * bearing.sin(), n + radius * bearing.cos(), u]
+    });
+    Some(
+        std::iter::once(center)
+            .chain(arc)
+            .chain(std::iter::once(center)),
+    )
 }
 
 /// Arc pieces for a full circle's worth of a sector outline on screen.
@@ -156,14 +166,75 @@ pub enum CoverageLayer<'a> {
 ///
 /// Under, deliberately: coverage is context and a track is the thing being looked at, so
 /// a ring must never sit on top of a symbol. The caller draws this before the glyphs.
+/// `note` is the layer's sentence as [`CoverageNoteKey::write`] wrote it for this layer:
+/// why there are no rings, or that the rings are nominal; drawn only when the layer calls
+/// for one.
 pub fn draw_coverage_2d(
     painter: &egui::Painter,
     palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     layer: CoverageLayer<'_>,
+    note: &str,
 ) {
-    draw_rings(painter, palette, rect, view, layer);
+    draw_rings(painter, palette, rect, view, layer, note);
+}
+
+/// What the coverage layer's note states (GAP-257): nothing, why there are no rings, or
+/// that the rings are nominal and why. The note was formatted on every frame; it is written
+/// when this key stops matching the layer, which is when the baseline or the sensors change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CoverageNoteKey {
+    /// Observed rings: no note.
+    Nothing,
+    NoSensorsActive,
+    NoOrigin(String),
+    Nominal(String),
+}
+
+impl CoverageNoteKey {
+    /// Whether a note written from this key is the note `layer` calls for.
+    #[must_use]
+    pub fn matches(&self, layer: &CoverageLayer<'_>) -> bool {
+        match (self, layer) {
+            (Self::Nothing, CoverageLayer::Circles { nominal: None, .. })
+            | (Self::NoSensorsActive, CoverageLayer::None(NoCoverage::NoSensorsActive)) => true,
+            (
+                Self::Nominal(gap),
+                CoverageLayer::Circles {
+                    nominal: Some(g), ..
+                },
+            ) => gap == g,
+            (Self::NoOrigin(setting), CoverageLayer::None(NoCoverage::NoOrigin { setting: s })) => {
+                setting == s
+            }
+            _ => false,
+        }
+    }
+
+    /// Write `layer`'s note into `text`, and return the key it was written from.
+    pub fn write(layer: &CoverageLayer<'_>, text: &mut String) -> Self {
+        use std::fmt::Write as _;
+        match layer {
+            CoverageLayer::Circles { nominal: None, .. } => Self::Nothing,
+            CoverageLayer::Circles {
+                nominal: Some(gap), ..
+            } => {
+                let _ = write!(
+                    text,
+                    "Coverage shown is each sensor's configured range, not what it is covering now: sensor modes are not read ({gap})."
+                );
+                Self::Nominal((*gap).to_owned())
+            }
+            CoverageLayer::None(reason) => {
+                text.push_str(&reason.sentence());
+                match reason {
+                    NoCoverage::NoSensorsActive => Self::NoSensorsActive,
+                    NoCoverage::NoOrigin { setting } => Self::NoOrigin((*setting).to_owned()),
+                }
+            }
+        }
+    }
 }
 
 /// Gaps along the declared approaches (DN-12 §7).
@@ -183,8 +254,7 @@ pub fn draw_gaps_2d(
     gaps: &[GapPolyline<'_>],
 ) {
     for gap in gaps {
-        let points: Vec<egui::Pos2> = gap.samples.iter().map(|p| view.project(*p, rect)).collect();
-        if points.len() < 2 {
+        if gap.samples.len() < 2 {
             continue;
         }
         let stroke = egui::Stroke::new(
@@ -203,7 +273,7 @@ pub fn draw_gaps_2d(
         // labels the gap without covering it.
         if gap.accepted {
             painter.text(
-                points[points.len() / 2] + egui::vec2(6.0, -6.0),
+                view.project(gap.samples[gap.samples.len() / 2], rect) + egui::vec2(6.0, -6.0),
                 egui::Align2::LEFT_BOTTOM,
                 "accepted",
                 egui::FontId::proportional(palette.small_font_size),
@@ -211,13 +281,18 @@ pub fn draw_gaps_2d(
             );
         }
         if gap.uncovered {
-            painter.add(egui::Shape::line(points, stroke));
+            // egui owns a line's points, so this is the one vector the layer allocates.
+            painter.add(egui::Shape::line(
+                gap.samples.iter().map(|p| view.project(*p, rect)).collect(),
+                stroke,
+            ));
         } else {
             // Single-sensor is drawn as a dashed line: the same stretch is watched, but
-            // by one sensor, and the broken line is the second cue.
-            for pair in points.chunks(2) {
+            // by one sensor, and the broken line is the second cue. Each dash is projected
+            // as it is drawn (GAP-257).
+            for pair in gap.samples.chunks(2) {
                 if let [a, b] = pair {
-                    painter.line_segment([*a, *b], stroke);
+                    painter.line_segment([view.project(*a, rect), view.project(*b, rect)], stroke);
                 }
             }
         }
@@ -358,6 +433,89 @@ pub fn dead_spot_line(field: &DeadSpotField<'_>) -> String {
 #[must_use]
 pub fn dead_spot_not_computed_line(reason: &str) -> String {
     format!("Terrain dead spots not computed: {reason}. They are not absent, they are unknown.")
+}
+
+/// What the dead-spot layer's line states (GAP-257): the facts [`dead_spot_line`] and
+/// [`dead_spot_not_computed_line`] print, so the line is written when one of them changes
+/// and not on every frame. The age is kept as the line prints it, in whole seconds, so the
+/// line is rewritten once a second while the field ages and not thirty times.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeadSpotLineKey {
+    NotComputed(String),
+    Computing,
+    Field {
+        revision: u64,
+        /// `age_s` rounded as `{:.0}` rounds it, as bits.
+        age: u64,
+        stale: bool,
+        linked: bool,
+        height_agl_m: u64,
+        sensor: Option<String>,
+        what_if: Option<String>,
+    },
+}
+
+/// The age as the line prints it: whole seconds, ties to even as `{:.0}` rounds.
+fn shown_age(age_s: f64) -> u64 {
+    age_s.round_ties_even().to_bits()
+}
+
+impl DeadSpotLineKey {
+    /// Whether a line written from this key is the line `layer` calls for.
+    #[must_use]
+    pub fn matches(&self, layer: &DeadSpotLayer<'_>) -> bool {
+        match (self, layer) {
+            (Self::NotComputed(a), DeadSpotLayer::NotComputed { reason }) => a == reason,
+            (Self::Computing, DeadSpotLayer::Computing) => true,
+            (
+                Self::Field {
+                    revision,
+                    age,
+                    stale,
+                    linked,
+                    height_agl_m,
+                    sensor,
+                    what_if,
+                },
+                DeadSpotLayer::Field(f),
+            ) => {
+                *revision == f.revision
+                    && *age == shown_age(f.age_s)
+                    && *stale == f.stale
+                    && *linked == f.linked
+                    && *height_agl_m == f.height_agl_m.to_bits()
+                    && sensor.as_deref() == f.sensor
+                    && what_if.as_deref() == f.what_if
+            }
+            _ => false,
+        }
+    }
+
+    /// Write `layer`'s line into `text`, and return the key it was written from.
+    pub fn write(layer: &DeadSpotLayer<'_>, text: &mut String) -> Self {
+        match layer {
+            DeadSpotLayer::NotComputed { reason } => {
+                text.push_str(&dead_spot_not_computed_line(reason));
+                Self::NotComputed((*reason).to_owned())
+            }
+            DeadSpotLayer::Computing => {
+                text.push_str("Terrain dead spots: computing the first field.");
+                Self::Computing
+            }
+            DeadSpotLayer::Field(f) => {
+                text.push_str(&dead_spot_line(f));
+                Self::Field {
+                    revision: f.revision,
+                    age: shown_age(f.age_s),
+                    stale: f.stale,
+                    linked: f.linked,
+                    height_agl_m: f.height_agl_m.to_bits(),
+                    sensor: f.sensor.map(str::to_owned),
+                    what_if: f.what_if.map(str::to_owned),
+                }
+            }
+        }
+    }
 }
 
 /// The pattern period, in cells, that keeps a hatch about this many pixels apart on screen.
@@ -521,7 +679,8 @@ pub fn dead_spot_rect(
 
 /// Draw the dead-spot layer (GAP-246): the field's texture over the terrain and under
 /// everything else, and the line that says what it is; or, with no field, the sentence
-/// that says why. A texture built for an older field is not drawn.
+/// that says why. A texture built for an older field is not drawn. `line` is the layer's
+/// sentence as [`DeadSpotLineKey::write`] wrote it for this layer.
 pub fn draw_dead_spots_2d(
     painter: &egui::Painter,
     palette: &theme::Palette,
@@ -529,21 +688,15 @@ pub fn draw_dead_spots_2d(
     view: &TopDownView,
     texture: Option<&DeadSpotTexture>,
     layer: DeadSpotLayer<'_>,
+    line: &str,
 ) {
     let anchor = rect.left_bottom()
         + egui::vec2(
             palette.panel_spacing,
             -palette.panel_spacing - 1.6 * palette.small_font_size,
         );
-    let (line, colour) = match layer {
-        DeadSpotLayer::NotComputed { reason } => (
-            dead_spot_not_computed_line(reason),
-            palette.muted_text_color(),
-        ),
-        DeadSpotLayer::Computing => (
-            "Terrain dead spots: computing the first field.".to_owned(),
-            palette.muted_text_color(),
-        ),
+    let colour = match layer {
+        DeadSpotLayer::NotComputed { .. } | DeadSpotLayer::Computing => palette.muted_text_color(),
         DeadSpotLayer::Field(field) => {
             if let Some(texture) = texture.filter(|t| t.key.0 == field.revision) {
                 let tint = if field.stale {
@@ -558,14 +711,11 @@ pub fn draw_dead_spots_2d(
                     tint,
                 );
             }
-            (
-                dead_spot_line(&field),
-                if field.stale {
-                    palette.warning_color
-                } else {
-                    palette.viewport_text_color
-                },
-            )
+            if field.stale {
+                palette.warning_color
+            } else {
+                palette.viewport_text_color
+            }
         }
     };
     painter.text(
@@ -1085,22 +1235,25 @@ pub fn draw_predictions_2d(
     predictions: &[PredictedPath<'_>],
 ) {
     for p in predictions {
-        let points: Vec<egui::Pos2> = p.points.iter().map(|q| view.project(*q, rect)).collect();
-        if points.len() < 2 {
+        let Some((nearest, after)) = p.points.split_first() else {
+            continue;
+        };
+        if after.is_empty() {
             continue;
         }
         let stroke = egui::Stroke::new(palette.stroke_emphasis, palette.warning_color);
-        for pair in points.windows(2) {
-            let (a, b) = (pair[0], pair[1]);
+        // Each point is projected once, as the segment ending at it is drawn (GAP-257).
+        let mut a = view.project(*nearest, rect);
+        for q in after {
+            let b = view.project(*q, rect);
             // Dashes: split each segment into thirds and draw the outer two.
             let d = b - a;
             painter.line_segment([a, a + d / 3.0], stroke);
             painter.line_segment([a + d * (2.0 / 3.0), b], stroke);
+            a = b;
         }
         if p.uncertainty_drawable {
-            if let Some(end) = points.last() {
-                painter.circle_stroke(*end, 4.0, stroke);
-            }
+            painter.circle_stroke(a, 4.0, stroke);
         }
     }
 }
@@ -1132,9 +1285,67 @@ pub fn dense_group_label(group: &gungnir_model::DenseGroupView) -> String {
     label
 }
 
+/// What a dense group's label states (GAP-257): the facts [`dense_group_label`] prints, so
+/// the label is written when the estimate changes and not on every frame.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DenseGroupLabelKey {
+    /// A resolvable scene: no group, no label.
+    None,
+    Group {
+        epoch: u64,
+        expected_targets: u64,
+        most_probable_count: Option<u64>,
+        filter: String,
+        is_stale: bool,
+    },
+}
+
+impl DenseGroupLabelKey {
+    /// Whether a label written from this key is the label `group` calls for.
+    #[must_use]
+    pub fn matches(&self, group: Option<&gungnir_model::DenseGroupView>) -> bool {
+        match (self, group) {
+            (Self::None, None) => true,
+            (
+                Self::Group {
+                    epoch,
+                    expected_targets,
+                    most_probable_count,
+                    filter,
+                    is_stale,
+                },
+                Some(g),
+            ) => {
+                *epoch == g.epoch.0.to_bits()
+                    && *expected_targets == g.expected_targets.to_bits()
+                    && *most_probable_count == g.most_probable_count
+                    && *filter == g.filter
+                    && *is_stale == g.is_stale
+            }
+            _ => false,
+        }
+    }
+
+    /// Write `group`'s label into `text`, and return the key it was written from.
+    pub fn write(group: Option<&gungnir_model::DenseGroupView>, text: &mut String) -> Self {
+        let Some(g) = group else {
+            return Self::None;
+        };
+        text.push_str(&dense_group_label(g));
+        Self::Group {
+            epoch: g.epoch.0.to_bits(),
+            expected_targets: g.expected_targets.to_bits(),
+            most_probable_count: g.most_probable_count,
+            filter: g.filter.clone(),
+            is_stale: g.is_stale,
+        }
+    }
+}
+
 /// Draw a dense group (GAP-015): a translucent disc two sigma across for each component
 /// holding at least [`GROUP_COMPONENT_DRAW_WEIGHT`] of a target, in the unknown-identity
 /// colour because a group has no identity, and one label at the group's weighted centre.
+/// `label` is the group's words as [`DenseGroupLabelKey::write`] wrote them for this group.
 ///
 /// **No symbol, no identifier, no per-component count.** A disc is mass at a place, and
 /// drawing it as a track symbol would claim the identity the filter does not carry.
@@ -1144,6 +1355,7 @@ pub fn draw_dense_group_2d(
     rect: egui::Rect,
     view: &TopDownView,
     group: Option<&gungnir_model::DenseGroupView>,
+    label: &str,
 ) {
     let Some(group) = group else {
         return;
@@ -1184,7 +1396,7 @@ pub fn draw_dense_group_2d(
     painter.text(
         anchor,
         egui::Align2::CENTER_BOTTOM,
-        dense_group_label(group),
+        label,
         egui::FontId::proportional(palette.small_font_size),
         if group.is_stale {
             palette.track_stale_color
@@ -1213,13 +1425,14 @@ pub struct LaydownPreview<'a> {
 /// proposed placement is never mistaken for the live picture's own sensors and
 /// resources. The label is the option's own intent, not its bare identifier, because
 /// "cover the sea approach" tells a reader what they are looking at and "west-2" does
-/// not.
+/// not. `label` is that line, written when the selection changes (GAP-257).
 pub fn draw_laydown_preview_2d(
     painter: &egui::Painter,
     palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     preview: Option<LaydownPreview<'_>>,
+    label: &str,
 ) {
     const MARKER_RADIUS: f32 = 7.0;
     let Some(preview) = preview else {
@@ -1251,7 +1464,7 @@ pub fn draw_laydown_preview_2d(
         painter.text(
             view.project(label_at, rect) + egui::vec2(0.0, -2.0 * MARKER_RADIUS),
             egui::Align2::CENTER_BOTTOM,
-            format!("Preview: {}", preview.intent),
+            label,
             egui::FontId::proportional(palette.small_font_size),
             palette.laydown_preview_color,
         );
@@ -1285,24 +1498,22 @@ pub fn draw_geofences_2d(
             palette.muted_text_color()
         };
         let stroke = egui::Stroke::new(palette.stroke_emphasis, colour);
-        let points: Vec<egui::Pos2> = (0..=SEGMENTS)
-            .map(|i| {
-                #[allow(clippy::cast_precision_loss)]
-                let theta = std::f64::consts::TAU * (i % SEGMENTS) as f64 / SEGMENTS as f64;
-                view.project(
-                    [
-                        fence.center_enu[0] + fence.radius_m * theta.cos(),
-                        fence.center_enu[1] + fence.radius_m * theta.sin(),
-                        fence.center_enu[2],
-                    ],
-                    rect,
-                )
-            })
-            .collect();
-        for pair in points.chunks(2) {
-            if let [a, b] = pair {
-                painter.line_segment([*a, *b], stroke);
-            }
+        let point = |i: usize| {
+            #[allow(clippy::cast_precision_loss)]
+            let theta = std::f64::consts::TAU * (i % SEGMENTS) as f64 / SEGMENTS as f64;
+            view.project(
+                [
+                    fence.center_enu[0] + fence.radius_m * theta.cos(),
+                    fence.center_enu[1] + fence.radius_m * theta.sin(),
+                    fence.center_enu[2],
+                ],
+                rect,
+            )
+        };
+        // Every other arc piece is a dash, each projected as it is drawn (GAP-257): the
+        // same 32 dashes the 65-point ring gave when it was collected and paired.
+        for i in (0..SEGMENTS).step_by(2) {
+            painter.line_segment([point(i), point(i + 1)], stroke);
         }
         painter.text(
             view.project(fence.center_enu, rect),
@@ -1348,28 +1559,33 @@ pub fn draw_hazards_2d(
     hazards: &[HazardOutline<'_>],
 ) {
     for hazard in hazards {
-        let points: Vec<egui::Pos2> = hazard
-            .samples
-            .iter()
-            .map(|p| view.project(*p, rect))
-            .collect();
-        if points.len() < 2 {
+        let Some(first) = hazard.samples.first().filter(|_| hazard.samples.len() >= 2) else {
             continue;
-        }
+        };
+        let first = view.project(*first, rect);
         let stroke = egui::Stroke::new(palette.stroke_hazard, palette.hazard_color);
         if hazard.blocks_surface {
-            painter.add(egui::Shape::line(points.clone(), stroke));
+            // egui owns a line's points, so this is the one vector the layer allocates; it
+            // was collected and then cloned for the shape (GAP-257).
+            painter.add(egui::Shape::line(
+                hazard
+                    .samples
+                    .iter()
+                    .map(|p| view.project(*p, rect))
+                    .collect(),
+                stroke,
+            ));
         } else {
-            for pair in points.chunks(2) {
+            for pair in hazard.samples.chunks(2) {
                 if let [a, b] = pair {
-                    painter.line_segment([*a, *b], stroke);
+                    painter.line_segment([view.project(*a, rect), view.project(*b, rect)], stroke);
                 }
             }
         }
         // The label sits at the outline's first point; for a ring that is its eastmost
         // sample, for a boom one end.
         painter.text(
-            points[0] + egui::vec2(palette.panel_spacing, -palette.panel_spacing),
+            first + egui::vec2(palette.panel_spacing, -palette.panel_spacing),
             egui::Align2::LEFT_BOTTOM,
             format!("{} ({})", hazard.name, hazard.kind),
             egui::FontId::proportional(palette.small_font_size),
@@ -1384,14 +1600,15 @@ fn draw_rings(
     rect: egui::Rect,
     view: &TopDownView,
     layer: CoverageLayer<'_>,
+    note: &str,
 ) {
     let (circles, nominal) = match layer {
         CoverageLayer::Circles { circles, nominal } => (circles, nominal),
-        CoverageLayer::None(reason) => {
+        CoverageLayer::None(_) => {
             painter.text(
                 rect.left_bottom() + egui::vec2(palette.panel_spacing, -palette.panel_spacing),
                 egui::Align2::LEFT_BOTTOM,
-                reason.sentence(),
+                note,
                 egui::FontId::proportional(palette.small_font_size),
                 palette.muted_text_color(),
             );
@@ -1399,13 +1616,11 @@ fn draw_rings(
         }
     };
 
-    if let Some(gap) = nominal {
+    if nominal.is_some() {
         painter.text(
             rect.left_bottom() + egui::vec2(palette.panel_spacing, -palette.panel_spacing),
             egui::Align2::LEFT_BOTTOM,
-            format!(
-                "Coverage shown is each sensor's configured range, not what it is covering now: sensor modes are not read ({gap})."
-            ),
+            note,
             egui::FontId::proportional(palette.small_font_size),
             palette.warning_color,
         );
@@ -1423,10 +1638,10 @@ fn draw_rings(
             palette.stroke_hairline,
             coverage_color(palette, circle.confidence),
         );
-        match sector_outline(circle, SECTOR_SEGMENTS) {
+        match sector_outline_points(circle, SECTOR_SEGMENTS) {
             Some(outline) => {
-                let points: Vec<egui::Pos2> =
-                    outline.iter().map(|p| view.project(*p, rect)).collect();
+                // Projected straight into the one vector egui's line owns (GAP-257).
+                let points: Vec<egui::Pos2> = outline.map(|p| view.project(p, rect)).collect();
                 painter.add(egui::Shape::line(points, stroke));
             }
             None => {
@@ -1491,6 +1706,69 @@ mod tests {
             cphd.contains("most likely 20") && cphd.ends_with("stale"),
             "{cphd}"
         );
+    }
+
+    /// GAP-257: the dead-spot line is written once and kept while what it states holds. It
+    /// prints the age in whole seconds, so the key moves once a second and not every frame;
+    /// a field going stale or a new revision rewrites it.
+    #[test]
+    fn the_dead_spot_line_is_rewritten_when_what_it_states_changes() {
+        fn layer(f: DeadSpotField<'_>) -> DeadSpotLayer<'_> {
+            DeadSpotLayer::Field(f)
+        }
+        let cells = [DeadSpotCell::Clear; 4];
+        let mut f = field(&cells, 2);
+        let mut text = String::new();
+        let key = DeadSpotLineKey::write(&layer(f), &mut text);
+        assert_eq!(text, dead_spot_line(&f));
+
+        f.age_s = 6.4;
+        assert!(key.matches(&layer(f)), "6.4 s prints as the same 6 s");
+        assert_eq!(dead_spot_line(&f), text, "and the line says the same");
+        f.age_s = 7.0;
+        assert!(!key.matches(&layer(f)), "a new second is a new line");
+        f.age_s = 6.0;
+        f.stale = true;
+        assert!(!key.matches(&layer(f)), "stale is stated");
+        f.stale = false;
+        f.revision += 1;
+        assert!(!key.matches(&layer(f)), "a new field is a new line");
+        assert!(!key.matches(&DeadSpotLayer::Computing));
+    }
+
+    /// GAP-257: the coverage note is the sentence the layer called for before it was cached,
+    /// and is kept only for a layer that would say the same.
+    #[test]
+    fn the_coverage_note_is_the_layers_own_sentence() {
+        let placed = CoverageLayer::None(NoCoverage::NoOrigin { setting: "origin" });
+        let mut text = String::new();
+        let key = CoverageNoteKey::write(&placed, &mut text);
+        assert_eq!(text, NoCoverage::NoOrigin { setting: "origin" }.sentence());
+        assert!(key.matches(&placed));
+        assert!(!key.matches(&CoverageLayer::None(NoCoverage::NoSensorsActive)));
+        assert!(!key.matches(&CoverageLayer::Circles {
+            circles: &[],
+            nominal: None
+        }));
+
+        let mut nominal_text = String::new();
+        let nominal = CoverageLayer::Circles {
+            circles: &[],
+            nominal: Some("no adapter"),
+        };
+        let nominal_key = CoverageNoteKey::write(&nominal, &mut nominal_text);
+        assert!(
+            nominal_text.contains("not what it is covering now")
+                && nominal_text.contains("no adapter")
+        );
+        assert!(nominal_key.matches(&nominal));
+        let observed = CoverageLayer::Circles {
+            circles: &[],
+            nominal: None,
+        };
+        let mut none_text = String::new();
+        assert!(CoverageNoteKey::write(&observed, &mut none_text).matches(&observed));
+        assert!(none_text.is_empty(), "observed rings carry no note");
     }
 
     fn field(cells: &[DeadSpotCell], columns: u32) -> DeadSpotField<'_> {

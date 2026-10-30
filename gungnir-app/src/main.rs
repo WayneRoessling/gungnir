@@ -8,7 +8,7 @@
 //! (ARCHITECTURE.md §4, §9).
 
 use gungnir_app::dock;
-use gungnir_app::hazards;
+use gungnir_app::picture;
 use gungnir_app::requirements;
 use gungnir_app::state::AppState;
 use gungnir_app::sustainment;
@@ -147,6 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 workspace: Workspace::default(),
                 scene,
                 about_open: false,
+                picture: picture::PictureCache::default(),
             }))
         }),
     )?;
@@ -219,8 +220,9 @@ fn ground_callback(
 /// Each callback runs after this returns, so it owns copies rather than borrowing. The
 /// ground pass goes under every layer, and is set whenever there is a surface to upload or
 /// a mesh to drop; the surface is shared, so its clone is a pointer. The glyph list is
-/// rebuilt only when the track set changes, so its clone is per frame and small, and it
-/// goes under the glyphs so each track's frame and labels draw over its disc.
+/// shared the same way (GAP-257): rebuilt only when the track set changes, behind an `Arc`,
+/// so the frame clones a pointer and not two hundred glyphs. It goes under the glyphs so
+/// each track's frame and labels draw over its disc.
 fn set_gl_passes(
     ui: &egui::Ui,
     scene: Arc<Mutex<gungnir_viewport3d::gl::SceneRenderer>>,
@@ -245,7 +247,7 @@ fn set_gl_passes(
         prepared.scene_slot,
         scene_callback(
             scene,
-            viewport.glyphs.clone(),
+            Arc::clone(&viewport.glyphs),
             viewport.glyph_revision,
             viewport.view,
             prepared.rect,
@@ -258,7 +260,7 @@ fn set_gl_passes(
 /// the list or the zoom changed (GAP-255).
 fn scene_callback(
     scene: Arc<Mutex<gungnir_viewport3d::gl::SceneRenderer>>,
-    glyphs: Vec<gungnir_viewport3d::tracks::TrackGlyph>,
+    glyphs: Arc<Vec<gungnir_viewport3d::tracks::TrackGlyph>>,
     glyph_revision: u64,
     view: gungnir_viewport3d::interaction::TopDownView,
     rect: egui::Rect,
@@ -314,6 +316,10 @@ struct App {
     /// Whether PN-21 is open (D-34). Session-local, like the replay cursor: which
     /// windows a person has open is what this window is doing, not what the mission is.
     about_open: bool,
+    /// The picture's layers, recomputed when their inputs change and lent to both
+    /// viewports (GAP-257). Session-local for the same reason: it is a cache of what the
+    /// mission state says, not mission state.
+    picture: picture::PictureCache,
 }
 
 /// The arrangement on screen: the main window's tree and the detached panels.
@@ -646,70 +652,13 @@ impl App {
     fn draw_detached_panel(&mut self, ui: &mut egui::Ui, panel: PanelId) -> Option<PanelAction> {
         match panel {
             PanelId::Viewport3d => {
-                // The detached window shows the same coverage as the docked one: two
-                // viewports disagreeing about what is covered would be worse than
-                // either being wrong.
-                let circles = sustainment::coverage_circles(&self.state);
-                let coverage = sustainment::coverage_layer(&self.state, &circles);
-                let report = sustainment::coverage_report(&self.state);
-                let names = sustainment::approach_names(&self.state);
-                let gaps = report
-                    .as_ref()
-                    .map(|r| {
-                        sustainment::gap_polylines(
-                            &names,
-                            r,
-                            &sustainment::live_accepted(&self.state, r),
-                        )
-                    })
-                    .unwrap_or_default();
-                let placed = hazards::placed(&self.state);
-                let hazards = hazards::outlines(&placed);
-                let fences = gungnir_app::geofences::placed(&self.state);
-                let geofences = gungnir_app::geofences::outlines(&fences);
-                let predicted =
-                    gungnir_app::prediction::paths(&gungnir_app::prediction::predict(&self.state));
-                let predictions: Vec<gungnir_viewport3d::layers::PredictedPath> = predicted
-                    .iter()
-                    .map(|p| gungnir_viewport3d::layers::PredictedPath {
-                        track: p.track,
-                        points: &p.points,
-                        uncertainty_drawable: p.uncertainty_drawable,
-                    })
-                    .collect();
-                let preview = sustainment::laydown_preview(&self.state);
-                let laydown_preview =
-                    preview
-                        .as_ref()
-                        .map(|p| gungnir_viewport3d::layers::LaydownPreview {
-                            intent: &p.intent,
-                            sensors: &p.sensor_positions,
-                            resources: &p.resource_positions,
-                        });
-                let point_clouds =
-                    gungnir_app::pointcloud::layers(&self.state.point_cloud, &self.state.data);
-                let shown = gungnir_app::dead_spots::shown_label(&self.state);
-                let dead_spots = gungnir_app::dead_spots::layer(&self.state.dead_spots, &shown);
-                gungnir_viewport3d::render(
-                    ui,
-                    &self.state.palette,
-                    &mut self.state.viewport,
-                    self.state.tracking.tracks(),
-                    self.state.tracking.bearing_rays(),
-                    &self.state.last_plan,
-                    gungnir_viewport3d::layers::LayerInputs {
-                        coverage,
-                        gaps: &gaps,
-                        hazards: &hazards,
-                        geofences: &geofences,
-                        predictions: &predictions,
-                        terrain: gungnir_app::terrain::layer(&self.state.terrain, &self.state.data),
-                        point_clouds: &point_clouds,
-                        laydown_preview,
-                        dense_group: self.state.tracking.dense_group(),
-                        dead_spots,
-                    },
-                );
+                // The detached window shows the same layers as the docked one, from the
+                // same cache (GAP-257): two viewports disagreeing about what is covered
+                // would be worse than either being wrong. The second window has no GL
+                // context of its own, so it draws the projection.
+                self.picture.sync(&self.state);
+                let (sources, viewport) = picture::Sources::split(&mut self.state);
+                picture::render_projection(ui, &self.picture, &sources, viewport);
                 None
             }
             other => self.draw_docked(ui, other),
@@ -898,77 +847,16 @@ impl App {
     /// decision of 2026-09-05), with the 2D projection as the opt-out and as the fallback
     /// when no GL context could be attached (`gungnir-viewport3d`'s crate documentation).
     fn draw_picture(&mut self, ui: &mut egui::Ui) {
-        // GAP-007. Built before either branch so both renderers show the same coverage,
-        // and so an unplaceable layer says so on whichever one is running.
-        let circles = sustainment::coverage_circles(&self.state);
-        let coverage = sustainment::coverage_layer(&self.state, &circles);
-        // GAP-006: gaps along the declared approaches, drawn on whichever renderer is
-        // running so the two cannot disagree about where the holes are.
-        let report = sustainment::coverage_report(&self.state);
-        let names = sustainment::approach_names(&self.state);
-        let gaps = report
-            .as_ref()
-            .map(|r| {
-                sustainment::gap_polylines(&names, r, &sustainment::live_accepted(&self.state, r))
-            })
-            .unwrap_or_default();
-        // GAP-017: the hazard layer, on whichever renderer is running.
-        let placed = hazards::placed(&self.state);
-        let hazards = hazards::outlines(&placed);
-        // GAP-088: the fences, a rule layer, on whichever renderer is running.
-        let fences = gungnir_app::geofences::placed(&self.state);
-        let geofences = gungnir_app::geofences::outlines(&fences);
-        // GAP-020: predicted lines, on whichever renderer is running.
-        let predicted =
-            gungnir_app::prediction::paths(&gungnir_app::prediction::predict(&self.state));
-        let predictions: Vec<gungnir_viewport3d::layers::PredictedPath> = predicted
-            .iter()
-            .map(|p| gungnir_viewport3d::layers::PredictedPath {
-                track: p.track,
-                points: &p.points,
-                uncertainty_drawable: p.uncertainty_drawable,
-            })
-            .collect();
-        // GAP-087: the selected laydown's preview, on whichever renderer is running.
-        let preview = sustainment::laydown_preview(&self.state);
-        let laydown_preview =
-            preview
-                .as_ref()
-                .map(|p| gungnir_viewport3d::layers::LaydownPreview {
-                    intent: &p.intent,
-                    sensors: &p.sensor_positions,
-                    resources: &p.resource_positions,
-                });
-        // GAP-098: the configured point-cloud pair, on whichever renderer is running.
-        let point_clouds =
-            gungnir_app::pointcloud::layers(&self.state.point_cloud, &self.state.data);
-        // GAP-246: the terrain dead spots, or why there are none, on whichever renderer
-        // is running.
-        let shown = gungnir_app::dead_spots::shown_label(&self.state);
-        let dead_spots = gungnir_app::dead_spots::layer(&self.state.dead_spots, &shown);
-
-        let layers = gungnir_viewport3d::layers::LayerInputs {
-            coverage,
-            gaps: &gaps,
-            hazards: &hazards,
-            geofences: &geofences,
-            predictions: &predictions,
-            terrain: gungnir_app::terrain::layer(&self.state.terrain, &self.state.data),
-            point_clouds: &point_clouds,
-            laydown_preview,
-            dense_group: self.state.tracking.dense_group(),
-            dead_spots,
-        };
-        let Some(scene) = self.scene.clone().filter(|_| self.state.viewport.use_3d) else {
-            gungnir_viewport3d::render(
-                ui,
-                &self.state.palette,
-                &mut self.state.viewport,
-                self.state.tracking.tracks(),
-                self.state.tracking.bearing_rays(),
-                &self.state.last_plan,
-                layers,
-            );
+        // The layers -- coverage (GAP-007), gaps (GAP-006), hazards (GAP-017), geofences
+        // (GAP-088), predicted lines (GAP-020), the laydown preview (GAP-087), the
+        // point-cloud pair (GAP-098) and the dead spots (GAP-246) -- are brought up to date
+        // before either branch, so both renderers show the same picture and an unplaceable
+        // layer says so on whichever one is running. Each is recomputed only when the state
+        // it reads changed (GAP-257, `gungnir_app::picture`).
+        self.picture.sync(&self.state);
+        let (sources, viewport) = picture::Sources::split(&mut self.state);
+        let Some(scene) = self.scene.clone().filter(|_| viewport.use_3d) else {
+            picture::render_projection(ui, &self.picture, &sources, viewport);
             return;
         };
 
@@ -978,26 +866,22 @@ impl App {
             .lock()
             .ok()
             .and_then(|renderer| renderer.ground_revision());
+        let frame = self.picture.frame(&sources);
         let Some(prepared) = gungnir_viewport3d::prepare_3d(
             ui,
-            &self.state.palette,
-            &mut self.state.viewport,
-            self.state.tracking.tracks(),
-            self.state.tracking.bearing_rays(),
-            &self.state.last_plan,
-            layers,
+            sources.palette,
+            viewport,
+            sources.tracking.tracks(),
+            sources.tracking.bearing_rays(),
+            sources.plan,
+            frame.inputs(),
             resident,
         ) else {
             return;
         };
 
-        set_gl_passes(ui, scene, &prepared, &self.state.viewport, resident);
-        gungnir_viewport3d::draw_renderer_toggle(
-            ui,
-            &self.state.palette,
-            prepared.rect,
-            &mut self.state.viewport,
-        );
+        set_gl_passes(ui, scene, &prepared, viewport, resident);
+        gungnir_viewport3d::draw_renderer_toggle(ui, sources.palette, prepared.rect, viewport);
     }
 
     /// Apply what was clicked. Exhaustive on purpose: a new panel action must be given

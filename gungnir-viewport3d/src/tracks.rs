@@ -58,6 +58,37 @@ pub fn update_track_symbols(tracks: &[TrackView]) -> Vec<TrackGlyph> {
     tracks.iter().map(glyph_for).collect()
 }
 
+/// Write each glyph's id label into `ids`, one per glyph, reusing the strings already there
+/// (GAP-257, `rust-ui-architecture-coding-standards.md` §5). Called when the glyph list is
+/// rebuilt, so the two hundred `to_string` calls a frame made at Scenario 4 counts are made
+/// once per list, and allocate nothing at all while the count holds.
+pub fn refill_glyph_ids(ids: &mut Vec<String>, glyphs: &[TrackGlyph]) {
+    use std::fmt::Write as _;
+    ids.resize_with(glyphs.len(), String::new);
+    for (id, g) in ids.iter_mut().zip(glyphs) {
+        id.clear();
+        // Writing a `u64` into a `String` cannot fail.
+        let _ = write!(id, "{}", g.track_id.0);
+    }
+}
+
+/// The id labels of `glyphs`, fresh: [`refill_glyph_ids`] into an empty list.
+#[must_use]
+pub fn glyph_ids(glyphs: &[TrackGlyph]) -> Vec<String> {
+    let mut ids = Vec::new();
+    refill_glyph_ids(&mut ids, glyphs);
+    ids
+}
+
+/// The id text drawn for glyph `i`: the one written with the list, or, for a list `ids` was
+/// not built from, the id formatted now rather than a glyph left unlabelled.
+fn id_text<'a>(ids: &'a [String], i: usize, g: &TrackGlyph) -> std::borrow::Cow<'a, str> {
+    ids.get(i).map_or_else(
+        || std::borrow::Cow::Owned(g.track_id.0.to_string()),
+        |s| std::borrow::Cow::Borrowed(s.as_str()),
+    )
+}
+
 /// True when the glyph set no longer matches the snapshot, so the caller rebuilds.
 ///
 /// Compares each held glyph with the whole glyph its track would draw as now, rather
@@ -87,15 +118,16 @@ pub(crate) const GLYPH_RADIUS_PX: f32 = 5.0;
 
 /// Classification frame round a lifecycle fill, one-sigma ellipse, heading vector, id
 /// label. Both renderers draw this: the projection alone, the three-d scene over its
-/// discs (GAP-251).
+/// discs (GAP-251). `ids` is [`glyph_ids`] of `glyphs`, written with the list.
 pub fn draw_glyphs_2d(
     painter: &egui::Painter,
     palette: &theme::Palette,
     rect: egui::Rect,
     view: &TopDownView,
     glyphs: &[TrackGlyph],
+    ids: &[String],
 ) {
-    for g in glyphs {
+    for (i, g) in glyphs.iter().enumerate() {
         let color = theme::track_color(palette, g.status, g.stale);
         let center = view.project(g.position, rect);
         let ellipse = egui::Rect::from_center_size(
@@ -125,7 +157,7 @@ pub fn draw_glyphs_2d(
         painter.text(
             id_label_anchor(center),
             egui::Align2::LEFT_BOTTOM,
-            g.track_id.0.to_string(),
+            id_text(ids, i, g),
             egui::FontId::monospace(palette.small_font_size),
             color,
         );
@@ -333,10 +365,71 @@ pub fn draw_bearing_rays_2d(
     }
 }
 
+/// The plan's assignment labels, one per assigned track, kept with the solutions they were
+/// written from (GAP-257). Every frame searched the whole solution list once per glyph and
+/// formatted each label again; the labels change when the plan does, which is once per
+/// allocation at most, so they are written then and looked up by track after.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct PlanLabels {
+    solutions: Vec<InterceptSolutionView>,
+    /// `(track, "R1 R4")`, in track order for the lookup each glyph makes.
+    labels: Vec<(TrackId, String)>,
+}
+
+impl PlanLabels {
+    /// Rewrite the labels when `plan`'s solutions differ from the ones they were written
+    /// from; compare and return otherwise.
+    pub fn sync(&mut self, plan: &PlanView) {
+        if self.solutions.as_slice() == plan.solutions() {
+            return;
+        }
+        self.solutions.clear();
+        self.solutions.extend_from_slice(plan.solutions());
+        self.labels = plan_labels(&self.solutions);
+    }
+
+    /// The label of `track`, when the plan assigns it anything.
+    #[must_use]
+    pub fn label(&self, track: TrackId) -> Option<&str> {
+        self.labels
+            .binary_search_by_key(&track.0, |(t, _)| t.0)
+            .ok()
+            .and_then(|i| self.labels.get(i))
+            .map(|(_, label)| label.as_str())
+    }
+
+    /// How many solutions the plan has, for the status line.
+    #[must_use]
+    pub fn assignments(&self) -> usize {
+        self.solutions.len()
+    }
+}
+
+/// Each assigned track's label, `R<resource>` for each of its solutions in the plan's
+/// order, separated by spaces, in track order. What [`draw_plan_2d`] drew per glyph per
+/// frame before GAP-257, written once per plan.
+#[must_use]
+pub fn plan_labels(solutions: &[InterceptSolutionView]) -> Vec<(TrackId, String)> {
+    use std::fmt::Write as _;
+    let mut labels: Vec<(TrackId, String)> = Vec::new();
+    for s in solutions {
+        match labels.iter_mut().find(|(t, _)| *t == s.track) {
+            Some((_, label)) => {
+                label.push(' ');
+                let _ = write!(label, "R{}", s.resource.0);
+            }
+            None => labels.push((s.track, format!("R{}", s.resource.0))),
+        }
+    }
+    labels.sort_by_key(|(t, _)| t.0);
+    labels
+}
+
 /// The plan, in both renderers: label each assigned track with its resources. Resource
 /// positions are geodetic and the intercept geometry is not yet computed, so the
 /// pairing is shown as text at the track until `InterceptSolutionView` carries a
-/// point to draw a line to.
+/// point to draw a line to. `labels` is the plan's [`PlanLabels`], synced this frame, and
+/// `ids` is [`glyph_ids`] of `glyphs`.
 ///
 /// **On the id's line, after the id** (GAP-253). The label was a second line below the
 /// glyph, which is where the id of a track 10 to 38 points below sits: the owner's look
@@ -349,24 +442,19 @@ pub fn draw_plan_2d(
     rect: egui::Rect,
     view: &TopDownView,
     glyphs: &[TrackGlyph],
-    plan: &PlanView,
+    ids: &[String],
+    labels: &PlanLabels,
 ) {
     let font = egui::FontId::monospace(palette.small_font_size);
-    for g in glyphs {
-        let resources: Vec<String> = plan
-            .solutions()
-            .iter()
-            .filter(|s| s.track == g.track_id)
-            .map(|s| format!("R{}", s.resource.0))
-            .collect();
-        if resources.is_empty() {
+    for (i, g) in glyphs.iter().enumerate() {
+        let Some(label) = labels.label(g.track_id) else {
             continue;
-        }
+        };
         // Measured rather than counted in characters, so the label follows the id in any
         // font the palette names.
         let id_width = painter
             .layout_no_wrap(
-                g.track_id.0.to_string(),
+                id_text(ids, i, g).into_owned(),
                 font.clone(),
                 egui::Color32::PLACEHOLDER,
             )
@@ -376,7 +464,7 @@ pub fn draw_plan_2d(
         painter.text(
             id_label_anchor(center) + egui::vec2(id_width + LABEL_GAP_PX, 0.0),
             egui::Align2::LEFT_BOTTOM,
-            resources.join(" "),
+            label,
             font.clone(),
             palette.intercept_line_color,
         );
@@ -667,9 +755,12 @@ mod tests {
         };
         let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
         let palette = theme::Palette::day();
+        let ids = glyph_ids(&glyphs);
+        let mut labels = PlanLabels::default();
+        labels.sync(&plan);
         painted(|p| {
-            draw_glyphs_2d(p, &palette, rect, &view, &glyphs);
-            draw_plan_2d(p, &palette, rect, &view, &glyphs, &plan);
+            draw_glyphs_2d(p, &palette, rect, &view, &glyphs, &ids);
+            draw_plan_2d(p, &palette, rect, &view, &glyphs, &ids, &labels);
         })
         .into_iter()
         .filter_map(|s| match s {
@@ -698,6 +789,69 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// GAP-257: the labels are what each glyph's per-frame search and format produced --
+    /// every resource of a track in the plan's order on one label, nothing for a track the
+    /// plan leaves alone -- and they are rewritten only when the solutions change.
+    #[test]
+    fn plan_labels_are_written_once_per_plan_and_say_what_the_search_did() {
+        let solution = |track: u64, resource: u32| InterceptSolutionView {
+            resource: gungnir_model::ResourceId(resource),
+            track: TrackId(track),
+            intercept_point: None,
+            time_to_intercept_s: None,
+        };
+        let plan = |solutions: Vec<InterceptSolutionView>| {
+            PlanView::intercept(gungnir_model::PlanId(1), MissionTime(0.0), solutions, 1.0)
+        };
+        let two_then_one = plan(vec![solution(55, 4), solution(12, 1), solution(55, 1)]);
+        let labels = plan_labels(two_then_one.solutions());
+        assert_eq!(
+            labels,
+            vec![
+                (TrackId(12), "R1".to_owned()),
+                (TrackId(55), "R4 R1".to_owned())
+            ],
+            "in track order, each track's resources in the plan's order"
+        );
+
+        let mut kept = PlanLabels::default();
+        kept.sync(&two_then_one);
+        assert_eq!(kept.label(TrackId(55)), Some("R4 R1"));
+        assert_eq!(kept.label(TrackId(12)), Some("R1"));
+        assert_eq!(
+            kept.label(TrackId(7)),
+            None,
+            "an unassigned track has no label"
+        );
+        assert_eq!(kept.assignments(), 3);
+        let before = kept.clone();
+        kept.sync(&two_then_one.clone());
+        assert_eq!(kept, before, "the same solutions are the same labels");
+        kept.sync(&plan(vec![solution(12, 9)]));
+        assert_eq!(kept.label(TrackId(55)), None);
+        assert_eq!(kept.label(TrackId(12)), Some("R9"));
+        assert_eq!(kept.assignments(), 1);
+    }
+
+    /// GAP-257: the id labels are written with the glyph list, one per glyph, and reuse the
+    /// strings already held when the list is rebuilt at the same count.
+    #[test]
+    fn glyph_ids_are_written_once_per_list() {
+        let tracks: Vec<TrackView> = [41_u64, 7, 300].iter().map(|&id| track(id, 0.0)).collect();
+        let glyphs = update_track_symbols(&tracks);
+        let mut ids = glyph_ids(&glyphs);
+        assert_eq!(ids, vec!["41", "7", "300"]);
+        let held: Vec<*const u8> = ids.iter().map(|s| s.as_ptr()).collect();
+        let moved: Vec<TrackView> = tracks.iter().map(|t| track(t.id.0 + 1, 5.0)).collect();
+        refill_glyph_ids(&mut ids, &update_track_symbols(&moved));
+        assert_eq!(ids, vec!["42", "8", "301"]);
+        assert_eq!(
+            ids.iter().map(|s| s.as_ptr()).collect::<Vec<_>>(),
+            held,
+            "a rebuild at the same count writes into the strings it already holds"
+        );
     }
 
     /// GAP-253: the assignment is read as part of the track's own label, so it follows the

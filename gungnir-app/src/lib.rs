@@ -51,6 +51,7 @@ pub mod misb;
 pub mod node_audit;
 pub mod node_tasks;
 pub mod peers;
+pub mod picture;
 pub mod planning_record;
 pub mod pointcloud;
 pub mod prediction;

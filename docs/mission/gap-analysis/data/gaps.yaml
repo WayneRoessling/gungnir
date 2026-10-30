@@ -13940,3 +13940,81 @@
       counts lines and decodes only the last. `session_summaries` uses it. Tested against
       `read_session` in `gungnir-store/src/lib.rs`
       (`../../record/2026-10-30/showing-the-replay-picker-no-longer-decodes-the.md`).
+
+- id: GAP-257
+  name: The picture's layers were reassembled, and the 2D path allocated, on every frame
+  type: Technical
+  caps: [CAP-5.10, CAP-2.10]
+  layer: UI and data ecosystem
+  sev: 2
+  effort: M
+  target: I4
+  owner: UI engineer
+  deps: [GAP-255]
+  impact: >-
+    The coverage circles and report, the placed hazards and geofences, the filter predictor
+    over every track at every horizon and the laydown preview were recomputed on every frame,
+    twice when the viewport was detached, and the egui gate carried a third hand-kept copy.
+    The 2D path then allocated polyline vectors, status sentences, id labels and a plan
+    search per glyph on every frame, and the binary cloned every glyph into the paint callback.
+    `rust-ui-architecture-coding-standards.md` §5 forbids each.
+  evidence: >-
+    `docs/review/2026-10-30-ui-review.md` §4.3 findings 16 and 18. `gungnir-app/src/main.rs`
+    `draw_picture` and `draw_detached_panel` held the same sixty lines;
+    `gungnir-app/tests/frame_budgets.rs::draw_picture` a third.
+    `gungnir-viewport3d/src/layers.rs` and `tracks.rs` collected a vector per gap, prediction,
+    geofence and hazard, formatted five sentences and every id label per frame, and
+    `draw_plan_2d` searched the plan once per glyph.
+  action: >-
+    One cache, `gungnir_app::picture::PictureCache`, that the binary's two viewports and the
+    gate all call, with a change key per layer group. In the viewport crate: sentences,
+    glyph ids and plan labels written when the facts they state change, polylines projected
+    as they are drawn, and the glyph list shared behind an `Arc`.
+  ref: >-
+    `../../review/2026-10-30-ui-review.md` §4.3; GAP-255; GAP-258; the `gungnir-ui` row of
+    `../../verification-capability-table.md`, criterion unchanged
+  history:
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      Filed from the review's findings 16 and 18, the two GAP-255 left because the gate now
+      times them.
+  - date: 2026-10-30
+    status: Closed
+    note: >-
+      `gungnir-app/src/picture.rs` assembles each layer group when its key changes; the
+      binary and `egui_pass_samples` both call it, and a test holds the rebuild counts.
+      The viewport caches its sentences, ids and plan labels and shares its glyphs through an
+      `Arc`. The point clouds stay per-frame dots: GAP-258
+      (`../../record/2026-10-30/gap-257-the-picture-assembled-once-per-change.md`).
+
+- id: GAP-258
+  name: The point clouds are up to forty thousand egui circles a frame
+  type: Technical
+  caps: [CAP-5.10]
+  layer: UI and data ecosystem
+  sev: 2
+  effort: S
+  target: I4
+  owner: UI engineer
+  deps: [GAP-257]
+  impact: >-
+    With a point-cloud pair loaded, the 2D path draws up to 40 000 `circle_filled` shapes
+    every frame, each tessellated by egui. It is the one cost GAP-257 found in the viewport
+    that cannot be removed without changing what is drawn.
+  evidence: >-
+    `gungnir-viewport3d/src/layers.rs::draw_point_clouds_2d` draws `circle_filled` per point
+    within the vertex budget. A single mesh of quads or a texture would be a different
+    picture (square points, no antialiasing), so it is a decision about the picture and not
+    a fix.
+  action: >-
+    Draw each cloud as one cached `egui::Mesh`, keyed like the terrain mesh on the cloud, the
+    view and the rect, and compare the picture before and after with the owner.
+  ref: >-
+    GAP-257; GAP-255; GAP-098
+  history:
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      Filed from GAP-257, which left it because drawing the points as one mesh changes what is
+      drawn.

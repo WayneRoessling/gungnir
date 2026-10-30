@@ -1726,7 +1726,15 @@ pub fn local_frame_of(
 /// Build the viewport's coverage layer for this frame.
 #[must_use]
 pub fn coverage_layer<'a>(state: &AppState, circles: &'a [CoverageCircle]) -> CoverageLayer<'a> {
-    if state.config.origin.is_none() {
+    coverage_layer_of(state.config.origin.is_some(), circles)
+}
+
+/// The same layer from the one fact about the state it reads beside the circles: whether
+/// the baseline declares an origin. `crate::picture` holds the circles across frames and
+/// borrows the viewport mutably beside them, so it cannot hand the whole state over.
+#[must_use]
+pub fn coverage_layer_of(has_origin: bool, circles: &[CoverageCircle]) -> CoverageLayer<'_> {
+    if !has_origin {
         return CoverageLayer::None(NoCoverage::NoOrigin { setting: "origin" });
     }
     if circles.is_empty() {
