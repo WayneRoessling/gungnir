@@ -705,12 +705,9 @@ impl App {
     fn draw_docked(&mut self, ui: &mut egui::Ui, panel: PanelId) -> Option<PanelAction> {
         match panel {
             PanelId::Replay => {
-                if !self.sustainment.sessions_read {
-                    // A disk read per session, so it is taken when the picker appears
-                    // rather than every frame.
-                    self.sustainment.sessions = sustainment::session_summaries(&self.state);
-                    self.sustainment.sessions_read = true;
-                }
+                // The same one-time read the dock tree takes (GAP-254), so the two paths
+                // cannot drift apart again.
+                self.sustainment.read_sessions_once(&self.state);
                 gungnir_app::workspace::render_replay(
                     ui,
                     &self.state,

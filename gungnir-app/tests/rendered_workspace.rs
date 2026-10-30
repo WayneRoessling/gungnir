@@ -229,6 +229,100 @@ fn a_configured_arrangement_is_what_reaches_the_screen() {
     );
 }
 
+/// A desktop whose journal holds one session with something in it.
+///
+/// The journal creates a session's file on its first append, so an untouched desktop has
+/// no session on disk at all and a picker over it is honestly empty. This publishes one
+/// event, lets the tick journal it and saves, which is the case the picker exists for.
+fn desktop_with_a_session(name: &str) -> AppState {
+    use gungnir_eventing::{Event, TrackingEvent};
+    use gungnir_model::{
+        Classification, MissionTime, Provenance, Quality, Releasability, TrackId, TrackStatus,
+        TrackView,
+    };
+
+    let mut state = desktop(name);
+    let now = state.clock.now();
+    let track = TrackView {
+        id: TrackId(1),
+        status: TrackStatus::Confirmed,
+        state: nalgebra::SVector::zeros(),
+        covariance: nalgebra::SMatrix::identity(),
+        classification: Classification::Unknown,
+        provenance: Provenance::default(),
+        quality: Quality::default(),
+        mission_time: MissionTime(0.0),
+        releasability: Releasability::default(),
+    };
+    state
+        .events
+        .publish(now, Event::Tracking(TrackingEvent::TrackInitiated(track)))
+        .expect("publish");
+    update::tick(&mut state);
+    state.save_session().expect("save the session");
+    state
+}
+
+/// GAP-254: the docked replay picker lists the journal's sessions.
+///
+/// The one-time read of the journal directory used to live only where a detached PN-12
+/// was drawn, so every layout that docks it (the analyst's among them,
+/// `docs/ux/information-architecture.md` §4) showed "No sessions recorded." for the whole
+/// session, over a journal that had sessions in it. The earlier tests drew PN-12 over an
+/// empty journal, where that text is the truth, and so could not see it. This one puts a
+/// session on disk and draws the analyst's real tree through the real `Behavior`, which
+/// is the docked path and not the detached one.
+#[test]
+fn the_docked_replay_picker_lists_the_journals_sessions() {
+    let mut state = desktop_with_a_session("docked-replay");
+    state.set_role(Role::Analyst);
+    let live = state.session().expect("the desktop is recording a session");
+    let layout = WorkspaceLayout::for_role(Role::Analyst);
+    assert!(
+        layout.docked().any(|p| p == PanelId::Replay),
+        "the analyst's layout no longer docks PN-12, so this test draws the wrong path"
+    );
+    let mut tree = dock::tree_from(&dock::default_arrangement(&layout));
+    let mut sustainment = SustainmentState::default();
+    let probe = RenderProbe::new();
+
+    let (_, frame) = probe.draw(|ui| {
+        let mut behavior = dock::PanelBehavior::new(&state, &mut sustainment);
+        tree.ui(&mut behavior, ui);
+    });
+
+    assert!(
+        frame.says("Sessions in this journal"),
+        "the picker was not drawn in the analyst's tree: {}",
+        frame.joined()
+    );
+    assert!(
+        !frame.says("No sessions recorded."),
+        "the docked picker said the journal was empty over a journal with a session in it: {}",
+        frame.joined()
+    );
+    // Whole-text equality rather than `says`: PN-13 is in the same tree and its heading
+    // begins "Session 1. Every figure below...", which contains the same words. The
+    // picker's row is a button whose whole text is the session's name.
+    let row = format!("Session {}", live.0);
+    assert!(
+        frame.texts.contains(&row),
+        "the docked picker did not name the journal's session: {}",
+        frame.joined()
+    );
+    assert!(
+        !frame.says("length not read"),
+        "the session's length was listed as unread, so the summaries were built without \
+         reading the session: {}",
+        frame.joined()
+    );
+    assert!(
+        sustainment.sessions_read,
+        "the docked path drew the picker without marking the sessions as read, so it \
+         would read the journal again every frame"
+    );
+}
+
 /// GAP-007: coverage that cannot be placed says so on the map, rather than the map
 /// simply having no rings on it.
 ///
