@@ -245,9 +245,10 @@ history, and an entry is never edited once it has merged.
 | GAP-248 | A laydown option's dead spots are not computed on PN-16 | Mission | CAP-1.4, CAP-2.11 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
 | GAP-249 | A sensor change cannot be tried against the dead spots without editing the baseline | Mission | CAP-1.4, CAP-2.11, CAP-3.9 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
 | GAP-250 | An empty approval queue in a rehearsal says there are no tracks while nine are on screen | Technical | CAP-4.1, CAP-5.9 | 3 | 10 | S | 30 | I4 | UI engineer | Closed |
+| GAP-251 | The three-d scene draws each track as a bare disc, with no number, frame or assignment | Technical | CAP-2.10, CAP-5.9 | 3 | 10 | S | 30 | I4 | UI engineer | Closed |
 | GAP-252 | The three-d scene draws no terrain, and its one paint callback would cover every layer if it did | Technical | CAP-5.9, CAP-5.10 | 3 | 10 | M | 30 | I4 | UI engineer | Open |
 
-Counts: 233 gaps, 6 mission, 227 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 234 gaps, 6 mission, 228 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3572,6 +3573,21 @@ Counts: 233 gaps, 6 mission, 227 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: UI engineer. Status: Closed.
 - Reference: The owner's round-1 screenshots of 2026-10-30; GAP-226; GAP-089.
 - Depends on: GAP-038, GAP-089.
+
+**GAP-251 The three-d scene draws each track as a bare disc, with no number, frame or assignment**
+
+- Type: Technical.
+- Capability: CAP-2.10 Terrain and map context; CAP-5.9 Role workspaces and workflow.
+- History:
+  - 2026-10-30, Open: Filed from the owner's look at the three-d scene, which named the missing details.
+  - 2026-10-30, Closed: `prepare_3d` draws each track's frame, sigma outline, heading vector, id and assignment over the scene's discs, through the function `render` uses. Tested by `gungnir-viewport3d/src/lib.rs`'s tests; what the owner should look at is in `../../record/2026-10-30/the-three-d-scene-draws-each-track-s.md`.
+- Evidence: `gungnir-viewport3d/src/lib.rs::prepare_3d` drew the map and the bearing rays but not `tracks::draw_glyphs_2d` or `tracks::draw_plan_2d`, which only `render` called; the owner's look at the scene recorded the omission (`../../record/2026-10-30/the-owner-s-look-at-the-three-d.md`)..
+- Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
+- Impact: In the default renderer an operator cannot tell one track from another, read its affiliation, heading or uncertainty, or see which resource a plan assigns to it, while the status line counts the assignments. Switching to the projection is the only way to read any of them.
+- Closing action: Draw both through one function in both renderers, over the scene's discs, with the paint callback set into a slot under them; a test in the crate holding the overlay to the projection's shapes; the owner looks again.
+- Target: I4. Owner: UI engineer. Status: Closed.
+- Reference: GAP-226; D-153.
+- Depends on: GAP-022, GAP-226.
 
 **GAP-252 The three-d scene draws no terrain, and its one paint callback would cover every layer if it did**
 

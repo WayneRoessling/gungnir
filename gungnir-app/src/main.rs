@@ -882,7 +882,7 @@ impl App {
             return;
         };
 
-        let Some(rect) = gungnir_viewport3d::prepare_3d(
+        let Some(prepared) = gungnir_viewport3d::prepare_3d(
             ui,
             &self.state.palette,
             &mut self.state.viewport,
@@ -896,17 +896,21 @@ impl App {
 
         // The callback runs after this function returns, so it owns copies rather than
         // borrowing: the glyph list is rebuilt only when the track set changes, so this
-        // clone is per frame and small.
-        ui.painter().add(scene_callback(
-            scene,
-            self.state.viewport.glyphs.clone(),
-            self.state.viewport.view,
-            rect,
-        ));
+        // clone is per frame and small. It goes into the slot `prepare_3d` left under the
+        // glyphs, so each track's frame and labels draw over its disc (GAP-251).
+        ui.painter().set(
+            prepared.scene_slot,
+            scene_callback(
+                scene,
+                self.state.viewport.glyphs.clone(),
+                self.state.viewport.view,
+                prepared.rect,
+            ),
+        );
         gungnir_viewport3d::draw_renderer_toggle(
             ui,
             &self.state.palette,
-            rect,
+            prepared.rect,
             &mut self.state.viewport,
         );
     }
