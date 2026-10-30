@@ -109,5 +109,6 @@ kilometre to spare.
 | `usgs_1_n44w124_clip.tif` | 4 351 944 | `0d00c04390c5738df1a3f896322ab37d15ccefc7800b8758ffa9cafa1673ab34` |
 
 The `tiff` crate the loader reads with (0.11.3, default features) decodes DEFLATE and the
-floating-point predictor for 32-bit floats. Nothing in the workspace loads this file yet;
-GAP-252's build is the first to.
+floating-point predictor for 32-bit floats. GAP-252's build is the first to load it:
+`../usability/round-1-oregon.json` names it, and `gungnir-app/tests/terrain.rs` places it in
+a `crs` build and holds the default build's refusal of it.

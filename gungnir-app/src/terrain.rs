@@ -49,6 +49,9 @@ pub enum TerrainStatus {
         path: String,
         vertices: usize,
         triangles: usize,
+        /// Which placement this is, so the viewport builds the surface it draws once per
+        /// load (GAP-252, DN-35 §6). Unique within the process: [`next_revision`].
+        revision: u64,
     },
     /// The file could not be read or placed; the reason is on screen, and line of
     /// sight stays flat rather than masked against something that is not there.
@@ -71,6 +74,7 @@ impl TerrainStatus {
                 path,
                 vertices,
                 triangles,
+                ..
             } => {
                 format!("{path}: {vertices} vertices, {triangles} triangles; masking line of sight")
             }
@@ -96,16 +100,25 @@ pub fn layer<'a>(
     status: &TerrainStatus,
     data: &'a gungnir_data::DataStore,
 ) -> Option<gungnir_viewport3d::layers::TerrainLayer<'a>> {
-    if !status.is_masking() {
+    let TerrainStatus::Loaded { revision, .. } = status else {
         return None;
-    }
+    };
     data.terrains
         .first()
         .map(|t| gungnir_viewport3d::layers::TerrainLayer {
             positions: &t.positions,
             rows: t.rows,
             columns: t.columns,
+            revision: *revision,
         })
+}
+
+/// A revision no earlier placement in this process has had. Process-wide rather than per
+/// `AppState`, so two placements can never share one, whichever state made them.
+#[must_use]
+pub fn next_revision() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Start loading the configured terrain off the render thread. Idempotent: the first
@@ -186,6 +199,7 @@ pub fn poll(state: &mut AppState) {
                         path,
                         vertices: placed.positions.len(),
                         triangles: placed.triangle_count(),
+                        revision: next_revision(),
                     };
                     state.data.terrains.clear();
                     state.data.terrains.push(placed);

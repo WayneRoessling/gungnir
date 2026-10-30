@@ -31,7 +31,6 @@ use gungnir_data::geoid::GeoidModel;
 use std::path::{Path, PathBuf};
 
 /// `testdata/geoid/SOURCE.md` records this digest for the committed EGM2008 clip.
-#[cfg(feature = "crs")]
 const CLIP_SHA256: &str = "60a16af44ca47724fd6cbb58565104a010dd2ef8c2d5ec1c666552052fa83e10";
 
 fn fixture(name: &str) -> String {
@@ -441,8 +440,8 @@ fn an_egm2008_dem_without_the_grid_is_refused_and_pn_09_says_why() {
 }
 
 /// The committed clip of `model`'s pinned grid, verified, as the desktop's start-up
-/// check would have installed it (`testdata/geoid/SOURCE.md` records each digest).
-#[cfg(feature = "crs")]
+/// check would have installed it (`testdata/geoid/SOURCE.md` records each digest). Needs
+/// no `crs` feature: verifying a grid is a digest, not PROJ.
 fn install_clip(state: &mut AppState, model: GeoidModel) {
     let (file, sha256) = match model {
         GeoidModel::Egm2008 => ("egm08_25_clip_53n56n_13e17e.tif", CLIP_SHA256),
@@ -592,6 +591,226 @@ fn the_pinned_grids_are_verified_at_start_and_place_a_dem() {
         assert!((up - want).abs() < 1e-4, "{name}: vertex 0's up: {up} m");
         let _ = std::fs::remove_dir_all(dir);
     }
+}
+
+/// GAP-252 (DN-35 §7 item 3): PN-09's terrain line says which renderer draws the ground,
+/// the one place the hand-over can be read: the overlay on the frame the surface arrives,
+/// the scene once the GL pass holds it.
+#[test]
+fn pn_09_says_which_renderer_draws_the_ground() {
+    let (mut state, dir) = desktop("ground-line", fixture("small.asc"));
+    settle(&mut state);
+    assert!(state.terrain.is_masking(), "{:?}", state.terrain);
+    let pn_09 = |state: &AppState| {
+        let (_, frame) = gungnir_ui::harness::RenderProbe::new().draw(|ui| {
+            gungnir_app::workspace::render_panel(ui, gungnir_workflow::PanelId::SystemHealth, state)
+        });
+        frame
+    };
+    assert!(
+        !pn_09(&state).says("ground drawn"),
+        "no frame of the viewport has drawn yet"
+    );
+    let revision = match state.terrain {
+        TerrainStatus::Loaded { revision, .. } => revision,
+        ref other => panic!("{other:?}"),
+    };
+    for (resident, says) in [
+        (None, "ground drawn by the overlay"),
+        (Some(revision), "ground drawn by the scene"),
+    ] {
+        let layer = gungnir_app::terrain::layer(&state.terrain, &state.data);
+        let viewport = &mut state.viewport;
+        let palette = state.palette;
+        let plan = state.last_plan.clone();
+        let _ = gungnir_ui::harness::RenderProbe::new().draw(|ui| {
+            gungnir_viewport3d::prepare_3d(
+                ui,
+                &palette,
+                viewport,
+                &[],
+                &[],
+                &plan,
+                gungnir_viewport3d::layers::LayerInputs {
+                    coverage: gungnir_viewport3d::layers::CoverageLayer::Circles {
+                        circles: &[],
+                        nominal: None,
+                    },
+                    gaps: &[],
+                    hazards: &[],
+                    geofences: &[],
+                    predictions: &[],
+                    terrain: layer,
+                    point_clouds: &[],
+                    laydown_preview: None,
+                    dense_group: None,
+                    dead_spots: gungnir_viewport3d::layers::DeadSpotLayer::NotComputed {
+                        reason: "a test",
+                    },
+                },
+                resident,
+            )
+            .map(|p| p.ground)
+        });
+        assert!(pn_09(&state).says(says), "PN-09 does not say {says:?}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Round 1's baseline moved over the Oregon DEM clip (GAP-252, DN-35 amendment 2 item 2),
+/// with the clip named by its absolute path and a scratch data directory.
+fn oregon_desktop(name: &str) -> (AppState, PathBuf) {
+    let dir = std::env::temp_dir().join(format!("gungnir-terrain-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let text = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/usability/round-1-oregon.json"),
+    )
+    .expect("the variant");
+    let mut config: ConfigBaseline = serde_json::from_str(&text).expect("parses");
+    config.data_dir = dir.to_string_lossy().into_owned();
+    config.geoid_grid_dir = Some(dir.join("no-grid-here").to_string_lossy().into_owned());
+    let terrain = config
+        .terrain
+        .as_mut()
+        .expect("the variant names a terrain");
+    assert_eq!(terrain.path, "testdata/dem/usgs_1_n44w124_clip.tif");
+    terrain.path = fixture("usgs_1_n44w124_clip.tif");
+    gungnir_config::validate(&config).expect("the Oregon variant is valid");
+    (AppState::with_config(config).expect("starts"), dir)
+}
+
+/// GAP-252: the variant declares what the clip does not say (`testdata/dem/SOURCE.md`):
+/// NAVD88 heights and a NAD83 realisation. Its origin is 43.67 N, 123.25 W, on the ground,
+/// and both radars stand above the origin's ground on masts, not inside the hills.
+#[test]
+fn the_oregon_variant_declares_what_the_clip_does_not_say() {
+    let (state, dir) = oregon_desktop("oregon-declares");
+    let terrain = state.config.terrain.as_ref().expect("a terrain");
+    assert_eq!(terrain.frame, "epsg:4269");
+    assert_eq!(terrain.vertical.as_deref(), Some("epsg:5703"));
+    assert_eq!(terrain.nad83_realisation.as_deref(), Some("epsg:6318"));
+    let origin = state.config.origin.expect("an origin");
+    assert!((origin[0].to_degrees() - 43.67).abs() < 1e-9);
+    assert!((origin[1].to_degrees() + 123.25).abs() < 1e-9);
+    assert!(
+        origin[2] > 54.0 && origin[2] < 1_013.0,
+        "on the clip's ground: {}",
+        origin[2]
+    );
+    for sensor in &state.config.sensors {
+        assert!(
+            sensor.position[2] > origin[2],
+            "sensor {} is above the ground",
+            sensor.id
+        );
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// GAP-252: the desktop `release.yml` publishes has no `crs` feature (D-51), and the clip
+/// is in NAD83 degrees, so that build refuses it **by name** rather than drawing it
+/// misplaced, even with the GEOID18 grid its heights need verified. The look in DN-35
+/// §8.2 needs a build with the feature.
+#[cfg(not(feature = "crs"))]
+#[test]
+fn a_build_without_crs_refuses_the_oregon_clip_by_name() {
+    let (mut state, dir) = oregon_desktop("oregon-no-crs");
+    install_clip(&mut state, GeoidModel::Geoid18Conus);
+    settle(&mut state);
+    let reason = refusal(&state);
+    assert!(reason.contains("crs feature"), "{reason}");
+    assert!(state.data.terrains.is_empty());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// **GAP-252 end to end: the desktop loads the Oregon clip and places it under round 1's
+/// sector** (DN-35 amendment 2), through GEOID18 and NAD83(2011) as the variant declares.
+///
+/// Independently of the loader: `testdata/usability/tools/round_1_oregon.py` read the clip
+/// with its own decoder, took the ground under the origin and under S2 through `pyproj`,
+/// and put the origin on that ground and S2 30 m above it. So the placed surface must pass
+/// through the origin at an up near zero and under S2 30 m below it, within what a 30 m
+/// cell's slope allows between the nearest vertex and the point. A geoid applied with the
+/// wrong sign misses by 46 m, a dropped geoid by 23 m, and a flipped row order or swapped
+/// axis puts the south-east's high ground in the north-west.
+#[cfg(feature = "crs")]
+#[test]
+fn the_oregon_clip_is_placed_under_round_1s_sector() {
+    let (mut state, dir) = oregon_desktop("oregon-crs");
+    install_clip(&mut state, GeoidModel::Geoid18Conus);
+    settle(&mut state);
+    assert!(state.terrain.is_masking(), "{:?}", state.terrain);
+    let mesh = &state.data.terrains[0];
+    assert_eq!((mesh.rows, mesh.columns), (1_038, 1_556));
+    let origin = state.config.origin.expect("an origin");
+    let frame = gungnir_model::LocalFrame::new(gungnir_model::Geodetic {
+        lat_rad: origin[0],
+        lon_rad: origin[1],
+        alt_m: origin[2],
+    });
+    let ground_under = |e: f32, n: f32| -> f32 {
+        mesh.positions
+            .iter()
+            .min_by(|a, b| {
+                let d = |p: &[f32; 3]| (p[0] - e).powi(2) + (p[1] - n).powi(2);
+                d(a).total_cmp(&d(b))
+            })
+            .map(|p| p[2])
+            .expect("a vertex")
+    };
+    let at_origin = ground_under(0.0, 0.0);
+    assert!(
+        at_origin.abs() < 10.0,
+        "the origin's ground is {at_origin} m up"
+    );
+    let s2 = state.config.sensors.iter().find(|s| s.id == 2).expect("S2");
+    let s2_enu = frame.to_enu(gungnir_model::Geodetic {
+        lat_rad: s2.position[0],
+        lon_rad: s2.position[1],
+        alt_m: s2.position[2],
+    });
+    #[allow(clippy::cast_possible_truncation)]
+    let under_s2 = ground_under(s2_enu[0] as f32, s2_enu[1] as f32);
+    #[allow(clippy::cast_possible_truncation)]
+    let mast = s2_enu[2] as f32 - under_s2;
+    assert!(
+        (mast - 30.0).abs() < 10.0,
+        "S2 stands {mast} m over the ground"
+    );
+    // About 35 km by 32 km, rising to the south-east.
+    let (min, max) = mesh.positions.iter().fold(
+        ([f32::INFINITY; 3], [f32::NEG_INFINITY; 3]),
+        |(lo, hi), p| {
+            (
+                [0, 1, 2].map(|i| lo[i].min(p[i])),
+                [0, 1, 2].map(|i| hi[i].max(p[i])),
+            )
+        },
+    );
+    assert!(
+        (max[0] - min[0] - 34_800.0).abs() < 1_000.0,
+        "{min:?} {max:?}"
+    );
+    assert!(
+        (max[1] - min[1] - 32_000.0).abs() < 1_000.0,
+        "{min:?} {max:?}"
+    );
+    let corner = |east: bool, north: bool| {
+        ground_under(
+            if east { max[0] } else { min[0] },
+            if north { max[1] } else { min[1] },
+        )
+    };
+    assert!(
+        corner(true, false) > corner(false, true),
+        "the south-east is higher"
+    );
+    // And the viewport builds the surface both renderers draw from it.
+    let layer = gungnir_app::terrain::layer(&state.terrain, &state.data).expect("a layer");
+    let surface = gungnir_viewport3d::layers::terrain_surface(&state.palette, layer)
+        .expect("the viewport's surface");
+    assert!(surface.positions.len() <= gungnir_viewport3d::layers::TERRAIN_VERTEX_BUDGET + 2_000);
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]

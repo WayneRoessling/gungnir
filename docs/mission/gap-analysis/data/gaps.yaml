@@ -13747,3 +13747,13 @@
       two passes, the projection's decimation, a real DEM (USGS 3DEP over the Oregon Coast
       Range, D-158), and a hillshade in both renderers now. DN-35 amendment 1 says what
       they change.
+  - date: 2026-10-30
+    status: Closed
+    note: >-
+      Built per DN-35 and its amendments 1 and 2: the hillshaded surface built once per
+      load for both renderers, the scene's ground pass under the layers and its glyph pass
+      over them, the hand-over decided once a frame, PN-09 saying who draws the ground, and
+      round 1's Oregon variant. DN-35 §8.1's rows are tests, as drafts. What the owner looks
+      at, and why the default desktop build cannot place the Oregon clip, is in
+      `../../record/2026-10-30/gap-252-terrain-in-the-three-d-scene.md`; the look
+      follows as its own record.
