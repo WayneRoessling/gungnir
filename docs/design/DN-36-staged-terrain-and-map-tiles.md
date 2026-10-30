@@ -2,8 +2,9 @@
 
 Part of GAP-227: its action's last item, "basemap tiles as the first consumer of the
 streaming stubs", widened to the ground under the picture as well as the imagery over it.
-Status: design, 2026-10-30; **nothing is built**. Four choices are raised for the owner as
-D-160 to D-163 (§10), each with a recommended default. What the owner has signed of this
+Status: design, 2026-10-30; **nothing is built**. Four choices were raised for the owner as
+D-160 to D-163 (§10), each with a recommended default; the owner took all four the same day,
+D-160 and D-162 past the default, and amendment 1 says what they change and raises D-164. What the owner has signed of this
 note is in [`../signatures.md`](../signatures.md).
 
 ## 1. Why now, and what it is for
@@ -233,9 +234,60 @@ format would each need a §2.9 decision. The node reads the same store for its l
 | **D-162** | Who stages the store | **A tool outside the binary**, `deploy/terrain/stage.py`, using the pinned GDAL image (§4.3) | A `gungnir-app terrain stage` subcommand, putting the network client in the binary |
 | **D-163** | The order of GAP-227's parts | **Staged terrain first** (this note), since it is the requirement in hand and imagery drapes on it; the cursor readout, the declutter and D-139's symbols proceed independently in parallel | Symbology and readout first, the tiles after |
 
+## Amendment 1, 2026-10-30: the owner's answers (D-160 to D-163)
+
+| Id | Taken | What it changes |
+|---|---|---|
+| D-160 | **Past the default: staged first, and fetched to fill gaps when connected** | §3 and §5.3 (item 1 below) |
+| D-161 | The default: a pyramid of GeoTIFF DEM tiles | Nothing. §4.1 stands, and fill tiles take the same form |
+| D-162 | **Past the default: a `terrain stage` subcommand in the binaries** | §4.3 (item 2 below) |
+| D-163 | The default: the staged terrain first, GAP-227's other parts in parallel | Nothing |
+
+1. **Fill when connected (D-160).** The pinned store is unchanged, and it is still the only
+   ground a disconnected deployment has. A deployment whose baseline names a fill source
+   (`terrain.fill_source`, absent by default) fetches the tiles its view or its coverage extent
+   needs and its store lacks:
+   - **into a fill cache under its own data directory, never into the pinned store.** The
+     manifest the baseline pins never changes at run time;
+   - **on the loader thread, never the render thread**, as the source's own tiles, cut and
+     averaged into the same pyramid form by the code `terrain stage` uses (item 2), and placed
+     by the same path;
+   - **with its digest recorded in the cache at fetch time.** That records what was fetched,
+     not that anybody vouched for it. Whether such a tile enters line of sight, and so the dead
+     spots and the coverage claims, is **D-164**, raised with this amendment;
+   - **marked.** A fill tile is drawn with a distinct edge and counted apart on PN-09
+     ("pinned 42 tiles, fetched 6, refused 0"). A fetch that fails, or a desktop without a
+     connection, is said in the same place, and the area is drawn as missing (§5.3). The
+     picture never waits on a fetch.
+
+   The fetch needs an HTTP client with TLS. Its crate is a §2.9 decision for the build, which
+   that pull request states with its `Decision:` and `Duplicate linkage:` lines. It sits
+   behind a feature of its own, off in a build that must never reach a network, as `crs` is.
+   §9's "no new crate in the binaries" no longer holds.
+
+2. **`terrain stage` in the binaries (D-162).** `gungnir-app terrain stage` and `gungnir-node
+   terrain stage`, one implementation, as `account` is. Given a bounding box, a source and an
+   output directory, it fetches the source tiles, checks each against the source's published
+   checksum where one exists, cuts and averages the pyramid, writes the GeoTIFF tiles and the
+   manifest, and prints the manifest's digest for the baseline. The cutting and averaging are
+   the workspace's own code, not GDAL's, shared with item 1's fill. So §8.1 row b becomes a
+   unit test of that code, and the manifest records the version that staged it.
+   `deploy/README.md` still gains the procedure, now as a command line.
+
+3. **§8.1 gains three draft rows:**
+
+   | Row | Test | Criterion |
+   |---|---|---|
+   | h. No fill without a source or a connection | `gungnir-app` | With no `fill_source`, or with the source unreachable, nothing is fetched, the picture and the coverage claims are those of the pinned store alone, and PN-09 says why |
+   | i. The pinned store is never written | `gungnir-app` | After a session that fetched fill tiles, every file under the store matches its manifest digest, and the manifest matches the baseline's |
+   | j. A fill tile is marked | `RenderProbe` | A fill tile's edge is drawn in its own style, and PN-09 counts it apart from the pinned tiles |
+
+   §8.2 gains a check: with a fill source and a connection, ground beyond the store appears,
+   marked, and the sentence for missing ground does not.
+
 ## Traceability
 
-GAP-227 (action, last item, widened); D-139; D-160 to D-163; GAP-252 and
+GAP-227 (action, last item, widened); D-164; D-139; D-160 to D-163; GAP-252 and
 `DN-35-terrain-in-the-three-d-scene.md`; DN-34 §13.1 row 8 and §13.2 step 6;
 `../rust-3d-data-ecosystem-build-vs-adopt.md` §2.1 and §4; GAP-023, GAP-108, GAP-197, GAP-200;
 GAP-247's height field; `ARCHITECTURE.md` §8; DN-12 §7;
