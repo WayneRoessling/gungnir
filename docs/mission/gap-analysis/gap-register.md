@@ -250,8 +250,9 @@ history, and an entry is never edited once it has merged.
 | GAP-253 | An assignment label is drawn over the number of the track below | Technical | CAP-2.10, CAP-5.9 | 2 | 10 | S | 20 | I4 | UI engineer | Closed |
 | GAP-254 | The docked replay picker never reads the journal's sessions | Technical | CAP-5.2, CAP-5.3 | 2 | 1 | S | 2 | I4 | UI engineer | Closed |
 | GAP-255 | The viewport rebuilt GPU and egui geometry every frame, outside every budget | Technical | CAP-5.10, CAP-2.10 | 2 | 8 | S | 16 | I4 | UI engineer | Closed |
+| GAP-256 | Showing the replay picker decodes every envelope in the journal | Technical | CAP-5.1, CAP-5.2 | 3 | 10 | S | 30 | I4 | Storage engineer | Closed |
 
-Counts: 237 gaps, 6 mission, 231 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 238 gaps, 6 mission, 232 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3654,4 +3655,19 @@ Counts: 237 gaps, 6 mission, 231 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: UI engineer. Status: Closed.
 - Reference: `../../review/2026-10-30-ui-review.md` §4.3; GAP-251; GAP-252; the `gungnir-viewport3d` "Glyph rebuild only on change" and `gungnir-ui` rows of `../../verification-capability-table.md`.
 - Depends on: GAP-251, GAP-252.
+
+**GAP-256 Showing the replay picker decodes every envelope in the journal**
+
+- Type: Technical.
+- Capability: CAP-5.1 Journal; CAP-5.2 Replay and rehearse.
+- History:
+  - 2026-10-30, Open: Filed from GAP-254's record, which noted the cost and left it.
+  - 2026-10-30, Closed: `EventJournal::session_len` added with a decode-everything default; `FileEventJournal` counts lines and decodes only the last. `session_summaries` uses it. Tested against `read_session` in `gungnir-store/src/lib.rs` (`../../record/2026-10-30/showing-the-replay-picker-no-longer-decodes-the.md`).
+- Evidence: `gungnir-app/src/sustainment.rs::session_summaries` took each length from `EventJournal::read_session(id).len()`; noted and left in GAP-254's record (`../../record/2026-10-30/the-docked-replay-picker-never-read-the-journal.md`)..
+- Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
+- Impact: Each time PN-12's picker appears, and again after each replay closes, every session in the journal is read, unsealed and parsed in full to learn one number per session. On a desktop that has recorded many long sessions the picker stalls the frame for as long as that takes.
+- Closing action: Give `EventJournal` a `session_len` that the file journal answers by counting lines and decoding only the last, under the same torn-line and sealing rules as `read_session`, and take the picker's lengths from it.
+- Target: I4. Owner: Storage engineer. Status: Closed.
+- Reference: GAP-254, GAP-126.
+- Depends on: GAP-254.
 

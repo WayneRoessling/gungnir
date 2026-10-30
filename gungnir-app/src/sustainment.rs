@@ -334,6 +334,10 @@ pub fn replay_view<'a>(
 /// A session whose length could not be read reports `None` rather than zero: an
 /// unreadable session and an empty one are different, and an analyst choosing what to
 /// review would act differently on each.
+///
+/// The length comes from `session_len`, which the file journal answers by counting lines
+/// (GAP-256). It used to come from `read_session`, which decoded every envelope of every
+/// session to learn one number each, so showing the picker read the whole journal.
 #[must_use]
 pub fn session_summaries(state: &AppState) -> Vec<SessionSummary> {
     let Ok(ids) = state.journal.sessions() else {
@@ -342,7 +346,7 @@ pub fn session_summaries(state: &AppState) -> Vec<SessionSummary> {
     ids.into_iter()
         .map(|id| SessionSummary {
             id: id.0,
-            envelopes: state.journal.read_session(id).ok().map(|e| e.len()),
+            envelopes: state.journal.session_len(id).ok(),
             live: state.session() == Some(id),
         })
         .collect()
