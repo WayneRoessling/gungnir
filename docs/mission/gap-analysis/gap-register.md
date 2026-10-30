@@ -3581,6 +3581,7 @@ Counts: 234 gaps, 6 mission, 228 technical; 1 already covered by a plan in `../.
 - History:
   - 2026-10-30, Open: Filed from the owner's look at the three-d scene, which named the missing details.
   - 2026-10-30, Closed: `prepare_3d` draws each track's frame, sigma outline, heading vector, id and assignment over the scene's discs, through the function `render` uses. Tested by `gungnir-viewport3d/src/lib.rs`'s tests; what the owner should look at is in `../../record/2026-10-30/the-three-d-scene-draws-each-track-s.md`.
+  - 2026-10-30, Closed: The owner looked at the overlay on a display and all nine checks passed; the disc under the four-lobe frame was confirmed by a native-resolution capture, not by eye (`../../record/2026-10-30/track-glyphs-over-the-three-d-scene-looked.md`).
 - Evidence: `gungnir-viewport3d/src/lib.rs::prepare_3d` drew the map and the bearing rays but not `tracks::draw_glyphs_2d` or `tracks::draw_plan_2d`, which only `render` called; the owner's look at the scene recorded the omission (`../../record/2026-10-30/the-owner-s-look-at-the-three-d.md`)..
 - Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
 - Impact: In the default renderer an operator cannot tell one track from another, read its affiliation, heading or uncertainty, or see which resource a plan assigns to it, while the status line counts the assignments. Switching to the projection is the only way to read any of them.

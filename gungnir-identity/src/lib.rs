@@ -95,10 +95,26 @@ pub trait IdentityResolver: Send + Sync {
     fn lineage(&self, id: GlobalEntityId) -> Option<&EntityLineage>;
 }
 
+/// A lineage's last state, kept beside the lineage so a new track can be compared with
+/// every known entity without walking the lineages themselves.
+#[derive(Debug, Clone)]
+struct Candidate {
+    id: GlobalEntityId,
+    last: LastSeen,
+}
+
 #[derive(Debug, Default)]
 pub struct InMemoryIdentityResolver {
     by_sighting: HashMap<Sighting, GlobalEntityId>,
     lineages: HashMap<GlobalEntityId, EntityLineage>,
+    /// Every lineage's `last_seen`, packed (2026-10-30). [`Self::best_match`] reads only
+    /// these, and walking the lineages for them cost a dense raid's desktop most of its
+    /// frame: a new track id was compared with each of thousands of lineages, a few
+    /// hundred bytes apart. Written only through [`Self::see`], so it never parts from
+    /// the lineage it copies.
+    candidates: Vec<Candidate>,
+    /// Where each lineage's candidate is in `candidates`.
+    slots: HashMap<GlobalEntityId, usize>,
     /// How similar a new track must be to a known entity to be taken as it (GAP-019).
     settings: CorrelationSettings,
     /// Kept for nothing but the record of how many this resolver has minted.
@@ -137,15 +153,45 @@ impl InMemoryIdentityResolver {
     }
 
     /// The most similar known entity to `track`, above the merge threshold.
+    ///
+    /// A lineage [`similarity::may_match`] rules out could not have cleared the threshold,
+    /// so the answer is the one a comparison with every lineage gives.
     fn best_match(&self, track: &TrackView) -> Option<(GlobalEntityId, Similarity)> {
-        self.lineages
-            .values()
-            .filter_map(|l| {
-                let last = l.last_seen.as_ref()?;
-                let s = similarity::similarity(track, last, &self.settings)?;
-                (s.confidence >= self.settings.merge_threshold).then_some((l.global_id, s))
+        let reach = similarity::reach(&self.settings);
+        self.candidates
+            .iter()
+            .filter(|c| similarity::may_match(track, &c.last, &self.settings, reach))
+            .filter_map(|c| {
+                let s = similarity::similarity(track, &c.last, &self.settings)?;
+                (s.confidence >= self.settings.merge_threshold).then_some((c.id, s))
             })
             .max_by(|a, b| a.1.confidence.total_cmp(&b.1.confidence))
+    }
+
+    /// Record `track` as the last state lineage `id` was seen in.
+    fn see(&mut self, id: GlobalEntityId, track: &TrackView) {
+        let last = LastSeen::of(track);
+        let Some(lineage) = self.lineages.get_mut(&id) else {
+            return;
+        };
+        lineage.last_seen = Some(last.clone());
+        if let Some(&slot) = self.slots.get(&id) {
+            self.candidates[slot].last = last;
+        } else {
+            self.slots.insert(id, self.candidates.len());
+            self.candidates.push(Candidate { id, last });
+        }
+    }
+
+    /// Drop lineage `id`'s candidate, when the lineage itself has gone.
+    fn forget(&mut self, id: GlobalEntityId) {
+        let Some(slot) = self.slots.remove(&id) else {
+            return;
+        };
+        self.candidates.swap_remove(slot);
+        if let Some(moved) = self.candidates.get(slot) {
+            self.slots.insert(moved.id, slot);
+        }
     }
 
     /// Record that `from` was determined to be the same object as `into`; `from`'s
@@ -157,6 +203,7 @@ impl InMemoryIdentityResolver {
         let Some(old) = self.lineages.remove(&from) else {
             return false;
         };
+        self.forget(from);
         for sighting in &old.sightings {
             self.by_sighting.insert(*sighting, into);
         }
@@ -216,7 +263,7 @@ impl InMemoryIdentityResolver {
                 mission_time: track.mission_time,
             });
         }
-        lineage.last_seen = Some(LastSeen::of(track));
+        self.see(entity, track);
     }
 
     /// The identity this sighting already has, if it has one.
@@ -242,9 +289,7 @@ impl IdentityResolver for InMemoryIdentityResolver {
     fn resolve(&mut self, session: SessionId, track: &TrackView) -> GlobalEntityId {
         let sighting = Sighting::new(session, track.id);
         if let Some(id) = self.by_sighting.get(&sighting).copied() {
-            if let Some(l) = self.lineages.get_mut(&id) {
-                l.last_seen = Some(LastSeen::of(track));
-            }
+            self.see(id, track);
             return id;
         }
         // GAP-019: an unknown session id may still be a known entity.
@@ -267,8 +312,8 @@ impl IdentityResolver for InMemoryIdentityResolver {
                     ),
                     mission_time: track.mission_time,
                 });
-                l.last_seen = Some(LastSeen::of(track));
             }
+            self.see(id, track);
             return id;
         }
         self.minted += 1;
@@ -285,9 +330,10 @@ impl IdentityResolver for InMemoryIdentityResolver {
                 aliases: Vec::new(),
                 merge_history: Vec::new(),
                 correlations: Vec::new(),
-                last_seen: Some(LastSeen::of(track)),
+                last_seen: None,
             },
         );
+        self.see(id, track);
         id
     }
 
@@ -495,5 +541,105 @@ mod tests {
         );
         assert_eq!(lineage.merge_history.len(), 1);
         assert!(r.lineage(a).is_none());
+    }
+
+    /// A deterministic stream of numbers in `[0, 1)`, so the comparison below is the same
+    /// on every run without a dependency for it.
+    struct Stream(u64);
+
+    impl Stream {
+        fn next(&mut self) -> f64 {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            #[allow(clippy::cast_precision_loss)]
+            let unit = (self.0 >> 11) as f64 / (1_u64 << 53) as f64;
+            unit
+        }
+    }
+
+    fn scattered(stream: &mut Stream, id: u64, t: f64) -> TrackView {
+        let mut track = track(id);
+        for i in 0..3 {
+            // Clustered, so that some pairs are close enough to merge and most are not.
+            track.state[i] = (stream.next() - 0.5) * 400.0;
+            track.state[i + 3] = (stream.next() - 0.5) * 20.0;
+            track.covariance[(i, i)] = 1.0 + stream.next() * 400.0;
+        }
+        track.classification = match id % 3 {
+            0 => Classification::Unknown,
+            1 => Classification::Hostile,
+            _ => Classification::Friendly,
+        };
+        track.mission_time = MissionTime(t);
+        track
+    }
+
+    /// What `best_match` answered before 2026-10-30: every lineage, compared in full.
+    fn compared_with_every_lineage(
+        r: &InMemoryIdentityResolver,
+        track: &TrackView,
+    ) -> Option<(GlobalEntityId, f64)> {
+        r.lineages
+            .values()
+            .filter_map(|l| {
+                let s = similarity::similarity(track, l.last_seen.as_ref()?, &r.settings)?;
+                (s.confidence >= r.settings.merge_threshold).then_some((l.global_id, s.confidence))
+            })
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+    }
+
+    /// **The packed candidates answer exactly what a comparison with every lineage does**
+    /// (2026-10-30): the same entity at the same confidence, for every new track, across
+    /// mints, correlations, re-sightings and merges, under the default settings and two
+    /// others. Thousands of these merge and tens of thousands do not, so a prefilter that
+    /// refused one pair it should not have would show here.
+    #[test]
+    fn the_packed_candidates_answer_as_every_lineage_does() {
+        let mut stream = Stream(0x5eed);
+        let mut merged = 0;
+        for settings in [
+            CorrelationSettings::default(),
+            CorrelationSettings {
+                merge_threshold: 0.05,
+                ..CorrelationSettings::default()
+            },
+            CorrelationSettings {
+                merge_threshold: 0.999,
+                ..CorrelationSettings::default()
+            },
+        ] {
+            let mut r = InMemoryIdentityResolver::new().with_settings(settings);
+            let mut id = 0;
+            for step in 0..250_u32 {
+                let t = f64::from(step) * 0.5;
+                for _ in 0..8 {
+                    id += 1;
+                    let candidate = scattered(&mut stream, id, t);
+                    let expected = compared_with_every_lineage(&r, &candidate);
+                    let answered = r.best_match(&candidate).map(|(e, s)| (e, s.confidence));
+                    assert_eq!(answered, expected, "track {id} at {t} s");
+                    merged += usize::from(expected.is_some());
+                    r.resolve(S1, &candidate);
+                }
+                // A known track seen again moves its lineage's last state, and a merge
+                // takes a lineage away: the candidates must follow both.
+                let again = scattered(&mut stream, id, t);
+                r.resolve(S1, &again);
+                if step % 50 == 49 {
+                    let ids: Vec<GlobalEntityId> = r.lineages.keys().copied().take(2).collect();
+                    assert!(r.merge(ids[0], ids[1], MissionTime(t)));
+                }
+            }
+            assert_eq!(r.candidates.len(), r.lineages.len());
+            for c in &r.candidates {
+                assert_eq!(r.lineages[&c.id].last_seen.as_ref(), Some(&c.last));
+            }
+        }
+        assert!(
+            merged > 1_000,
+            "only {merged} tracks merged, so little was tested"
+        );
     }
 }

@@ -331,10 +331,12 @@ fn startup_to_first_frame_is_within_budget() {
 ///
 /// **Scenario 3 and not Scenario 4**, because `performance-budgets.md` states this budget
 /// against Scenario 3, unlike the egui and snapshot budgets beside it. At Scenario 4's
-/// count the same frames measure p99 4.9 to 5.3 ms release (216 to 349 tracks, three
+/// count the same frames measured p99 4.9 to 5.3 ms release (216 to 349 tracks, three
 /// runs), over 4 ms; that is a figure for the owner, recorded in
 /// `docs/record/2026-10-30/the-per-frame-gate-timed-an-empty-picture.md`, and not this
-/// row's criterion.
+/// row's criterion. Nearly all of it was identity resolution scanning every lineage for
+/// each new track id, and with that made cheap the same frames measure p99 1.7 to 2.1 ms
+/// (`docs/record/2026-10-30/the-slow-frames-at-scenario-4-were-identity.md`).
 #[test]
 fn per_frame_update_meets_its_budget() {
     let timeline = generate(
