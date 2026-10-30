@@ -225,12 +225,17 @@ impl<'a> PanelBehavior<'a> {
     /// `workspace::render_panel` because they read state this window owns.
     pub fn draw_panel(&mut self, ui: &mut egui::Ui, panel: PanelId) -> Option<PanelAction> {
         match panel {
-            PanelId::Replay => crate::workspace::render_replay(
-                ui,
-                self.state,
-                &self.sustainment.replay,
-                &self.sustainment.sessions,
-            ),
+            PanelId::Replay => {
+                // GAP-254: the picker's sessions are read here, on the docked path, and
+                // not only where the detached window draws it.
+                self.sustainment.read_sessions_once(self.state);
+                crate::workspace::render_replay(
+                    ui,
+                    self.state,
+                    &self.sustainment.replay,
+                    &self.sustainment.sessions,
+                )
+            }
             // PN-13 writes into the review draft as the reviewer types (GAP-049), the
             // same reason PN-15 takes its draft mutably.
             PanelId::Reports => crate::workspace::render_reports(ui, self.state, self.sustainment),

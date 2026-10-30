@@ -90,7 +90,8 @@ pub struct SustainmentState {
     /// What PN-15 has typed but not committed (GAP-005).
     pub requirements: gungnir_ui::panels::requirements::Draft,
     /// Session ids and lengths, refreshed when the replay picker is shown. Reading
-    /// every session's length is a disk read per session, so it is not done per frame.
+    /// every session's length is a disk read per session, so it is not done per frame;
+    /// [`SustainmentState::read_sessions_once`] is the one place that reads them.
     pub sessions: Vec<SessionSummary>,
     pub sessions_read: bool,
     /// The after-action review in progress (GAP-049, DN-20). Session state: the journal
@@ -110,6 +111,24 @@ pub struct SustainmentState {
     /// person's passphrase lives here for one frame and leaves with the draft.
     pub control_status_dialog:
         Option<gungnir_ui::panels::control_status_dialog::ControlStatusDialogState>,
+}
+
+impl SustainmentState {
+    /// Read the picker's sessions from the journal if they have not been read since the
+    /// picker last appeared.
+    ///
+    /// Called from wherever PN-12 is drawn, docked or detached (GAP-254): the read used to
+    /// live on the detached path alone, so a docked picker, which is where every analyst,
+    /// intelligence analyst, planner and administrator layout puts it, stayed empty for
+    /// the whole session. It is a disk read per session, so it is taken once, when the
+    /// picker appears, and again after a replay closes (`sessions_read` is cleared there)
+    /// rather than every frame.
+    pub fn read_sessions_once(&mut self, state: &AppState) {
+        if !self.sessions_read {
+            self.sessions = session_summaries(state);
+            self.sessions_read = true;
+        }
+    }
 }
 
 /// The desktop's replay state: which session is open and how fast it is running.
