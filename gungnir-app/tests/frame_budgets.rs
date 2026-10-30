@@ -16,7 +16,7 @@
 //! |---|---|---|
 //! | Startup to first frame, under 3 s | **yes** | Every stage it covers is implemented. |
 //! | Journal append, under 1 ms for 50 envelopes | **yes** since GAP-085 | Implemented, and now meets its budget under the D-04 desktop profile. |
-//! | Per-frame `update()`, p99 under 4 ms | **yes** since 2026-09-15 | Gated in the GAP-067 walk, on measurements the owner read first: p99 16 microseconds release, 189 microseconds debug, against 4 ms. Release only, the convention this file already applies to the journal budget. |
+//! | Per-frame `update()`, p99 under 4 ms | **yes** since 2026-09-15 | Gated in the GAP-067 walk, on measurements the owner read first: p99 16 microseconds release, 189 microseconds debug, against 4 ms. Release only, the convention this file already applies to the journal budget. Those frames held no track; since 2026-10-30 the convoy is in the picture first. |
 //! | egui pass, p99 under 8 ms at Scenario 4 counts | **yes** since 2026-09-16 | The `gungnir-ui` §2 row's budget, agreed under D-16 and never measured once until the GAP-067 walk went looking for its test and found that nothing anywhere timed an egui pass. Measured from 2026-09-15 and gated by the owner in the same walk on reading the figures. Release only. Over the operator's workspace as well as the commander's since GAP-226, because only the operator's has the track table. |
 //! | `tracks()`/`is_healthy()`, p99 under 1 ms | **yes** since 2026-09-15 | Gated in the same walk. Both calls measure p99 100 ns against a 1 ms budget -- four orders of magnitude -- so this one is asserted in **both** profiles; see its own documentation for why the usual release-only rule is not what protects it. |
 //!
@@ -159,29 +159,44 @@ fn generate(scenario: &Scenario, seed: u64) -> GeneratedTimeline {
 /// Scenario 4's target count: the dense swarm the budgets below are stated at.
 const SCENARIO_4_TARGETS: usize = 200;
 
+/// Scenario 3's convoy: the four vehicles the per-frame `update()` budget is stated over.
+const SCENARIO_3_CONVOY: usize = 4;
+
 /// Replay `timeline` into `state` until the picture holds Scenario 4's track count.
 ///
 /// **The budgets are stated "at Scenario 4 track counts", and until GAP-226 the tests
 /// measured at four.** They ticked ten seconds of the replay and stopped waiting at the
 /// first track, so the egui pass and the snapshot calls were timed against a picture of
 /// a handful of tracks. On this seed the picture passes 200 tracks about 45 s in, and
-/// settles near 340 with the swarm's false tracks. This drives the replay until it holds
-/// 200, giving the asynchronous pipeline a moment every two seconds of mission time, as
-/// the desktop's own frames would. Bounded twice: by the timeline's own end, then by a
-/// minute of wall time for a pipeline still working through it, as `sample_set_replay.rs`
-/// allows. A replay that never reaches the count fails here rather than letting a budget
-/// pass on a smaller picture.
+/// settles near 340 with the swarm's false tracks.
 fn drive_to_scenario_4_counts(
     timeline: &GeneratedTimeline,
     state: &mut AppState,
     clock: &mut ReplayClockAuthority,
+) {
+    drive_to_track_count(timeline, state, clock, SCENARIO_4_TARGETS, "Scenario 4");
+}
+
+/// Replay `timeline` into `state` until the picture holds `count` tracks.
+///
+/// Gives the asynchronous pipeline a moment every two seconds of mission time, as the
+/// desktop's own frames would. Bounded twice: by the timeline's own end, then by a minute
+/// of wall time for a pipeline still working through it, as `sample_set_replay.rs`
+/// allows. A replay that never reaches the count fails here rather than letting a budget
+/// pass on a smaller picture.
+fn drive_to_track_count(
+    timeline: &GeneratedTimeline,
+    state: &mut AppState,
+    clock: &mut ReplayClockAuthority,
+    count: usize,
+    scenario: &str,
 ) {
     let end = timeline
         .observations
         .iter()
         .map(|o| o.receipt_time_s)
         .fold(0.0_f64, f64::max);
-    while clock.current.0 < end && state.tracking.tracks().len() < SCENARIO_4_TARGETS {
+    while clock.current.0 < end && state.tracking.tracks().len() < count {
         for _ in 0..60 {
             clock.advance(FRAME_S);
             state.clock = Box::new(*clock);
@@ -190,16 +205,16 @@ fn drive_to_scenario_4_counts(
         std::thread::sleep(Duration::from_millis(20));
     }
     for _ in 0..12_000 {
-        if state.tracking.tracks().len() >= SCENARIO_4_TARGETS {
+        if state.tracking.tracks().len() >= count {
             break;
         }
         std::thread::sleep(Duration::from_millis(5));
         state.tracking.poll(clock.current);
     }
     assert!(
-        state.tracking.tracks().len() >= SCENARIO_4_TARGETS,
-        "the replay ended with {} tracks, short of Scenario 4's {SCENARIO_4_TARGETS}, so \
-         a budget measured now would be measured on a smaller picture",
+        state.tracking.tracks().len() >= count,
+        "the replay ended with {} tracks, short of {scenario}'s {count}, so a budget \
+         measured now would be measured on a smaller picture",
         state.tracking.tracks().len()
     );
 }
@@ -219,21 +234,32 @@ fn p99(samples: &mut [Duration]) -> Duration {
     samples[rank.saturating_sub(1).min(samples.len() - 1)]
 }
 
-/// Run `frames` frames of a scenario, timing each one.
-fn frame_samples(timeline: &GeneratedTimeline, name: &str, frames: usize) -> Vec<Duration> {
-    let mut state = state_for(timeline, name);
-    let mut clock = ReplayClockAuthority {
-        current: MissionTime(0.0),
-    };
+/// The wall time left between two timed frames: the pipeline's share of the frame period.
+/// The desktop leaves it a whole 33 ms; one is enough for a fresh output to be waiting at
+/// most polls, and keeps 3 000 frames to a few seconds.
+const FRAME_GAP: Duration = Duration::from_millis(1);
+
+/// Run `frames` more frames of the replay in `state`, [`FRAME_GAP`] apart, timing each.
+/// Returns the samples and the fewest and most tracks any timed frame held.
+fn frame_samples(
+    state: &mut AppState,
+    clock: &mut ReplayClockAuthority,
+    frames: usize,
+) -> (Vec<Duration>, usize, usize) {
     let mut samples = Vec::with_capacity(frames);
+    let (mut fewest, mut most) = (usize::MAX, 0);
     for _ in 0..frames {
         clock.advance(FRAME_S);
-        state.clock = Box::new(clock);
+        state.clock = Box::new(*clock);
         let start = Instant::now();
-        update::tick(&mut state);
+        update::tick(state);
         samples.push(start.elapsed());
+        let held = state.tracking.tracks().len();
+        fewest = fewest.min(held);
+        most = most.max(held);
+        std::thread::sleep(FRAME_GAP);
     }
-    samples
+    (samples, fewest, most)
 }
 
 /// **Gated.** Startup to first frame: config, tokio runtime, journal open, services
@@ -290,6 +316,25 @@ fn startup_to_first_frame_is_within_budget() {
 /// The margin is why that matters here rather than for the snapshot row below -- p99 is
 /// 21 times under budget in debug, but the *worst* single frame is only three times
 /// under it, which is close enough to the limit that a loaded runner could reach it.
+///
+/// # Timed with the convoy in the picture, since 2026-10-30
+///
+/// **Until then every frame this test timed held no track at all.** It ran 3 000 frames
+/// from the replay's start back to back, 100 s of mission time in about 10 ms of wall
+/// time, and the pipeline delivered nothing inside that, so the poll and the plan were
+/// timed against an empty picture: p99 8 to 9 microseconds release. The same question
+/// GAP-226 asked of the egui and snapshot gates found it. The test now drives the replay
+/// until the picture holds the convoy's four vehicles and leaves [`FRAME_GAP`] between
+/// timed frames, so most polls find a fresh output and the plan has tracks to answer;
+/// a timed frame with no track fails it. Release figures, three runs of this file: p99
+/// 85 to 103 microseconds over 4 to 10 tracks.
+///
+/// **Scenario 3 and not Scenario 4**, because `performance-budgets.md` states this budget
+/// against Scenario 3, unlike the egui and snapshot budgets beside it. At Scenario 4's
+/// count the same frames measure p99 4.9 to 5.3 ms release (216 to 349 tracks, three
+/// runs), over 4 ms; that is a figure for the owner, recorded in
+/// `docs/record/2026-10-30/the-per-frame-gate-timed-an-empty-picture.md`, and not this
+/// row's criterion.
 #[test]
 fn per_frame_update_meets_its_budget() {
     let timeline = generate(
@@ -298,7 +343,18 @@ fn per_frame_update_meets_its_budget() {
         },
         7,
     );
-    let mut samples = frame_samples(&timeline, "frame", 3_000);
+    let mut state = state_for(&timeline, "frame");
+    let mut clock = ReplayClockAuthority {
+        current: MissionTime(0.0),
+    };
+    drive_to_track_count(
+        &timeline,
+        &mut state,
+        &mut clock,
+        SCENARIO_3_CONVOY,
+        "Scenario 3",
+    );
+    let (mut samples, fewest, most) = frame_samples(&mut state, &mut clock, 3_000);
     let worst = samples.iter().copied().max().unwrap_or_default();
     let p = p99(&mut samples);
     let profile = if cfg!(debug_assertions) {
@@ -307,13 +363,18 @@ fn per_frame_update_meets_its_budget() {
         "release"
     };
     println!(
-        "per-frame update(): p99 {p:?}, worst {worst:?} over {} frames \
-         (budget {BUDGET_FRAME_P99:?}, {profile} profile)",
+        "per-frame update(): p99 {p:?}, worst {worst:?} over {} frames holding {fewest} to \
+         {most} tracks (budget {BUDGET_FRAME_P99:?}, {profile} profile)",
         samples.len()
     );
     assert!(
         !samples.is_empty(),
         "the frame harness produced no measurements"
+    );
+    assert!(
+        fewest > 0,
+        "a timed frame held no track, so the poll and the plan were timed against an \
+         empty picture"
     );
     if cfg!(debug_assertions) {
         println!(
