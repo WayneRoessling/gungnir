@@ -13709,7 +13709,7 @@
   effort: M
   target: I4
   owner: UI engineer
-  deps: [GAP-226, GAP-023, D-154, D-155, D-156, D-157]
+  deps: [GAP-226, GAP-023, D-154, D-155, D-156, D-157, D-158]
   impact: >-
     DN-34 §13.2 makes the terrain in GL, with the layers on it, the first 3D element after
     the scene was seen. The scene draws only the track discs, so the tilt that follows has no
@@ -13740,3 +13740,10 @@
     note: >-
       Filed with DN-35's design, taking DN-34 §13.2 step 1 once GAP-226's look had met
       increment 0. D-154 to D-157 raised the same day.
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      D-154 to D-158 taken by the owner the same day: the layers stay in egui between the
+      two passes, the projection's decimation, a real DEM (USGS 3DEP over the Oregon Coast
+      Range, D-158), and a hillshade in both renderers now. DN-35 amendment 1 says what
+      they change.

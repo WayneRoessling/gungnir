@@ -3710,7 +3710,12 @@
   raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §5.3 and §10"
   decider: Owner
   unblocks: GAP-252
-  outcome: ""
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default: the layers stay in egui,
+    drawn by the one `draw_layers` between the GL ground pass and the GL glyph pass.** The
+    GL drape is built with the tilt. Rejected: the drape in GL now. See
+    `../../design/DN-35-terrain-in-the-three-d-scene.md` amendment 1.
 
 - id: D-155
   decision: The resolution of the three-d scene's terrain surface
@@ -3722,7 +3727,11 @@
   raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §6 and §10"
   decider: Owner
   unblocks: GAP-252
-  outcome: ""
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default: the projection's
+    decimation, at most 16 384 vertices.** Rejected: a finer budget for the scene alone. See
+    `../../design/DN-35-terrain-in-the-three-d-scene.md` amendment 1.
 
 - id: D-156
   decision: The ground the owner looks at when the scene draws terrain
@@ -3735,7 +3744,11 @@
   raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §9 and §10"
   decider: Owner
   unblocks: GAP-252
-  outcome: ""
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, past the recommended default: a clip of a real DEM**,
+    which place and source settled by D-158. Rejected: a synthetic DEM over round 1's sector
+    (the default). See `../../design/DN-35-terrain-in-the-three-d-scene.md` amendment 1.
 
 - id: D-157
   decision: Whether the terrain gains a hillshade with the scene's surface
@@ -3748,4 +3761,30 @@
   raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §10"
   decider: Owner
   unblocks: GAP-252
-  outcome: ""
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, past the recommended default: a hillshade now, in both
+    renderers**, computed once per load into the surface's vertex colours. Rejected: the
+    height ramp alone, with a hillshade as a follow-on (the default). See
+    `../../design/DN-35-terrain-in-the-three-d-scene.md` amendment 1.
+
+- id: D-158
+  decision: Which real DEM, over which place, the owner looks at for the scene's terrain
+  question: >-
+    D-156 chose a real DEM. Round 1's own origin, 55 N 12 E in Zealand, is nearly flat and
+    outside the committed geoid grids. Recommended: a USGS 3DEP 1 arc-second clip in the
+    Oregon Coast Range inside 43 to 45 N, 122 to 124 W, public domain, placed through the
+    NAD83 and NAVD88 path whose GEOID18 and NADCON5 grids are already in testdata, with
+    round 1's origin moved there in a baseline variant. The alternatives: Copernicus GLO-30
+    over Bornholm, inside the committed EGM2008 grid, with attribution; or a real DEM at
+    round 1's own origin, with a new geoid clip.
+  raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` amendment 1"
+  decider: Owner
+  unblocks: GAP-252
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default: USGS 3DEP 1 arc-second
+    over the Oregon Coast Range**, inside the committed NADCON5 and GEOID18 clips, with round
+    1's origin moved there in a baseline variant. Rejected: Copernicus GLO-30 over Bornholm,
+    and a real DEM at round 1's own origin. See
+    `../../design/DN-35-terrain-in-the-three-d-scene.md` amendment 1.
