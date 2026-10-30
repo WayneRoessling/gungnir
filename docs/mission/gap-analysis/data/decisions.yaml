@@ -3808,3 +3808,59 @@
     **Taken by the owner, 2026-10-30: no.** The per-frame `update()` budget stays stated
     and gated at Scenario 3 only, unchanged. A figure measured at Scenario 4's count is
     information, not a criterion, and no test asserts it.
+
+- id: D-160
+  decision: Where ground beyond the baseline's named DEM comes from
+  question: >-
+    The picture's ground stops at the edge of the one DEM a baseline names. Recommended:
+    staged before deployment, a terrain store the desktop and the node read and never
+    write, its manifest's digest pinned in the baseline, as the geoid grids are pinned; a
+    disconnected desktop then shows the same ground as a connected one, and no network
+    client enters the binary. The alternatives: fetched at run time from a service the
+    baseline names, with the store as a cache; or staged and fetched to fill gaps when
+    connected.
+  raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` §3 and §10"
+  decider: Owner
+  unblocks: GAP-227
+  outcome: ""
+
+- id: D-161
+  decision: The terrain store's tile format
+  question: >-
+    Recommended: a pyramid of GeoTIFF DEM tiles in the source's own CRS and vertical
+    system, each read by the existing loader and placed by the path GAP-023, GAP-108,
+    GAP-197 and GAP-200 built, so every tile keeps the placement's independent oracles
+    and no dependency is added. The alternative: quantized-mesh or 3D Tiles terrain,
+    which brings the 3D Tiles dependency of
+    `../../rust-3d-data-ecosystem-build-vs-adopt.md` §2.1 forward and needs a placement
+    path of its own.
+  raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` §4.1 and §10"
+  decider: Owner
+  unblocks: GAP-227
+  outcome: ""
+
+- id: D-162
+  decision: Who stages the terrain store
+  question: >-
+    Recommended: a tool outside the binary, `deploy/terrain/stage.py`, run once on a
+    connected machine with the pinned GDAL image the committed DEM and geoid clips were
+    cut with; the binary only reads and verifies. The alternative: a `gungnir-app terrain
+    stage` subcommand, which puts the network client and the source-specific code in the
+    binary.
+  raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` §4.3 and §10"
+  decider: Owner
+  unblocks: GAP-227
+  outcome: ""
+
+- id: D-163
+  decision: The order of GAP-227's parts
+  question: >-
+    GAP-227 holds staged terrain and imagery tiles (DN-36), MIL-STD-2525D symbols (D-139),
+    a cursor latitude, longitude and MGRS readout, and declutter. Recommended: the staged
+    terrain first, since it is the requirement in hand and imagery drapes on it; the
+    readout, the declutter and the symbols proceed independently in parallel. The
+    alternative: symbology and the readout first, the tiles after.
+  raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` §1 and §10"
+  decider: Owner
+  unblocks: GAP-227
+  outcome: ""

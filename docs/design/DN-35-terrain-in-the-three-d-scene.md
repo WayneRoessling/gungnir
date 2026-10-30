@@ -426,6 +426,14 @@ The vertical system and the NAD83 realisation are not in the file, so the varian
 declares them. The vertical system is NAVD88, which USGS publishes 3DEP heights in. The
 realisation is the build's to choose and record against USGS's metadata for the tile.
 
+## Amendment 3, 2026-10-30: built
+
+The note above, with amendments 1 and 2, was built the same day (GAP-252, PR #283). The build,
+the choices amendment 2 left to it, and the checks for the owner's look are in
+`../record/2026-10-30/gap-252-terrain-in-the-three-d-scene.md`. §8.1's rows are tests, still
+drafts. The ground still stops at the edge of the one DEM a baseline names; staged tiles
+beyond it are `DN-36-staged-terrain-and-map-tiles.md` (GAP-227).
+
 ## Traceability
 
 GAP-252; D-154, D-155, D-156, D-157, D-158; DN-34 §13.1 rows 1 and 2, §13.2 step 1, §13.3,
