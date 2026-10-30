@@ -243,14 +243,23 @@ fn set_gl_passes(
     }
     ui.painter().set(
         prepared.scene_slot,
-        scene_callback(scene, viewport.glyphs.clone(), viewport.view, prepared.rect),
+        scene_callback(
+            scene,
+            viewport.glyphs.clone(),
+            viewport.glyph_revision,
+            viewport.view,
+            prepared.rect,
+        ),
     );
 }
 
-/// The paint callback that draws the scene's glyphs into `rect` (GAP-022).
+/// The paint callback that draws the scene's glyphs into `rect` (GAP-022). `glyph_revision`
+/// is which list `glyphs` is, so the pass uploads its instance buffers only on the frame
+/// the list or the zoom changed (GAP-255).
 fn scene_callback(
     scene: Arc<Mutex<gungnir_viewport3d::gl::SceneRenderer>>,
     glyphs: Vec<gungnir_viewport3d::tracks::TrackGlyph>,
+    glyph_revision: u64,
     view: gungnir_viewport3d::interaction::TopDownView,
     rect: egui::Rect,
 ) -> egui::PaintCallback {
@@ -260,7 +269,14 @@ fn scene_callback(
         // the draw leaves the status line and the panels intact rather than taking the
         // window down with it.
         if let Ok(mut renderer) = scene.lock() {
-            renderer.paint_glyphs(&glyphs, &view, viewport, clip, info.pixels_per_point);
+            renderer.paint_glyphs(
+                &glyphs,
+                glyph_revision,
+                &view,
+                viewport,
+                clip,
+                info.pixels_per_point,
+            );
         }
     });
     egui::PaintCallback {

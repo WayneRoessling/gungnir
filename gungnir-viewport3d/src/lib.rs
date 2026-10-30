@@ -128,6 +128,11 @@ pub struct ViewportState {
     pub camera: three_d::Camera,
     pub scene: scene::Scene,
     pub glyphs: Vec<tracks::TrackGlyph>,
+    /// Which glyph list `glyphs` is: changed every time the list is rebuilt, and read by
+    /// the scene's glyph pass to upload its instance buffers only then (GAP-255,
+    /// `gl::GlyphUploadKey`). Wraps rather than overflows; at one rebuild a frame that is
+    /// nineteen billion years away.
+    pub glyph_revision: u64,
     /// Retained bearings, drawn as rays rather than glyphs (DN-27 §7; GAP-096).
     pub bearing_rays: Vec<tracks::BearingRayGlyph>,
     pub view: interaction::TopDownView,
@@ -148,6 +153,11 @@ pub struct ViewportState {
     /// The terrain surface both renderers draw, built once per load and never per frame
     /// (GAP-252, `docs/design/DN-35-terrain-in-the-three-d-scene.md` §6).
     pub terrain_surface: Option<layers::TerrainSurfaceSlot>,
+    /// The surface projected into the view as the egui mesh the overlay draws, kept while
+    /// the surface, the view and the rect are what it was projected under, and rebuilt
+    /// only when one of them changes (GAP-255). `None` while the scene draws its own
+    /// ground, so the projection is not kept up to date for a frame that does not draw it.
+    pub terrain_mesh_2d: Option<layers::TerrainMesh2d>,
     /// Who drew the ground on the last frame, for PN-09's terrain line (DN-35 §7 item 3).
     pub ground: Ground,
 }
@@ -189,6 +199,7 @@ impl ViewportState {
             ),
             scene: scene::Scene::default(),
             glyphs: Vec::new(),
+            glyph_revision: 0,
             bearing_rays: Vec::new(),
             view: interaction::TopDownView::default(),
             gl_ready: false,
@@ -196,8 +207,39 @@ impl ViewportState {
             layers: CoverageLayers::default(),
             dead_spot_texture: None,
             terrain_surface: None,
+            terrain_mesh_2d: None,
             ground: Ground::Overlay,
         }
+    }
+
+    /// Rebuild the glyph lists from the snapshot where they no longer match it, and mark
+    /// the track glyphs as a new list when they are rebuilt (GAP-255), so the scene's glyph
+    /// pass uploads its instances on that frame and not on the frames between.
+    fn sync_glyphs(&mut self, tracks: &[TrackView], bearing_rays: &[BearingRayView]) {
+        if tracks::glyphs_need_rebuild(&self.glyphs, tracks) {
+            self.glyphs = tracks::update_track_symbols(tracks);
+            self.glyph_revision = self.glyph_revision.wrapping_add(1);
+        }
+        if tracks::bearing_glyphs_need_rebuild(&self.bearing_rays, bearing_rays) {
+            self.bearing_rays = tracks::update_bearing_ray_glyphs(bearing_rays);
+        }
+    }
+
+    /// Bring the overlay's terrain mesh up to date for a frame drawn into `rect`
+    /// (GAP-255): projected when the overlay draws the ground and the surface, the view or
+    /// the rect differs from what the mesh holds; dropped when the scene draws the ground
+    /// or there is no surface. The borrow is split by field so the surface can be read
+    /// while the mesh slot is written.
+    fn sync_terrain_mesh_2d(&mut self, ground: Ground, rect: egui::Rect) {
+        let surface = match ground {
+            Ground::Overlay => self
+                .terrain_surface
+                .as_ref()
+                .and_then(|slot| slot.surface.as_ref().ok())
+                .map(std::sync::Arc::as_ref),
+            Ground::Scene => None,
+        };
+        layers::sync_terrain_mesh_2d(&mut self.terrain_mesh_2d, surface, &self.view, rect);
     }
 
     /// The terrain surface, when one is placed and could be built.
@@ -250,13 +292,16 @@ fn draw_layers(
     layers: &layers::LayerInputs<'_>,
     ground: Ground,
 ) {
-    // Terrain goes under everything: it is the ground the rest is drawn on (GAP-023).
+    // Terrain goes under everything: it is the ground the rest is drawn on (GAP-023). The
+    // mesh was projected before this call, by `ViewportState::sync_terrain_mesh_2d`, and
+    // only if something it depends on changed (GAP-255).
     if ground == Ground::Overlay {
         layers::draw_terrain_2d(
             painter,
             rect,
             &state.view,
             state.terrain_surface().map(AsRef::as_ref),
+            state.terrain_mesh_2d.as_ref(),
         );
     }
     // Point clouds have no toggle either, the same reason predictions and the laydown
@@ -410,13 +455,7 @@ pub fn prepare_3d(
     }
     let scroll = ui.input(|i| i.smooth_scroll_delta.y);
     state.view.apply_input(&response, scroll);
-
-    if tracks::glyphs_need_rebuild(&state.glyphs, tracks) {
-        state.glyphs = tracks::update_track_symbols(tracks);
-    }
-    if tracks::bearing_glyphs_need_rebuild(&state.bearing_rays, bearing_rays) {
-        state.bearing_rays = tracks::update_bearing_ray_glyphs(bearing_rays);
-    }
+    state.sync_glyphs(tracks, bearing_rays);
 
     // Coverage is drawn by egui rather than in a GL pass: it is a flat overlay on
     // the ground plane, and drawing it here means it survives whatever the callbacks
@@ -438,6 +477,7 @@ pub fn prepare_3d(
     // this frame (DN-35 §7 item 2).
     let ground = ground_source(state.terrain_surface().map(|s| s.revision), ground_resident);
     state.ground = ground;
+    state.sync_terrain_mesh_2d(ground, rect);
     let painter = ui.painter_at(rect);
     // The projection's background and metre grid, so the two renderers differ only in
     // how a track is drawn, and the grid is a fixed reference for checking that the
@@ -494,13 +534,7 @@ pub fn render(
         ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
     let scroll = ui.input(|i| i.smooth_scroll_delta.y);
     state.view.apply_input(&response, scroll);
-
-    if tracks::glyphs_need_rebuild(&state.glyphs, tracks) {
-        state.glyphs = tracks::update_track_symbols(tracks);
-    }
-    if tracks::bearing_glyphs_need_rebuild(&state.bearing_rays, bearing_rays) {
-        state.bearing_rays = tracks::update_bearing_ray_glyphs(bearing_rays);
-    }
+    state.sync_glyphs(tracks, bearing_rays);
 
     layers::sync_dead_spot_texture(
         ui.ctx(),
@@ -512,6 +546,7 @@ pub fn render(
     layers::sync_terrain_surface(palette, &mut state.terrain_surface, layers.terrain);
     // The projection always draws its own ground (DN-35 §7 item 1).
     state.ground = Ground::Overlay;
+    state.sync_terrain_mesh_2d(Ground::Overlay, rect);
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, palette.viewport_background);
     interaction::draw_grid(&painter, palette, rect, &state.view);
@@ -971,6 +1006,130 @@ mod tests {
         );
         assert_eq!(state.ground, Ground::Overlay);
         assert_eq!(state.ground_line(), None);
+    }
+
+    /// GAP-255: the glyph revision changes exactly when the glyph list is rebuilt. Frames
+    /// with the same tracks keep it, through either entry point; a track that moved bumps
+    /// it once. The scene's glyph pass uploads its instances on that key, so a revision
+    /// that moved every frame would put the per-frame upload back, and one that never moved
+    /// would draw stale glyphs.
+    #[test]
+    fn the_glyph_revision_changes_only_when_the_glyphs_are_rebuilt() {
+        let palette = theme::Palette::day();
+        let mut state = ViewportState::new();
+        let tracks = [
+            track(41, 0.0, Classification::Hostile),
+            track(42, 300.0, Classification::Unknown),
+        ];
+        let projection = |state: &mut ViewportState, tracks: &[TrackView]| {
+            let _ = egui::Context::default().run_ui(screen(), |ui| {
+                render(ui, &palette, state, tracks, &[], &no_plan(), no_layers());
+            });
+        };
+        let scene = |state: &mut ViewportState, tracks: &[TrackView]| {
+            let _ = egui::Context::default().run_ui(screen(), |ui| {
+                prepare_3d(
+                    ui,
+                    &palette,
+                    state,
+                    tracks,
+                    &[],
+                    &no_plan(),
+                    no_layers(),
+                    None,
+                );
+            });
+        };
+        assert_eq!(state.glyph_revision, 0);
+        projection(&mut state, &tracks);
+        let built = state.glyph_revision;
+        assert_eq!(built, 1, "the first frame builds the list");
+        for _ in 0..5 {
+            projection(&mut state, &tracks);
+            scene(&mut state, &tracks);
+        }
+        assert_eq!(
+            state.glyph_revision, built,
+            "the same tracks are the same list"
+        );
+
+        let moved = [
+            track(41, 50.0, Classification::Hostile),
+            track(42, 300.0, Classification::Unknown),
+        ];
+        scene(&mut state, &moved);
+        assert_eq!(
+            state.glyph_revision,
+            built + 1,
+            "a moved track is a new list"
+        );
+        projection(&mut state, &moved);
+        assert_eq!(state.glyph_revision, built + 1);
+    }
+
+    /// GAP-255 through the frame: the projection draws the terrain on every frame, but
+    /// projects it once while the view stands still -- three frames hold the same `Arc` --
+    /// and once more after a pan. The scene drops the overlay's mesh while it draws the
+    /// ground itself, and projects it again when the ground comes back to egui.
+    #[test]
+    fn the_projection_reprojects_the_terrain_only_when_the_view_moves() {
+        let terrain = hills();
+        let palette = theme::Palette::day();
+        let mut state = ViewportState::new();
+        let layer = layers::TerrainLayer {
+            positions: &terrain,
+            rows: 20,
+            columns: 24,
+            revision: 7,
+        };
+        let frame = |state: &mut ViewportState| {
+            let output = egui::Context::default().run_ui(screen(), |ui| {
+                render(
+                    ui,
+                    &palette,
+                    state,
+                    &[],
+                    &[],
+                    &no_plan(),
+                    layers::LayerInputs {
+                        terrain: Some(layer),
+                        ..no_layers()
+                    },
+                );
+            });
+            output
+                .shapes
+                .iter()
+                .filter(|s| is_terrain(&s.shape))
+                .count()
+        };
+        let held = |state: &ViewportState| {
+            std::sync::Arc::clone(&state.terrain_mesh_2d.as_ref().expect("a mesh").mesh)
+        };
+        assert_eq!(frame(&mut state), 1, "the load frame draws the ground");
+        let first = held(&state);
+        for _ in 0..3 {
+            assert_eq!(frame(&mut state), 1, "every frame draws the ground");
+            assert!(
+                std::sync::Arc::ptr_eq(&first, &held(&state)),
+                "a still view reprojected the terrain"
+            );
+        }
+        state.view.center_e += 250.0;
+        assert_eq!(frame(&mut state), 1);
+        assert!(
+            !std::sync::Arc::ptr_eq(&first, &held(&state)),
+            "a pan must reproject the terrain"
+        );
+
+        // The scene holding the surface: the overlay's mesh is dropped, not kept current.
+        let (_, ground) = scene_frame(&mut state, &terrain, Some(7));
+        assert_eq!(ground, Ground::Scene);
+        assert!(state.terrain_mesh_2d.is_none());
+        let (shapes, ground) = scene_frame(&mut state, &terrain, None);
+        assert_eq!(ground, Ground::Overlay);
+        assert_eq!(shapes.iter().filter(|s| is_terrain(s)).count(), 1);
+        assert!(state.terrain_mesh_2d.is_some());
     }
 
     /// A shape as a comparable string. Text is its position, words and colour: a galley

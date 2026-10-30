@@ -249,8 +249,9 @@ history, and an entry is never edited once it has merged.
 | GAP-252 | The three-d scene draws no terrain, and its one paint callback would cover every layer if it did | Technical | CAP-5.9, CAP-5.10 | 3 | 10 | M | 30 | I4 | UI engineer | Closed |
 | GAP-253 | An assignment label is drawn over the number of the track below | Technical | CAP-2.10, CAP-5.9 | 2 | 10 | S | 20 | I4 | UI engineer | Closed |
 | GAP-254 | The docked replay picker never reads the journal's sessions | Technical | CAP-5.2, CAP-5.3 | 2 | 1 | S | 2 | I4 | UI engineer | Closed |
+| GAP-255 | The viewport rebuilt GPU and egui geometry every frame, outside every budget | Technical | CAP-5.10, CAP-2.10 | 2 | 8 | S | 16 | I4 | UI engineer | Closed |
 
-Counts: 236 gaps, 6 mission, 230 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 237 gaps, 6 mission, 231 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3637,4 +3638,19 @@ Counts: 236 gaps, 6 mission, 230 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: UI engineer. Status: Closed.
 - Reference: GAP-071, GAP-075.
 - Depends on: GAP-071, GAP-075.
+
+**GAP-255 The viewport rebuilt GPU and egui geometry every frame, outside every budget**
+
+- Type: Technical.
+- Capability: CAP-5.10 Performance budgets; CAP-2.10 Terrain and map context.
+- History:
+  - 2026-10-30, Open: Filed from the review's findings 14, 15 and 17, which its §6 item 2 puts together as one change.
+  - 2026-10-30, Closed: The glyph pass uploads only when `ViewportState::glyph_revision` or the zoom changed (`gl::GlyphUploadKey`, tested without GL); the overlay's terrain mesh is held on `ViewportState::terrain_mesh_2d` and reprojected only when the surface, the view or the rect changes; `egui_pass_samples` draws the dashboard and the viewport as the desktop lays them out, from the layers `draw_picture` assembles, against the row's unchanged 8 ms (`../../record/2026-10-30/the-viewport-s-two-per-frame-rebuilds-and.md`).
+- Evidence: `docs/review/2026-10-30-ui-review.md` §4.3 findings 14, 15 and 17. `gungnir-viewport3d/src/gl.rs::SceneRenderer::paint_glyphs` called `set_instances` unconditionally, and three-d 0.19.0's `InstancedMesh::set_instances` allocates fresh `InstanceBuffer`s on every call (`src/renderer/geometry/instanced_mesh.rs`); the struct's documentation said both GPU objects were created once. `gungnir-viewport3d/src/layers.rs::draw_terrain_2d` built the egui mesh per frame with no key on the view or the terrain. `gungnir-app/tests/frame_budgets.rs::egui_pass_samples` drew `tree.ui` and nothing else..
+- Severity: 2. Reach: 8 threads. Effort: S. Priority: 16.
+- Impact: Two rebuilds `rust-ui-architecture-coding-standards.md` §5 forbids ran on every frame whether or not anything had changed: the scene's glyph pass re-created its four instance buffers on the GPU, and the overlay re-projected a terrain mesh of up to 16 384 vertices. Neither was inside a budget, because the egui gate timed the dock tree only; the viewport, its glyphs and the layer assembly around it were the part of the frame no test measured.
+- Closing action: Key the instance upload on a glyph revision and the zoom; cache the overlay's terrain mesh on the surface, the view and the rect, as the dead-spot texture is; and draw the viewport, from the layers the binary assembles, inside the egui gate, with the criterion unchanged.
+- Target: I4. Owner: UI engineer. Status: Closed.
+- Reference: `../../review/2026-10-30-ui-review.md` §4.3; GAP-251; GAP-252; the `gungnir-viewport3d` "Glyph rebuild only on change" and `gungnir-ui` rows of `../../verification-capability-table.md`.
+- Depends on: GAP-251, GAP-252.
 
