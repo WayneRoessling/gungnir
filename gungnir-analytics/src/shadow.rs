@@ -70,7 +70,9 @@ impl CellSight {
     }
 }
 
-/// One sensor's own answer for one cell, so PN-10 can show that sensor's shadow alone.
+/// One sensor's own answer for one cell, so the map can show that sensor's shadow alone
+/// when one is chosen on PN-11 (DN-34 amendment 1 item 5: PN-10, where §7 item 6 put the
+/// choice, has no row selection to hang it on).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Sight {
     /// Not in this sensor's volume.
