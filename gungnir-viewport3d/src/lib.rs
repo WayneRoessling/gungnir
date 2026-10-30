@@ -418,12 +418,14 @@ pub fn prepare_3d(
         state.bearing_rays = tracks::update_bearing_ray_glyphs(bearing_rays);
     }
 
-    // Coverage is drawn by egui rather than in the GL pass: it is a flat overlay on
-    // the ground plane, and drawing it here means it survives whatever the callback
-    // does -- the same reason the status line is here (GAP-022 item 53). Bearing rays
-    // join it for the same reason: the scene's only GL geometry is the track disc, so
-    // this overlay is where a ray is drawn. The dead spots join it too (GAP-246, DN-34
-    // §8.2): the same texture, the same toggle, on whichever renderer is in front.
+    // Coverage is drawn by egui rather than in a GL pass: it is a flat overlay on
+    // the ground plane, and drawing it here means it survives whatever the callbacks
+    // do -- the same reason the status line is here (GAP-022 item 53). Bearing rays
+    // join it for the same reason: the scene's two GL passes draw the ground (GAP-252)
+    // and each track's disc, with the rest of the glyph drawn over the disc by egui
+    // (GAP-251), and nothing else, so this overlay is where a ray is drawn. The dead
+    // spots join it too (GAP-246, DN-34 §8.2): the same texture, the same toggle, on
+    // whichever renderer is in front.
     layers::sync_dead_spot_texture(
         ui.ctx(),
         palette,
