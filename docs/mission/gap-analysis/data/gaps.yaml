@@ -13763,3 +13763,37 @@
       at, and why the default desktop build cannot place the Oregon clip, is in
       `../../record/2026-10-30/gap-252-terrain-in-the-three-d-scene.md`; the look
       follows as its own record.
+
+- id: GAP-253
+  name: An assignment label is drawn over the number of the track below
+  type: Technical
+  caps: [CAP-2.10, CAP-5.9]
+  layer: UI and data ecosystem
+  sev: 2
+  effort: S
+  target: I4
+  owner: UI engineer
+  deps: [GAP-251]
+  impact: >-
+    Where tracks on a common approach are 10 to 38 points apart on screen, the resource
+    assigned to one track covers the number of the next, so the operator cannot read either.
+  evidence: >-
+    `gungnir-viewport3d/src/tracks.rs::draw_plan_2d` drew the assignment as a second line
+    below each glyph, in the band where the next track's id sits; the owner's look found `R1`
+    on track 54's number (`../../record/2026-10-30/track-glyphs-over-the-three-d-scene-looked.md`).
+  action: >-
+    Put each track's assignments on its id's line, after the id, in both renderers, with a
+    test that stacked tracks' labels do not overlap.
+  ref: >-
+    GAP-251
+  history:
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      Found in the owner's look at the track glyphs over the three-d scene.
+  - date: 2026-10-30
+    status: Closed
+    note: >-
+      The assignment follows the id on one line, and a track with two resources lists both.
+      Tested in `gungnir-viewport3d/src/tracks.rs`
+      (`../../record/2026-10-30/an-assignment-label-no-longer-covers-the-next.md`).

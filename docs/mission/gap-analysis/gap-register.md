@@ -247,8 +247,9 @@ history, and an entry is never edited once it has merged.
 | GAP-250 | An empty approval queue in a rehearsal says there are no tracks while nine are on screen | Technical | CAP-4.1, CAP-5.9 | 3 | 10 | S | 30 | I4 | UI engineer | Closed |
 | GAP-251 | The three-d scene draws each track as a bare disc, with no number, frame or assignment | Technical | CAP-2.10, CAP-5.9 | 3 | 10 | S | 30 | I4 | UI engineer | Closed |
 | GAP-252 | The three-d scene draws no terrain, and its one paint callback would cover every layer if it did | Technical | CAP-5.9, CAP-5.10 | 3 | 10 | M | 30 | I4 | UI engineer | Closed |
+| GAP-253 | An assignment label is drawn over the number of the track below | Technical | CAP-2.10, CAP-5.9 | 2 | 10 | S | 20 | I4 | UI engineer | Closed |
 
-Counts: 234 gaps, 6 mission, 228 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 235 gaps, 6 mission, 229 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3605,4 +3606,19 @@ Counts: 234 gaps, 6 mission, 228 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: UI engineer. Status: Closed.
 - Reference: `../../design/DN-35-terrain-in-the-three-d-scene.md`; `../../design/DN-34-sensor-dead-spots.md` §13 and amendment 6; GAP-226.
 - Depends on: GAP-226, GAP-023, D-154, D-155, D-156, D-157, D-158.
+
+**GAP-253 An assignment label is drawn over the number of the track below**
+
+- Type: Technical.
+- Capability: CAP-2.10 Terrain and map context; CAP-5.9 Role workspaces and workflow.
+- History:
+  - 2026-10-30, Open: Found in the owner's look at the track glyphs over the three-d scene.
+  - 2026-10-30, Closed: The assignment follows the id on one line, and a track with two resources lists both. Tested in `gungnir-viewport3d/src/tracks.rs` (`../../record/2026-10-30/an-assignment-label-no-longer-covers-the-next.md`).
+- Evidence: `gungnir-viewport3d/src/tracks.rs::draw_plan_2d` drew the assignment as a second line below each glyph, in the band where the next track's id sits; the owner's look found `R1` on track 54's number (`../../record/2026-10-30/track-glyphs-over-the-three-d-scene-looked.md`)..
+- Severity: 2. Reach: 10 threads. Effort: S. Priority: 20.
+- Impact: Where tracks on a common approach are 10 to 38 points apart on screen, the resource assigned to one track covers the number of the next, so the operator cannot read either.
+- Closing action: Put each track's assignments on its id's line, after the id, in both renderers, with a test that stacked tracks' labels do not overlap.
+- Target: I4. Owner: UI engineer. Status: Closed.
+- Reference: GAP-251.
+- Depends on: GAP-251.
 
