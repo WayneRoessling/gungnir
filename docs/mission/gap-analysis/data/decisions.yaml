@@ -3788,3 +3788,23 @@
     1's origin moved there in a baseline variant. Rejected: Copernicus GLO-30 over Bornholm,
     and a real DEM at round 1's own origin. See
     `../../design/DN-35-terrain-in-the-three-d-scene.md` amendment 1.
+
+- id: D-159
+  decision: Whether the per-frame update() budget also holds at Scenario 4's track count
+  question: >-
+    `../../performance-budgets.md` states "per-frame `update()`, p99 under 4 ms" against
+    Scenario 3, and `per_frame_update_meets_its_budget` gates it there. At Scenario 4's
+    count the same frames measured p99 4.3 to 5.3 ms, then 1.7 to 2.1 ms once identity
+    resolution was made cheap. The egui row splits a Scenario 4 frame between the egui
+    pass, the viewport and `update()`, so the question was whether this budget should hold
+    at Scenario 4 as well.
+  raised_in: >-
+    `../../record/2026-10-30/the-per-frame-gate-timed-an-empty-picture.md` and
+    `../../record/2026-10-30/the-slow-frames-at-scenario-4-were-identity.md`
+  decider: Owner
+  unblocks: Nothing; it settles which picture the per-frame gate is held to
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30: no.** The per-frame `update()` budget stays stated
+    and gated at Scenario 3 only, unchanged. A figure measured at Scenario 4's count is
+    information, not a criterion, and no test asserts it.
