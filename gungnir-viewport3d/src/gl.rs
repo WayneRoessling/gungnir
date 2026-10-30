@@ -30,7 +30,9 @@
 //! every check in `docs/record/2026-10-30/the-owner-s-look-at-the-three-d.md`
 //! passed; and again the same day with the track glyphs drawn over it (GAP-251,
 //! `docs/record/2026-10-30/track-glyphs-over-the-three-d-scene-looked.md`). No test can see
-//! it again. Unlike the egui panels there is no headless probe
+//! it again. **The ground pass (GAP-252) has not been seen at all**: what the owner looks for
+//! is in `docs/record/2026-10-30/gap-252-terrain-in-the-three-d-scene.md`. Unlike the egui
+//! panels there is no headless probe
 //! for a GL draw call -- `RenderProbe` reads egui's shape list, and three-d does not
 //! produce one -- so a change to this draw is unseen until somebody looks, and that
 //! record's checks are what to look for.

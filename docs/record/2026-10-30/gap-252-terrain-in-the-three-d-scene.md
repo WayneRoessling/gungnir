@@ -57,7 +57,19 @@ because a pass criterion is the owner's.
 | f | `gl::tests::a_terrain_colour_crosses_unmultiplied` |
 | g | `gungnir-app/tests/frame_budgets.rs::the_scene_path_draws_no_egui_terrain_and_the_surface_is_built_once`. In every profile it asserts that the scene's egui pass draws no terrain mesh and the projection's draws one. The timings are printed and not asserted (figures below) |
 
-FIGURES
+**Row g's figures**, one release run on the build machine (a hybrid of 8 performance and 12
+efficiency cores, where a timing can move by about two times with the core it lands on). The
+1 000 by 1 000 hills DEM keeps 15 625 vertices.
+
+- The surface is built once per load in 3.6 ms, and the frame that builds it took 5.3 ms in
+  all. DN-35 §6 estimated a millisecond or two. One frame at 5 ms is inside the 8 ms egui
+  budget, so the build stays on the render thread rather than moving to the terrain worker.
+- The scene path's viewport egui pass: p99 27 µs over 200 passes, with no terrain mesh in it.
+- The projection's: p99 480 µs. The only difference from the scene path's pass is the
+  15 625-vertex terrain mesh, projected every frame.
+
+Both are against the 8 ms budget for the egui pass. Neither is asserted until the owner agrees
+the row.
 
 ## The Oregon baseline (amendment 2 item 2)
 
@@ -130,8 +142,9 @@ GUNGNIR_CONFIG=testdata/usability/round-1-oregon.json
 gungnir-app --rehearsal testdata/usability/round-1-seed.json
 ```
 
-First, every check `the-owner-s-look-at-the-three-d.md` passed, and those of
-`the-three-d-scene-draws-each-track-s.md`, over the new ground. Then DN-35 §8.2, with amendment
+First, every check `the-owner-s-look-at-the-three-d.md` passed, and the nine of
+`the-three-d-scene-draws-each-track-s.md` that `track-glyphs-over-the-three-d-scene-looked.md`
+passed, over the new ground. Then DN-35 §8.2, with amendment
 1 item 3 and amendment 2 item 3:
 
 1. The scene's ground appears. Switched with the corner control, it is the projection's ground:
