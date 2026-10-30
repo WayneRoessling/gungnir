@@ -12779,22 +12779,31 @@
     grid in a fixed scroll area laid out every frame, the information architecture says
     it is virtualised, and the frame-budget gate renders a workspace that has no table.
   evidence: >-
-    `gungnir-viewport3d/src/gl.rs:29-31`; `gungnir-app/src/ui_settings.rs:232`;
+    `gungnir-viewport3d/src/gl.rs:29-31`; `gungnir-model/src/ui_settings.rs:232`;
     `gungnir-app/src/main.rs:575` against `gungnir-viewport3d/src/lib.rs:18-20`;
     `gungnir-ui/src/panels/track_table.rs:99-106`;
     `docs/ux/information-architecture.md:135-136`
   action: >-
-    Default `scene_3d` off until it has been seen on a display, with a screenshot smoke
-    check; `show_rows` virtualisation with sort and filter; the operator workspace added
-    to the 8 ms gate; the two comments and the IA sentence corrected.
+    Per D-153, the scene stays the default and the owner looks at it on a display;
+    `show_rows` virtualisation with sort and filter; the operator workspace added to the
+    8 ms gate.
   ref: >-
-    GAP-022; GAP-056;
+    GAP-022; GAP-056; D-153;
     `../../review/2026-10-26-comprehensive-review.md` §8 findings 5 and 7
   history:
   - date: 2026-10-26
     status: Open
     note: >-
       Filed by plan 12.
+  - date: 2026-10-30
+    status: In progress
+    note: >-
+      D-153 taken by the owner: the scene stays the default and the owner looks at it.
+      Reading the draw path first found three defects that would have spoiled the look,
+      fixed before it: the camera showed the overlay's ground times the aspect ratio and
+      the display scaling, three-d clipped its draw to a box at the window's corner, and a
+      glyph was 120 m whatever the zoom. The two comments and the IA sentence already
+      agreed. The owner's look and the track table remain.
 
 - id: GAP-227
   name: No basemap, no standard symbology, no declutter, no geographic readout

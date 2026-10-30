@@ -326,11 +326,17 @@ pub fn prepare_3d(
         layers.dead_spots,
     );
     let painter = ui.painter_at(rect);
+    // The projection's background and metre grid, so the two renderers differ only in
+    // how a track is drawn, and the grid is a fixed reference for checking that the
+    // scene puts each track where the overlay's rings and rays expect it.
+    painter.rect_filled(rect, 0.0, palette.viewport_background);
+    interaction::draw_grid(&painter, palette, rect, &state.view);
     draw_layers(&painter, palette, rect, state, &layers);
     tracks::draw_bearing_rays_2d(&painter, palette, rect, &state.view, &state.bearing_rays);
 
-    // The status line is drawn by egui over the callback's output, so it says what the
-    // operator is looking at whether or not the GL draw produced anything.
+    // The status line is drawn by egui before the callback, which draws over it without
+    // clearing anything, so the line says what the operator is looking at whether or
+    // not the GL draw produced anything.
     ui.painter_at(rect).text(
         rect.left_top() + egui::vec2(palette.panel_spacing, palette.panel_spacing),
         egui::Align2::LEFT_TOP,

@@ -153,6 +153,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// The paint callback that draws the three-d scene into `rect` (GAP-022).
+///
+/// egui hands the callback the region in physical pixels, both the whole viewport and
+/// the part of it egui clips to, and its pixels-per-point; the scene needs all three to
+/// put each track where the overlay drawn in points expects it (GAP-226).
+fn scene_callback(
+    scene: Arc<Mutex<gungnir_viewport3d::gl::SceneRenderer>>,
+    glyphs: Vec<gungnir_viewport3d::tracks::TrackGlyph>,
+    view: gungnir_viewport3d::interaction::TopDownView,
+    rect: egui::Rect,
+) -> egui::PaintCallback {
+    let callback = eframe::egui_glow::CallbackFn::new(move |info, _painter| {
+        let pixels = info.viewport_in_pixels();
+        let viewport = gungnir_viewport3d::gl::viewport_from(
+            pixels.left_px,
+            pixels.from_bottom_px,
+            pixels.width_px,
+            pixels.height_px,
+        );
+        let clip = info.clip_rect_in_pixels();
+        let clip = gungnir_viewport3d::gl::viewport_from(
+            clip.left_px,
+            clip.from_bottom_px,
+            clip.width_px,
+            clip.height_px,
+        );
+        // A poisoned lock means a previous frame panicked inside the callback. Skipping
+        // the draw leaves the status line and the panels intact rather than taking the
+        // window down with it.
+        if let Ok(mut renderer) = scene.lock() {
+            renderer.paint(&glyphs, &view, viewport, clip, info.pixels_per_point);
+        }
+    });
+    egui::PaintCallback {
+        rect,
+        callback: Arc::new(callback),
+    }
+}
+
 /// Which half of PN-15's scratch a successful action should clear.
 ///
 /// Stating clears the new-requirement form; the other three clear the composed action.
@@ -855,27 +894,12 @@ impl App {
         // The callback runs after this function returns, so it owns copies rather than
         // borrowing: the glyph list is rebuilt only when the track set changes, so this
         // clone is per frame and small.
-        let glyphs = self.state.viewport.glyphs.clone();
-        let view = self.state.viewport.view;
-        let callback = eframe::egui_glow::CallbackFn::new(move |info, _painter| {
-            let pixels = info.viewport_in_pixels();
-            let viewport = gungnir_viewport3d::gl::viewport_from(
-                pixels.left_px,
-                pixels.from_bottom_px,
-                pixels.width_px,
-                pixels.height_px,
-            );
-            // A poisoned lock means a previous frame panicked inside the callback.
-            // Skipping the draw leaves the status line and the panels intact rather
-            // than taking the window down with it.
-            if let Ok(mut renderer) = scene.lock() {
-                renderer.paint(&glyphs, &view, viewport);
-            }
-        });
-        ui.painter().add(egui::PaintCallback {
+        ui.painter().add(scene_callback(
+            scene,
+            self.state.viewport.glyphs.clone(),
+            self.state.viewport.view,
             rect,
-            callback: Arc::new(callback),
-        });
+        ));
         gungnir_viewport3d::draw_renderer_toggle(
             ui,
             &self.state.palette,
