@@ -260,6 +260,67 @@ fn seeded_session(name: &str, planner_step: Option<std::time::Duration>) {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// **An empty queue in a rehearsal does not blame a tracker that is not there** (GAP-250).
+///
+/// The owner's round-1 screenshots of 2026-10-30 showed nine tracks, P-1206 proposed and
+/// P-1183 decided, under a queue that said there were no tracks to plan against: the
+/// reason read the tracking flag, which a rehearsal holds false on purpose. Here every
+/// queued item is decided, as a participant would, and the empty queue's sentence is read.
+/// P-1181's refusal on readiness is in the denial history, so this also pins the other
+/// half: once plans have reached a person, the queue does not say none did.
+#[test]
+fn a_rehearsals_empty_queue_names_neither_missing_tracks_nor_universal_denial() {
+    use gungnir_app::decisions;
+    use gungnir_ui::panels::approval_queue::{EmptyBecause, PendingId};
+
+    let (mut state, dir) = desktop("empty-reason");
+    let (seed, hash) = rehearsal::load_seed(&testdata("round-1-seed.json")).expect("seed loads");
+    rehearsal::install(&mut state, seed, hash).expect("installed");
+    at(&mut state, 0.0);
+    at(&mut state, 76.0);
+    assert_eq!(state.tracking.tracks().len(), 9, "every seeded track is up");
+    assert!(
+        !state.health().tracking_healthy,
+        "the scripted picture keeps its honest flag"
+    );
+    assert!(
+        state.desk.denials.count > 0,
+        "P-1181 was refused on readiness"
+    );
+
+    let pending: Vec<PendingId> = state
+        .desk
+        .approvals
+        .queue()
+        .iter()
+        .map(|item| PendingId(item.id.0))
+        .collect();
+    assert!(!pending.is_empty(), "the seed's plans reached the queue");
+    for id in pending {
+        decisions::decide(
+            &mut state,
+            id,
+            gungnir_command::OperatorDecision::Rejected {
+                reason: "a participant declining in round 1".to_owned(),
+            },
+        )
+        .expect("a rejection asks for no acknowledgement");
+    }
+    assert!(state.desk.approvals.queue().is_empty());
+
+    let reason = decisions::queue_empty_reason(&state);
+    let sentence = reason.sentence();
+    assert!(
+        !sentence.contains("no tracks") && !sentence.contains("tracking pipeline"),
+        "nine tracks are on screen, so the queue may not say there are none: {sentence}"
+    );
+    assert!(
+        !matches!(reason, EmptyBecause::AllDenied { .. }),
+        "plans reached a person and were decided, so not every plan was denied: {sentence}"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn a_seed_whose_plans_are_not_sorted_by_at_s_is_refused_and_named() {
     // Round-1's own history: 1201 (at_s 0.0) once sat after 1183 (at_s 45.0) in the
