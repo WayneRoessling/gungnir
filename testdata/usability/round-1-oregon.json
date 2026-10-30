@@ -1,0 +1,318 @@
+{
+  "version": 1,
+  "revision": 1,
+  "origin": [
+    0.7621852843459237,
+    -2.151118303083011,
+    142.12962145544589
+  ],
+  "sensors": [
+    {
+      "id": 1,
+      "modality": "radar",
+      "position": [
+        0.7621852843459239,
+        -2.151118303083011,
+        167.12962145358324
+      ],
+      "max_range_m": 15000.0,
+      "detection_model": "radar.short"
+    },
+    {
+      "id": 2,
+      "modality": "radar",
+      "position": [
+        0.7623548018287526,
+        -2.1498805918772583,
+        331.6713300254196
+      ],
+      "max_range_m": 12000.0,
+      "detection_model": "radar.short"
+    }
+  ],
+  "resources": [
+    {
+      "id": 1,
+      "position": [
+        0.7621852843459238,
+        -2.151118303083011,
+        142.12962145544589
+      ],
+      "capacity": 4,
+      "layer": "point",
+      "rounds_available": 8,
+      "reserve": 2,
+      "intercept_speed_mps": 250.0
+    },
+    {
+      "id": 2,
+      "position": [
+        0.762354801830298,
+        -2.149880591873594,
+        142.13141178525984
+      ],
+      "capacity": 2,
+      "layer": "area",
+      "intercept_speed_mps": 600.0
+    }
+  ],
+  "assets": [
+    {
+      "id": 1,
+      "name": "the harbour",
+      "position": [
+        0.7621852843459238,
+        -2.151118303083011,
+        142.12962145544589
+      ],
+      "radius_m": 600.0,
+      "priority": "high",
+      "warning_lead_time_s": 120.0,
+      "warning_channel": "port-authority"
+    },
+    {
+      "id": 2,
+      "name": "the plant",
+      "position": [
+        0.762354801830298,
+        -2.149880591873594,
+        142.13141178525984
+      ],
+      "radius_m": 400.0,
+      "priority": "critical"
+    }
+  ],
+  "policy": {
+    "control_status": {
+      "by_layer": {
+        "point": "free",
+        "area": "hold"
+      }
+    },
+    "authority": {
+      "rules": [
+        {
+          "action": "plan.decide",
+          "role": "Operator",
+          "layer": "point",
+          "class": null,
+          "pre_delegated": false
+        },
+        {
+          "action": "plan.decide",
+          "role": "Supervisor",
+          "layer": "point",
+          "class": null,
+          "pre_delegated": false
+        }
+      ]
+    },
+    "decisions": {
+      "expiry_s": {
+        "point": 90.0
+      },
+      "escalate_after_s": {
+        "point": 45.0
+      }
+    }
+  },
+  "endpoints": [
+    {
+      "name": "port-authority",
+      "kind": "voice",
+      "address": "vhf-16"
+    }
+  ],
+  "approaches": [
+    {
+      "name": "upper Vell approach",
+      "points": [
+        [
+          0.763284499687778,
+          -2.145925912260723,
+          840.0
+        ],
+        [
+          0.7627340506022205,
+          -2.1485214294024484,
+          840.0
+        ],
+        [
+          0.7622322810131562,
+          -2.1509018498409183,
+          840.0
+        ]
+      ],
+      "corridor_half_width_m": 3000.0
+    }
+  ],
+  "geofences": [
+    {
+      "name": "upper Vell no-go",
+      "center": [
+        0.7624548205761269,
+        -2.151467384625218,
+        142.13019692152739
+      ],
+      "radius_m": 1500.0,
+      "no_go": true
+    }
+  ],
+  "hazards": [
+    {
+      "name": "harbour boom",
+      "kind": "boom",
+      "shape": "polyline",
+      "points": [
+        [
+          0.7621542244146893,
+          -2.151150042262674,
+          142.12962845433503
+        ],
+        [
+          0.7621542245709267,
+          -2.151070694313515,
+          142.12962978053838
+        ]
+      ],
+      "blocks_surface": true
+    }
+  ],
+  "laydowns": [
+    {
+      "id": "current",
+      "intent": "the deployment as sited",
+      "sensors": [
+        {
+          "sensor": 1,
+          "position_enu": [
+            -0.0,
+            0.0,
+            25.0
+          ],
+          "mode": "Search"
+        },
+        {
+          "sensor": 2,
+          "position_enu": [
+            5718.677,
+            1081.631,
+            186.891
+          ],
+          "mode": "Search"
+        }
+      ],
+      "resources": [
+        {
+          "resource": 1,
+          "position_enu": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "resource": 2,
+          "position_enu": [
+            5718.507,
+            1081.599,
+            -2.649
+          ]
+        }
+      ],
+      "current": true
+    },
+    {
+      "id": "b",
+      "intent": "move the area-layer battery toward the upper Vell approach, ahead of R2's scheduled maintenance window",
+      "sensors": [
+        {
+          "sensor": 1,
+          "position_enu": [
+            -0.0,
+            0.0,
+            25.0
+          ],
+          "mode": "Search"
+        },
+        {
+          "sensor": 2,
+          "position_enu": [
+            5718.677,
+            1081.631,
+            186.891
+          ],
+          "mode": "Search"
+        }
+      ],
+      "resources": [
+        {
+          "resource": 1,
+          "position_enu": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "resource": 2,
+          "position_enu": [
+            2000.0,
+            1400.0,
+            -1.0
+          ]
+        }
+      ],
+      "current": false
+    },
+    {
+      "id": "c",
+      "intent": "move S2 forward to the south-shore site 10 km up the upper Vell approach, for early detection over the outer estuary",
+      "sensors": [
+        {
+          "sensor": 1,
+          "position_enu": [
+            -0.0,
+            0.0,
+            25.0
+          ],
+          "mode": "Search"
+        },
+        {
+          "sensor": 2,
+          "position_enu": [
+            10762.39,
+            2540.092,
+            266.775
+          ],
+          "mode": "Search"
+        }
+      ],
+      "resources": [
+        {
+          "resource": 1,
+          "position_enu": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "resource": 2,
+          "position_enu": [
+            5718.507,
+            1081.599,
+            -2.649
+          ]
+        }
+      ],
+      "current": false
+    }
+  ],
+  "terrain": {
+    "path": "testdata/dem/usgs_1_n44w124_clip.tif",
+    "frame": "epsg:4269",
+    "vertical": "epsg:5703",
+    "nad83_realisation": "epsg:6318"
+  }
+}

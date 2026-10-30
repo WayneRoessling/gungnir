@@ -153,11 +153,101 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// The paint callback that draws the three-d scene into `rect` (GAP-022).
+/// The region egui gave a paint callback, as the OpenGL viewport and clip box.
 ///
 /// egui hands the callback the region in physical pixels, both the whole viewport and
-/// the part of it egui clips to, and its pixels-per-point; the scene needs all three to
+/// the part of it egui clips to; the scene needs both, with egui's pixels-per-point, to
 /// put each track where the overlay drawn in points expects it (GAP-226).
+fn gl_region(
+    info: &egui::PaintCallbackInfo,
+) -> (
+    gungnir_viewport3d::gl::Viewport,
+    gungnir_viewport3d::gl::Viewport,
+) {
+    let pixels = info.viewport_in_pixels();
+    let viewport = gungnir_viewport3d::gl::viewport_from(
+        pixels.left_px,
+        pixels.from_bottom_px,
+        pixels.width_px,
+        pixels.height_px,
+    );
+    let clip = info.clip_rect_in_pixels();
+    let clip = gungnir_viewport3d::gl::viewport_from(
+        clip.left_px,
+        clip.from_bottom_px,
+        clip.width_px,
+        clip.height_px,
+    );
+    (viewport, clip)
+}
+
+/// The paint callback that draws the scene's ground into `rect` (GAP-252, DN-35 §5.1),
+/// under every layer. It uploads the surface whatever `ground` says and draws it only
+/// for `Ground::Scene`, so the frame that decided egui draws the ground is the one the
+/// mesh is uploaded on.
+fn ground_callback(
+    scene: Arc<Mutex<gungnir_viewport3d::gl::SceneRenderer>>,
+    surface: Option<Arc<gungnir_viewport3d::layers::TerrainSurface>>,
+    ground: gungnir_viewport3d::Ground,
+    view: gungnir_viewport3d::interaction::TopDownView,
+    rect: egui::Rect,
+) -> egui::PaintCallback {
+    let callback = eframe::egui_glow::CallbackFn::new(move |info, _painter| {
+        let (viewport, clip) = gl_region(&info);
+        // As in `scene_callback`: a poisoned lock skips the draw, and the next frame reads
+        // no resident surface, so egui draws the ground.
+        if let Ok(mut renderer) = scene.lock() {
+            renderer.paint_ground(
+                surface.as_deref(),
+                ground,
+                &view,
+                viewport,
+                clip,
+                info.pixels_per_point,
+            );
+        }
+    });
+    egui::PaintCallback {
+        rect,
+        callback: Arc::new(callback),
+    }
+}
+
+/// Set the scene's two GL passes into the slots `prepare_3d` left for them (GAP-251,
+/// GAP-252).
+///
+/// Each callback runs after this returns, so it owns copies rather than borrowing. The
+/// ground pass goes under every layer, and is set whenever there is a surface to upload or
+/// a mesh to drop; the surface is shared, so its clone is a pointer. The glyph list is
+/// rebuilt only when the track set changes, so its clone is per frame and small, and it
+/// goes under the glyphs so each track's frame and labels draw over its disc.
+fn set_gl_passes(
+    ui: &egui::Ui,
+    scene: Arc<Mutex<gungnir_viewport3d::gl::SceneRenderer>>,
+    prepared: &gungnir_viewport3d::Prepared3d,
+    viewport: &gungnir_viewport3d::ViewportState,
+    resident: Option<u64>,
+) {
+    let surface = viewport.terrain_surface().cloned();
+    if surface.is_some() || resident.is_some() {
+        ui.painter().set(
+            prepared.ground_slot,
+            ground_callback(
+                Arc::clone(&scene),
+                surface,
+                prepared.ground,
+                viewport.view,
+                prepared.rect,
+            ),
+        );
+    }
+    ui.painter().set(
+        prepared.scene_slot,
+        scene_callback(scene, viewport.glyphs.clone(), viewport.view, prepared.rect),
+    );
+}
+
+/// The paint callback that draws the scene's glyphs into `rect` (GAP-022).
 fn scene_callback(
     scene: Arc<Mutex<gungnir_viewport3d::gl::SceneRenderer>>,
     glyphs: Vec<gungnir_viewport3d::tracks::TrackGlyph>,
@@ -165,25 +255,12 @@ fn scene_callback(
     rect: egui::Rect,
 ) -> egui::PaintCallback {
     let callback = eframe::egui_glow::CallbackFn::new(move |info, _painter| {
-        let pixels = info.viewport_in_pixels();
-        let viewport = gungnir_viewport3d::gl::viewport_from(
-            pixels.left_px,
-            pixels.from_bottom_px,
-            pixels.width_px,
-            pixels.height_px,
-        );
-        let clip = info.clip_rect_in_pixels();
-        let clip = gungnir_viewport3d::gl::viewport_from(
-            clip.left_px,
-            clip.from_bottom_px,
-            clip.width_px,
-            clip.height_px,
-        );
+        let (viewport, clip) = gl_region(&info);
         // A poisoned lock means a previous frame panicked inside the callback. Skipping
         // the draw leaves the status line and the panels intact rather than taking the
         // window down with it.
         if let Ok(mut renderer) = scene.lock() {
-            renderer.paint(&glyphs, &view, viewport, clip, info.pixels_per_point);
+            renderer.paint_glyphs(&glyphs, &view, viewport, clip, info.pixels_per_point);
         }
     });
     egui::PaintCallback {
@@ -882,6 +959,12 @@ impl App {
             return;
         };
 
+        // GAP-252 (DN-35 §7 item 2): the surface the ground pass holds, read before anything
+        // is drawn. A poisoned lock reads as none, which leaves egui drawing the ground.
+        let resident = scene
+            .lock()
+            .ok()
+            .and_then(|renderer| renderer.ground_revision());
         let Some(prepared) = gungnir_viewport3d::prepare_3d(
             ui,
             &self.state.palette,
@@ -890,23 +973,12 @@ impl App {
             self.state.tracking.bearing_rays(),
             &self.state.last_plan,
             layers,
+            resident,
         ) else {
             return;
         };
 
-        // The callback runs after this function returns, so it owns copies rather than
-        // borrowing: the glyph list is rebuilt only when the track set changes, so this
-        // clone is per frame and small. It goes into the slot `prepare_3d` left under the
-        // glyphs, so each track's frame and labels draw over its disc (GAP-251).
-        ui.painter().set(
-            prepared.scene_slot,
-            scene_callback(
-                scene,
-                self.state.viewport.glyphs.clone(),
-                self.state.viewport.view,
-                prepared.rect,
-            ),
-        );
+        set_gl_passes(ui, scene, &prepared, &self.state.viewport, resident);
         gungnir_viewport3d::draw_renderer_toggle(
             ui,
             &self.state.palette,

@@ -589,6 +589,10 @@ pub struct TerrainLayer<'a> {
     pub positions: &'a [[f32; 3]],
     pub rows: u32,
     pub columns: u32,
+    /// Which placement these positions are (GAP-252, DN-35 §6). The caller sets it when it
+    /// places a terrain and changes it on any later placement, so the surface both
+    /// renderers draw is built once per load and never per frame.
+    pub revision: u64,
 }
 
 /// One loaded point cloud as the viewport draws it (GAP-098).
@@ -631,10 +635,9 @@ pub fn terrain_stride(rows: u32, columns: u32) -> u32 {
     stride.max(1)
 }
 
-/// The colour of a height between the surface's lowest and highest: dark green low,
-/// pale brown high, translucent so tracks and rings stay legible over it.
+/// The height ramp's colour, unmultiplied: dark green low, pale brown high.
 #[must_use]
-pub fn terrain_color(palette: &theme::Palette, t: f32) -> egui::Color32 {
+pub fn terrain_rgb(t: f32) -> [u8; 3] {
     let t = if t.is_finite() {
         t.clamp(0.0, 1.0)
     } else {
@@ -644,25 +647,156 @@ pub fn terrain_color(palette: &theme::Palette, t: f32) -> egui::Color32 {
     let high = [176.0_f32, 150.0, 110.0];
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let mix = |i: usize| (low[i] + (high[i] - low[i]) * t) as u8;
-    egui::Color32::from_rgba_unmultiplied(mix(0), mix(1), mix(2), palette.terrain_alpha)
+    [mix(0), mix(1), mix(2)]
 }
 
-/// Draw the terrain as a shaded surface in the top-down view. Nothing is drawn for
-/// `None`, and nothing is written either: the health panel is where the absence of
-/// terrain is said (PN-09), and a label on every empty map would be noise.
-pub fn draw_terrain_2d(
-    painter: &egui::Painter,
-    palette: &theme::Palette,
-    rect: egui::Rect,
-    view: &TopDownView,
-    terrain: Option<TerrainLayer<'_>>,
-) {
-    let Some(terrain) = terrain else { return };
-    let (rows, columns) = (terrain.rows, terrain.columns);
-    if rows < 2 || columns < 2 || terrain.positions.len() != (rows as usize) * (columns as usize) {
-        return;
+/// The colour of a height between the surface's lowest and highest: dark green low,
+/// pale brown high, translucent so tracks and rings stay legible over it.
+#[must_use]
+pub fn terrain_color(palette: &theme::Palette, t: f32) -> egui::Color32 {
+    let [r, g, b] = terrain_rgb(t);
+    egui::Color32::from_rgba_unmultiplied(r, g, b, palette.terrain_alpha)
+}
+
+/// Where the hillshade's light comes from (GAP-252, D-157, DN-35 amendment 1 item 1): the
+/// north-west, the cartographic convention, because relief lit from the upper left of the
+/// screen is read as relief rather than inverted.
+pub const HILLSHADE_AZIMUTH_DEG: f64 = 315.0;
+/// The light's height above the horizon, in degrees.
+pub const HILLSHADE_ALTITUDE_DEG: f64 = 45.0;
+/// The darkest a slope facing away from the light is drawn, as a factor on the ramp's
+/// colour. With [`HILLSHADE_BRIGHTEST`] it keeps every slope off black and white, and a dead
+/// spot over the lightest ground darker than the darkest ground with none (a test holds it).
+pub const HILLSHADE_DARKEST: f64 = 0.75;
+/// The lightest a slope facing the light is drawn.
+pub const HILLSHADE_BRIGHTEST: f64 = 1.25;
+
+/// The hillshade factor for ground rising `de` metres per metre east and `dn` per metre
+/// north: the light's cosine on the ground's normal, over its cosine on flat ground, so
+/// **flat ground is exactly one** and keeps the ramp's colour unchanged. Bounded by
+/// [`HILLSHADE_DARKEST`] and [`HILLSHADE_BRIGHTEST`].
+#[must_use]
+pub fn hillshade(de: f64, dn: f64) -> f64 {
+    let (sin_az, cos_az) = HILLSHADE_AZIMUTH_DEG.to_radians().sin_cos();
+    let (sin_alt, cos_alt) = HILLSHADE_ALTITUDE_DEG.to_radians().sin_cos();
+    // The light's direction in east, north, up; the ground's normal is (-de, -dn, 1).
+    let lit = (-de * sin_az * cos_alt - dn * cos_az * cos_alt + sin_alt)
+        / (de * de + dn * dn + 1.0).sqrt();
+    let factor = lit / sin_alt;
+    if factor.is_finite() {
+        factor.clamp(HILLSHADE_DARKEST, HILLSHADE_BRIGHTEST)
+    } else {
+        1.0
     }
-    let (lo, hi) = terrain
+}
+
+/// The ground's rise per metre east and north at kept vertex `(i, j)` of a decimated grid,
+/// by central differences between its kept neighbours, one-sided where only one is kept.
+/// A neighbour with no height is left out; an axis with none is taken as flat.
+fn gradient(grid: &[Option<[f32; 3]>], width: usize, i: usize, j: usize) -> (f64, f64) {
+    let height = grid.len() / width.max(1);
+    let at = |i: usize, j: usize| grid[i * width + j].map(|p| p.map(f64::from));
+    let Some(here) = at(i, j) else {
+        return (0.0, 0.0);
+    };
+    let difference = |before: Option<[f64; 3]>, after: Option<[f64; 3]>| {
+        let (from, to) = match (before, after) {
+            (Some(a), Some(b)) => (a, b),
+            (Some(a), None) => (a, here),
+            (None, Some(b)) => (here, b),
+            (None, None) => return None,
+        };
+        Some([to[0] - from[0], to[1] - from[1], to[2] - from[2]])
+    };
+    let across = difference(
+        j.checked_sub(1).and_then(|j| at(i, j)),
+        (j + 1 < width).then(|| at(i, j + 1)).flatten(),
+    );
+    let down = difference(
+        i.checked_sub(1).and_then(|i| at(i, j)),
+        (i + 1 < height).then(|| at(i + 1, j)).flatten(),
+    );
+    // Along one axis only: the rise is along that axis's horizontal direction.
+    let along = |v: [f64; 3]| {
+        let run = v[0] * v[0] + v[1] * v[1];
+        if run > 0.0 {
+            (v[2] * v[0] / run, v[2] * v[1] / run)
+        } else {
+            (0.0, 0.0)
+        }
+    };
+    match (across, down) {
+        (Some(a), Some(b)) => {
+            // The plane through both differences: solve for the rise per metre east and
+            // north. A placed grid's axes are never parallel; if they were, take one.
+            let det = a[0] * b[1] - a[1] * b[0];
+            if det.abs() > f64::EPSILON * (a[0] * a[0] + a[1] * a[1] + b[0] * b[0] + b[1] * b[1]) {
+                (
+                    (a[2] * b[1] - a[1] * b[2]) / det,
+                    (a[0] * b[2] - a[2] * b[0]) / det,
+                )
+            } else {
+                along(a)
+            }
+        }
+        (Some(v), None) | (None, Some(v)) => along(v),
+        (None, None) => (0.0, 0.0),
+    }
+}
+
+/// The ramp's colour lit by `shade`: each component multiplied, the alpha unchanged. A
+/// factor of exactly one gives exactly [`terrain_color`]'s colour.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn shaded(palette: &theme::Palette, t: f32, shade: f64) -> egui::Color32 {
+    let [r, g, b] = terrain_rgb(t).map(|c| (f64::from(c) * shade).round().clamp(0.0, 255.0) as u8);
+    egui::Color32::from_rgba_unmultiplied(r, g, b, palette.terrain_alpha)
+}
+
+/// The placed terrain as both renderers draw it: the decimated grid, its colours and its
+/// triangles, built once per load (`rust-ui-architecture-coding-standards.md` §5), never
+/// per frame (GAP-252, DN-35 §6).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TerrainSurface {
+    /// The [`TerrainLayer::revision`] this was built from.
+    pub revision: u64,
+    /// ENU metres, the kept vertices only; a no-data corner keeps no vertex.
+    pub positions: Vec<[f32; 3]>,
+    /// The height ramp over the **full** grid's lowest and highest height, as the projection
+    /// coloured it before GAP-252, lit by the hillshade (DN-35 amendment 1 item 1).
+    pub colors: Vec<egui::Color32>,
+    /// Two triangles per decimated cell whose four corners all have a height.
+    pub indices: Vec<u32>,
+}
+
+/// Build the surface both renderers draw from a placed grid: decimated to
+/// [`TERRAIN_VERTEX_BUDGET`], coloured by height over the full grid, and hillshaded on the
+/// decimated grid, so the shade matches the triangles drawn.
+///
+/// # Errors
+///
+/// [`ViewportError::MalformedMesh`] when the positions do not fill `rows * columns`, and
+/// [`ViewportError::EmptyMesh`] when no cell has four corners with a height. Every refusal
+/// happens here, before anything reaches a GPU.
+///
+/// [`ViewportError::MalformedMesh`]: crate::ViewportError::MalformedMesh
+/// [`ViewportError::EmptyMesh`]: crate::ViewportError::EmptyMesh
+pub fn terrain_surface(
+    palette: &theme::Palette,
+    layer: TerrainLayer<'_>,
+) -> Result<TerrainSurface, crate::ViewportError> {
+    let (rows, columns) = (layer.rows as usize, layer.columns as usize);
+    if layer.positions.len() != rows.saturating_mul(columns) {
+        return Err(crate::ViewportError::MalformedMesh {
+            reason: format!(
+                "{} positions do not fill a grid of {rows} rows by {columns} columns",
+                layer.positions.len()
+            ),
+        });
+    }
+    if rows < 2 || columns < 2 {
+        return Err(crate::ViewportError::EmptyMesh);
+    }
+    let (lo, hi) = layer
         .positions
         .iter()
         .map(|p| p[2])
@@ -671,30 +805,38 @@ pub fn draw_terrain_2d(
             (lo.min(z), hi.max(z))
         });
     if !lo.is_finite() {
-        return;
+        return Err(crate::ViewportError::EmptyMesh);
     }
     let span = if hi > lo { hi - lo } else { 1.0 };
-    let stride = terrain_stride(rows, columns);
-    let sampled_rows: Vec<u32> = (0..rows).step_by(stride as usize).collect();
-    let sampled_columns: Vec<u32> = (0..columns).step_by(stride as usize).collect();
-    let mut mesh = egui::Mesh::default();
-    // Vertex (i, j) of the decimated grid is at index i * sampled_columns.len() + j.
-    let mut ids: Vec<Option<u32>> = Vec::with_capacity(sampled_rows.len() * sampled_columns.len());
-    for &r in &sampled_rows {
-        for &c in &sampled_columns {
-            let p = terrain.positions[(r as usize) * (columns as usize) + c as usize];
-            if !p[2].is_finite() {
-                ids.push(None);
-                continue;
-            }
-            let pos = view.project([f64::from(p[0]), f64::from(p[1]), 0.0], rect);
-            #[allow(clippy::cast_possible_truncation)]
-            let id = mesh.vertices.len() as u32;
-            mesh.colored_vertex(pos, terrain_color(palette, (p[2] - lo) / span));
-            ids.push(Some(id));
-        }
-    }
+    let stride = terrain_stride(layer.rows, layer.columns) as usize;
+    let sampled_rows: Vec<usize> = (0..rows).step_by(stride).collect();
+    let sampled_columns: Vec<usize> = (0..columns).step_by(stride).collect();
     let width = sampled_columns.len();
+    // Vertex (i, j) of the decimated grid is at index i * width + j.
+    let grid: Vec<Option<[f32; 3]>> = sampled_rows
+        .iter()
+        .flat_map(|&r| {
+            sampled_columns.iter().map(move |&c| {
+                let p = layer.positions[r * columns + c];
+                p[2].is_finite().then_some(p)
+            })
+        })
+        .collect();
+    let mut positions = Vec::with_capacity(grid.len());
+    let mut colors = Vec::with_capacity(grid.len());
+    let mut ids: Vec<Option<u32>> = Vec::with_capacity(grid.len());
+    for (k, p) in grid.iter().enumerate() {
+        let Some(p) = p else {
+            ids.push(None);
+            continue;
+        };
+        let (de, dn) = gradient(&grid, width, k / width, k % width);
+        #[allow(clippy::cast_possible_truncation)]
+        ids.push(Some(positions.len() as u32));
+        positions.push(*p);
+        colors.push(shaded(palette, (p[2] - lo) / span, hillshade(de, dn)));
+    }
+    let mut indices = Vec::new();
     for i in 0..sampled_rows.len().saturating_sub(1) {
         for j in 0..width.saturating_sub(1) {
             let (nw, ne, sw, se) = (
@@ -704,14 +846,84 @@ pub fn draw_terrain_2d(
                 ids[(i + 1) * width + j + 1],
             );
             if let (Some(nw), Some(ne), Some(sw), Some(se)) = (nw, ne, sw, se) {
-                mesh.add_triangle(nw, sw, ne);
-                mesh.add_triangle(ne, sw, se);
+                indices.extend_from_slice(&[nw, sw, ne, ne, sw, se]);
             }
         }
     }
-    if !mesh.indices.is_empty() {
-        painter.add(egui::Shape::mesh(mesh));
+    if indices.is_empty() {
+        return Err(crate::ViewportError::EmptyMesh);
     }
+    Ok(TerrainSurface {
+        revision: layer.revision,
+        positions,
+        colors,
+        indices,
+    })
+}
+
+/// The surface the viewport holds and the revision it was built from. A refusal is held
+/// too, so a grid that cannot be drawn is refused once a load rather than once a frame.
+#[derive(Debug)]
+pub struct TerrainSurfaceSlot {
+    pub revision: u64,
+    pub surface: Result<std::sync::Arc<TerrainSurface>, crate::ViewportError>,
+}
+
+/// Bring `slot` up to date with `layer`: build the surface when the revision changed, and
+/// drop it when there is no terrain. Called once a frame before anything is drawn; costs
+/// nothing when nothing changed, as [`sync_dead_spot_texture`] does. Returns whether it
+/// built.
+pub fn sync_terrain_surface(
+    palette: &theme::Palette,
+    slot: &mut Option<TerrainSurfaceSlot>,
+    layer: Option<TerrainLayer<'_>>,
+) -> bool {
+    let Some(layer) = layer else {
+        *slot = None;
+        return false;
+    };
+    if slot.as_ref().is_some_and(|s| s.revision == layer.revision) {
+        return false;
+    }
+    *slot = Some(TerrainSurfaceSlot {
+        revision: layer.revision,
+        surface: terrain_surface(palette, layer).map(std::sync::Arc::new),
+    });
+    true
+}
+
+/// The surface projected into the top-down view as an egui mesh. Only the projection is
+/// per frame; the colours and triangles were decided once, in [`terrain_surface`].
+#[must_use]
+pub fn terrain_mesh_2d(
+    rect: egui::Rect,
+    view: &TopDownView,
+    surface: &TerrainSurface,
+) -> egui::Mesh {
+    let mut mesh = egui::Mesh::default();
+    mesh.vertices.reserve(surface.positions.len());
+    for (p, colour) in surface.positions.iter().zip(&surface.colors) {
+        let pos = view.project([f64::from(p[0]), f64::from(p[1]), 0.0], rect);
+        mesh.colored_vertex(pos, *colour);
+    }
+    mesh.indices.clone_from(&surface.indices);
+    mesh
+}
+
+/// Draw the terrain as a shaded surface in the top-down view. Nothing is drawn for
+/// `None`, and nothing is written either: the health panel is where the absence of
+/// terrain is said (PN-09), and a label on every empty map would be noise.
+pub fn draw_terrain_2d(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    view: &TopDownView,
+    surface: Option<&TerrainSurface>,
+) {
+    let Some(surface) = surface else { return };
+    if surface.indices.is_empty() {
+        return;
+    }
+    painter.add(egui::Shape::mesh(terrain_mesh_2d(rect, view, surface)));
 }
 
 /// The most points a frame draws per cloud, the same reasoning as
@@ -1436,6 +1648,353 @@ mod tests {
         assert!(high.r() > low.r(), "higher ground is paler");
         assert_eq!(terrain_color(&palette, f32::NAN), low);
         assert!(low.a() < 255, "translucent, so tracks stay legible over it");
+    }
+
+    /// `draw_terrain_2d` as it was before GAP-252, kept as the oracle the surface is held
+    /// to (DN-35 §8.1 row a): it folded, decimated and coloured the full grid every frame.
+    fn oracle_terrain_mesh(
+        palette: &theme::Palette,
+        rect: egui::Rect,
+        view: &TopDownView,
+        terrain: TerrainLayer<'_>,
+    ) -> Option<egui::Mesh> {
+        let (rows, columns) = (terrain.rows, terrain.columns);
+        if rows < 2
+            || columns < 2
+            || terrain.positions.len() != (rows as usize) * (columns as usize)
+        {
+            return None;
+        }
+        let (lo, hi) = terrain
+            .positions
+            .iter()
+            .map(|p| p[2])
+            .filter(|z| z.is_finite())
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), z| {
+                (lo.min(z), hi.max(z))
+            });
+        if !lo.is_finite() {
+            return None;
+        }
+        let span = if hi > lo { hi - lo } else { 1.0 };
+        let stride = terrain_stride(rows, columns);
+        let sampled_rows: Vec<u32> = (0..rows).step_by(stride as usize).collect();
+        let sampled_columns: Vec<u32> = (0..columns).step_by(stride as usize).collect();
+        let mut mesh = egui::Mesh::default();
+        let mut ids: Vec<Option<u32>> =
+            Vec::with_capacity(sampled_rows.len() * sampled_columns.len());
+        for &r in &sampled_rows {
+            for &c in &sampled_columns {
+                let p = terrain.positions[(r as usize) * (columns as usize) + c as usize];
+                if !p[2].is_finite() {
+                    ids.push(None);
+                    continue;
+                }
+                let pos = view.project([f64::from(p[0]), f64::from(p[1]), 0.0], rect);
+                #[allow(clippy::cast_possible_truncation)]
+                let id = mesh.vertices.len() as u32;
+                mesh.colored_vertex(pos, terrain_color(palette, (p[2] - lo) / span));
+                ids.push(Some(id));
+            }
+        }
+        let width = sampled_columns.len();
+        for i in 0..sampled_rows.len().saturating_sub(1) {
+            for j in 0..width.saturating_sub(1) {
+                let (nw, ne, sw, se) = (
+                    ids[i * width + j],
+                    ids[i * width + j + 1],
+                    ids[(i + 1) * width + j],
+                    ids[(i + 1) * width + j + 1],
+                );
+                if let (Some(nw), Some(ne), Some(sw), Some(se)) = (nw, ne, sw, se) {
+                    mesh.add_triangle(nw, sw, ne);
+                    mesh.add_triangle(ne, sw, se);
+                }
+            }
+        }
+        (!mesh.indices.is_empty()).then_some(mesh)
+    }
+
+    /// A grid of `rows` by `columns` 30 m cells, north row first, its heights from
+    /// `height(east, north)`, and `NaN` at every cell `hole` names.
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+    fn grid(
+        rows: u32,
+        columns: u32,
+        height: impl Fn(f32, f32) -> f32,
+        hole: impl Fn(u32, u32) -> bool,
+    ) -> Vec<[f32; 3]> {
+        let mut positions = Vec::with_capacity((rows * columns) as usize);
+        for r in 0..rows {
+            for c in 0..columns {
+                let (e, n) = (
+                    c as f32 * 30.0 - 900.0,
+                    (rows - 1 - r) as f32 * 30.0 - 600.0,
+                );
+                let z = if hole(r, c) { f32::NAN } else { height(e, n) };
+                positions.push([e, n, z]);
+            }
+        }
+        positions
+    }
+
+    fn rolling(e: f32, n: f32) -> f32 {
+        120.0 * (e / 400.0).sin() * (n / 550.0).cos() + 40.0 * (e / 130.0 + n / 170.0).sin() + 200.0
+    }
+
+    fn layer_of(positions: &[[f32; 3]], rows: u32, columns: u32) -> TerrainLayer<'_> {
+        TerrainLayer {
+            positions,
+            rows,
+            columns,
+            revision: 3,
+        }
+    }
+
+    /// GAP-252, DN-35 §8.1 row a as amendment 1 restates it: over a small grid, a grid past
+    /// the vertex budget and a grid with no-data holes, the mesh the projection now builds
+    /// from the surface is today's vertex for vertex and index for index, and, over flat
+    /// ground, colour for colour. Elsewhere each colour is today's lit by a bounded shade,
+    /// with today's alpha.
+    #[test]
+    fn the_surface_is_the_projections_ground() {
+        let palette = theme::Palette::day();
+        let rect = egui::Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(800.0, 600.0));
+        let view = TopDownView {
+            center_e: 120.0,
+            center_n: -40.0,
+            meters_per_px: 7.5,
+        };
+        let holes = |r: u32, c: u32| (r == 4 && c == 6) || (r == 10 && (8..11).contains(&c));
+        let no_hole = |_: u32, _: u32| false;
+        let cases: [(&str, u32, u32, bool); 3] = [
+            ("small", 9, 12, false),
+            ("past the budget", 150, 140, false),
+            ("with holes", 20, 24, true),
+        ];
+        for (name, rows, columns, with_holes) in cases {
+            assert_eq!(
+                terrain_stride(rows, columns) > 1,
+                name == "past the budget",
+                "{name}: the cases must cover a stride of one and above one"
+            );
+            for flat in [false, true] {
+                let height = |e: f32, n: f32| if flat { 150.0 } else { rolling(e, n) };
+                let positions = if with_holes {
+                    grid(rows, columns, height, holes)
+                } else {
+                    grid(rows, columns, height, no_hole)
+                };
+                let layer = layer_of(&positions, rows, columns);
+                let oracle = oracle_terrain_mesh(&palette, rect, &view, layer).expect("drawn");
+                let surface = terrain_surface(&palette, layer).expect("a surface");
+                assert_eq!(surface.revision, 3);
+                let mesh = terrain_mesh_2d(rect, &view, &surface);
+                assert_eq!(mesh.indices, oracle.indices, "{name}: the triangles");
+                assert_eq!(mesh.vertices.len(), oracle.vertices.len(), "{name}");
+                for (drawn, today) in mesh.vertices.iter().zip(&oracle.vertices) {
+                    assert_eq!(drawn.pos, today.pos, "{name}: a vertex moved");
+                    assert_eq!(drawn.uv, today.uv, "{name}");
+                    if flat {
+                        assert_eq!(
+                            drawn.color, today.color,
+                            "{name}: flat ground is today's colour"
+                        );
+                        continue;
+                    }
+                    let [r, g, b, a] = drawn.color.to_srgba_unmultiplied();
+                    let [tr, tg, tb, ta] = today.color.to_srgba_unmultiplied();
+                    assert_eq!(a, ta, "{name}: the alpha is terrain_alpha");
+                    for (lit, ramp) in [(r, tr), (g, tg), (b, tb)] {
+                        let (lit, ramp) = (f64::from(lit), f64::from(ramp));
+                        assert!(
+                            lit >= ramp * HILLSHADE_DARKEST - 2.0
+                                && lit <= ramp * HILLSHADE_BRIGHTEST + 2.0,
+                            "{name}: {lit} is not {ramp} lit within the shade's bounds"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// The surface refuses by name what it cannot draw, before anything reaches a GPU.
+    #[test]
+    fn a_surface_that_cannot_be_drawn_is_refused_by_name() {
+        let palette = theme::Palette::day();
+        let positions = grid(4, 5, rolling, |_, _| false);
+        assert!(matches!(
+            terrain_surface(&palette, layer_of(&positions[..19], 4, 5)),
+            Err(crate::ViewportError::MalformedMesh { .. })
+        ));
+        let empty = grid(4, 5, rolling, |_, _| true);
+        assert_eq!(
+            terrain_surface(&palette, layer_of(&empty, 4, 5)),
+            Err(crate::ViewportError::EmptyMesh)
+        );
+        let checkered = grid(4, 5, rolling, |r, c| (r + c) % 2 == 0);
+        assert_eq!(
+            terrain_surface(&palette, layer_of(&checkered, 4, 5)),
+            Err(crate::ViewportError::EmptyMesh),
+            "no cell has four corners"
+        );
+        assert_eq!(
+            terrain_surface(&palette, layer_of(&positions[..5], 1, 5)),
+            Err(crate::ViewportError::EmptyMesh)
+        );
+    }
+
+    /// GAP-252, DN-35 §8.1 row b: over a hundred frames at one revision the surface is
+    /// built once, a new revision rebuilds it once, and no terrain drops it. A refusal is
+    /// held too, so a grid that cannot be drawn is not refused again every frame.
+    #[test]
+    fn the_surface_is_built_once_per_load() {
+        let palette = theme::Palette::day();
+        let positions = grid(30, 40, rolling, |_, _| false);
+        let mut slot = None;
+        let mut layer = layer_of(&positions, 30, 40);
+        let builds = (0..100)
+            .filter(|_| sync_terrain_surface(&palette, &mut slot, Some(layer)))
+            .count();
+        assert_eq!(builds, 1, "a hundred frames at one revision");
+        layer.revision = 4;
+        let builds = (0..100)
+            .filter(|_| sync_terrain_surface(&palette, &mut slot, Some(layer)))
+            .count();
+        assert_eq!(builds, 1, "a new revision");
+        assert_eq!(slot.as_ref().map(|s| s.revision), Some(4));
+        assert!(!sync_terrain_surface(&palette, &mut slot, None));
+        assert!(slot.is_none(), "no terrain drops the surface");
+
+        let empty = grid(4, 5, rolling, |_, _| true);
+        let refused = layer_of(&empty, 4, 5);
+        let builds = (0..100)
+            .filter(|_| sync_terrain_surface(&palette, &mut slot, Some(refused)))
+            .count();
+        assert_eq!(builds, 1, "a refusal is held, not retried every frame");
+        assert!(slot.is_some_and(|s| s.surface.is_err()));
+    }
+
+    /// GAP-252, D-157 (DN-35 amendment 1 item 1): flat ground shades to exactly one; a
+    /// slope toward the north-west light is lighter and one away darker; and the factor
+    /// never leaves its bounds however steep the ground.
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn the_hillshade_is_one_on_flat_ground_and_bounded_on_any_slope() {
+        assert_eq!(
+            hillshade(0.0, 0.0),
+            1.0,
+            "flat ground keeps today's colour exactly"
+        );
+        // Ground rising to the south-east faces the north-west light.
+        let toward = hillshade(0.15, -0.15);
+        let away = hillshade(-0.15, 0.15);
+        assert!(toward > 1.0, "{toward}");
+        assert!(away < 1.0, "{away}");
+        // A slope along the light's own line is the one most lit; across it, less.
+        assert!(hillshade(0.1, -0.1) > hillshade(0.1, 0.1));
+        for (de, dn) in [(40.0, -40.0), (-40.0, 40.0), (1e6, 0.0), (f64::NAN, 0.0)] {
+            let shade = hillshade(de, dn);
+            assert!(
+                (HILLSHADE_DARKEST..=HILLSHADE_BRIGHTEST).contains(&shade),
+                "({de}, {dn}): {shade}"
+            );
+        }
+        // Most lit where the ground faces the light square on: a 45 degree slope.
+        assert_eq!(hillshade(0.7, -0.7), HILLSHADE_BRIGHTEST);
+        assert_eq!(hillshade(-0.5, 0.5), HILLSHADE_DARKEST);
+        assert_eq!(hillshade(-40.0, 40.0), HILLSHADE_DARKEST);
+        const {
+            assert!(
+                HILLSHADE_DARKEST > 0.0 && HILLSHADE_BRIGHTEST * 176.0 < 255.0,
+                "never black or white"
+            );
+        }
+    }
+
+    /// The shade is read from the surface's own geometry: a uniform slope facing the light
+    /// is lit uniformly, every vertex alike, and a no-data hole in it changes no other
+    /// vertex's colour, because a kept neighbour's one-sided difference finds the same
+    /// slope. The light comes from the north-west, so the slope rising to the south-east
+    /// is lighter than the flat ramp colour.
+    #[test]
+    fn a_hole_changes_no_other_vertexs_shade() {
+        let palette = theme::Palette::day();
+        // Binary fractions, so every height and difference is exact in `f32`.
+        let slope = |e: f32, n: f32| 0.25 * e - 0.125 * n + 400.0;
+        let whole = grid(12, 14, slope, |_, _| false);
+        // The hole is inside the grid, away from the lowest and highest corners, so the
+        // ramp's ends do not move with it.
+        let holed = grid(12, 14, slope, |r, c| r == 5 && c == 6);
+        let colours =
+            |positions: &[[f32; 3]]| -> std::collections::HashMap<[u32; 2], egui::Color32> {
+                let surface =
+                    terrain_surface(&palette, layer_of(positions, 12, 14)).expect("a surface");
+                surface
+                    .positions
+                    .iter()
+                    .zip(&surface.colors)
+                    .map(|(p, c)| ([p[0].to_bits(), p[1].to_bits()], *c))
+                    .collect()
+            };
+        let (whole, holed) = (colours(&whole), colours(&holed));
+        assert_eq!(holed.len(), whole.len() - 1);
+        for (at, colour) in &holed {
+            assert_eq!(whole.get(at), Some(colour), "the vertex at {at:?} changed");
+        }
+        let shade = hillshade(0.25, -0.125);
+        assert!(shade > 1.0, "{shade}");
+        assert!(
+            whole
+                .values()
+                .all(|c| c.to_srgba_unmultiplied()[0] > terrain_rgb(0.0)[0]),
+            "every vertex of the slope is lit, the lowest corner included"
+        );
+    }
+
+    /// GAP-252 (DN-35 amendment 1 item 1), beside `gungnir-ui`'s
+    /// `a_dead_spot_darkens_the_terrain_under_it_but_does_not_hide_it`, whose ground is the
+    /// unshaded ramp's two ends: over the lightest and darkest shaded ground a dead spot
+    /// still at least halves the brightness, and a dead spot over the lightest ground is
+    /// darker than the darkest ground with none, so a shadow is never read as a valley.
+    #[test]
+    fn a_dead_spot_stays_darker_than_any_shaded_ground() {
+        let over = |top: [f64; 3], alpha: f64, under: [f64; 3]| {
+            [0, 1, 2].map(|i| top[i] * alpha + under[i] * (1.0 - alpha))
+        };
+        let rgb = |c: egui::Color32| [f64::from(c.r()), f64::from(c.g()), f64::from(c.b())];
+        let luma = |c: [f64; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        for palette in [theme::Palette::day(), theme::Palette::night()] {
+            let terrain_alpha = f64::from(palette.terrain_alpha) / 255.0;
+            let shadow_alpha = f64::from(palette.shadow_alpha) / 255.0;
+            let ground = |t: f32, shade: f64| {
+                let lit = shaded(&palette, t, shade).to_srgba_unmultiplied();
+                over(
+                    [f64::from(lit[0]), f64::from(lit[1]), f64::from(lit[2])],
+                    terrain_alpha,
+                    rgb(palette.viewport_background),
+                )
+            };
+            let darkest = ground(0.0, HILLSHADE_DARKEST);
+            let lightest = ground(1.0, HILLSHADE_BRIGHTEST);
+            for lit in [darkest, lightest] {
+                let dark = over(rgb(palette.shadow_color), shadow_alpha, lit);
+                assert!(
+                    luma(dark) < 0.5 * luma(lit),
+                    "a dead spot must at least halve the ground's brightness: {} to {}",
+                    luma(lit),
+                    luma(dark)
+                );
+            }
+            let shadow_on_lightest = over(rgb(palette.shadow_color), shadow_alpha, lightest);
+            assert!(
+                luma(shadow_on_lightest) < luma(darkest),
+                "a dead spot over the lightest ground ({}) must be darker than the darkest \
+                 ground with none ({})",
+                luma(shadow_on_lightest),
+                luma(darkest)
+            );
+        }
     }
 
     /// A small cloud is drawn whole; a large one is decimated to the budget, never

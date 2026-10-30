@@ -794,6 +794,14 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
     // GAP-247, GAP-246 (DN-34 §10): the resampled surface every line of sight reads, and
     // the dead-spot worker's state, on the terrain's own line.
     let mut terrain_line = state.terrain.line();
+    // GAP-252 (DN-35 §7 item 3): which renderer drew the ground, the one place the
+    // hand-over from the overlay to the scene can be read.
+    if state.terrain.is_masking() {
+        if let Some(ground) = state.viewport.ground_line() {
+            terrain_line.push_str("; ");
+            terrain_line.push_str(&ground);
+        }
+    }
     if let Some(field) = crate::terrain::height_field_line(state.height_field.as_deref()) {
         terrain_line.push_str("; ");
         terrain_line.push_str(&field);

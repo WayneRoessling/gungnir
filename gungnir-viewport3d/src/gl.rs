@@ -30,7 +30,9 @@
 //! every check in `docs/record/2026-10-30/the-owner-s-look-at-the-three-d.md`
 //! passed; and again the same day with the track glyphs drawn over it (GAP-251,
 //! `docs/record/2026-10-30/track-glyphs-over-the-three-d-scene-looked.md`). No test can see
-//! it again. Unlike the egui panels there is no headless probe
+//! it again. **The ground pass (GAP-252) has not been seen at all**: what the owner looks for
+//! is in `docs/record/2026-10-30/gap-252-terrain-in-the-three-d-scene.md`. Unlike the egui
+//! panels there is no headless probe
 //! for a GL draw call -- `RenderProbe` reads egui's shape list, and three-d does not
 //! produce one -- so a change to this draw is unseen until somebody looks, and that
 //! record's checks are what to look for.
@@ -38,7 +40,7 @@
 //! This path is the **default** (`ui.scene_3d`, on), by the owner's decisions of
 //! 2026-09-05 and 2026-10-30 (D-153). Two things carry the weight that a test would
 //! otherwise have carried, and both are deliberate: the viewport's status line is
-//! painted by egui and this callback draws after it without clearing anything, so a
+//! painted by egui after both GL passes (GAP-252), and neither clears anything, so a
 //! draw that produces nothing still leaves the line reporting how many tracks exist --
 //! an empty viewport that says twelve tracks is a fault someone can report, an empty
 //! viewport that says nothing is an operator concluding the sector is clear; and the
@@ -52,8 +54,14 @@
 /// is the fact this whole attachment rests on.
 pub use three_d::context::Context as GlContext;
 
+/// The OpenGL region a paint callback draws into, re-exported for the same reason: the
+/// binary converts egui's region once for both GL passes (GAP-252) and names the type.
+pub use three_d::Viewport;
+
 use crate::interaction::TopDownView;
+use crate::layers::TerrainSurface;
 use crate::tracks::{TrackGlyph, GLYPH_RADIUS_PX};
+use crate::Ground;
 use gungnir_ui::theme;
 use std::sync::Arc;
 
@@ -85,6 +93,10 @@ pub enum AttachError {
 pub struct SceneRenderer {
     context: three_d::Context,
     glyph_mesh: three_d::Gm<three_d::InstancedMesh, three_d::ColorMaterial>,
+    /// The terrain's mesh and the surface revision it was built from (GAP-252, DN-35 §6):
+    /// built the first time the ground pass is handed a revision it does not hold, and
+    /// dropped when handed none, so the upload is once per load.
+    ground: Option<(u64, three_d::Gm<three_d::Mesh, three_d::ColorMaterial>)>,
     /// The palette resolved from `ConfigBaseline` at start-up (D-35, GAP-095), carried
     /// here because the OpenGL draw path has no `egui::Ui` to read it from the way the
     /// 2D projection's functions do. Set once, in `attach`, and never reassigned.
@@ -117,18 +129,75 @@ impl SceneRenderer {
         Ok(Self {
             context,
             glyph_mesh,
+            ground: None,
             palette,
         })
     }
 
-    /// Draw the glyphs for this frame into the region egui has given the viewport.
+    /// The surface revision the ground pass holds, for [`crate::ground_source`]. The
+    /// binary reads it under the lock it already takes, before the frame is drawn.
+    #[must_use]
+    pub fn ground_revision(&self) -> Option<u64> {
+        self.ground.as_ref().map(|(revision, _)| *revision)
+    }
+
+    /// The ground pass (GAP-252, DN-35 §5.1): bring the uploaded mesh up to date with
+    /// `surface`, then draw it if `ground` says the scene draws it this frame and the mesh
+    /// held is this surface's. On the frame a surface first arrives the frame was decided
+    /// for egui, so this uploads and draws nothing; the next frame draws it.
+    ///
+    /// The terrain is translucent, as in the projection, so the background and the metre
+    /// grid egui painted before this show through. A straight-down grid never overlaps
+    /// itself, so nothing needs sorting, and no depth buffer is asked for (DN-35 §4).
+    pub fn paint_ground(
+        &mut self,
+        surface: Option<&TerrainSurface>,
+        ground: Ground,
+        view: &TopDownView,
+        viewport: three_d::Viewport,
+        clip: three_d::Viewport,
+        pixels_per_point: f32,
+    ) {
+        match ground_upload(self.ground_revision(), surface.map(|s| s.revision)) {
+            GroundUpload::Keep => {}
+            GroundUpload::Drop => self.ground = None,
+            GroundUpload::Build => {
+                if let Some(surface) = surface {
+                    let mesh = three_d::Mesh::new(&self.context, &ground_mesh(surface));
+                    let material = three_d::ColorMaterial::new_transparent(
+                        &self.context,
+                        &three_d::CpuMaterial {
+                            albedo: three_d::Srgba::WHITE,
+                            ..three_d::CpuMaterial::default()
+                        },
+                    );
+                    self.ground = Some((surface.revision, three_d::Gm::new(mesh, material)));
+                }
+            }
+        }
+        if ground != Ground::Scene {
+            return;
+        }
+        let Some((held, mesh)) = &self.ground else {
+            return;
+        };
+        if surface.map(|s| s.revision) != Some(*held) {
+            return;
+        }
+        let camera = camera(view, viewport, pixels_per_point);
+        three_d::RenderTarget::screen(&self.context, viewport.width, viewport.height)
+            .render_partially(clip.into(), &camera, [mesh], &[]);
+    }
+
+    /// The glyph pass: draw the glyphs for this frame into the region egui has given the
+    /// viewport.
     ///
     /// `viewport` and `clip` are in physical pixels with the origin at the bottom left,
     /// which is what OpenGL and three-d use; egui's rect is in points with the origin at
     /// the top left, so the caller converts. Getting that wrong draws the picture in the
     /// wrong half of the window, which is why the conversion is [`viewport_from`] and
     /// tested. `pixels_per_point` is egui's, because the 2D view's scale is in points.
-    pub fn paint(
+    pub fn paint_glyphs(
         &mut self,
         glyphs: &[TrackGlyph],
         view: &TopDownView,
@@ -152,6 +221,56 @@ impl SceneRenderer {
     #[must_use]
     pub fn instance_count(&self) -> u32 {
         self.glyph_mesh.geometry.instance_count()
+    }
+}
+
+/// What the ground pass does with its mesh, from the revision it holds and the revision
+/// the frame hands it (GAP-252, DN-35 §8.1 row b). Pure, so the upload's key is tested
+/// without a GL context.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroundUpload {
+    /// The mesh held is the one wanted, or there is none and none is wanted.
+    Keep,
+    /// A surface is wanted that the pass does not hold: build its mesh.
+    Build,
+    /// No surface is wanted: drop the mesh held.
+    Drop,
+}
+
+/// See [`GroundUpload`].
+#[must_use]
+pub fn ground_upload(held: Option<u64>, wanted: Option<u64>) -> GroundUpload {
+    match (held, wanted) {
+        (held, Some(wanted)) if held != Some(wanted) => GroundUpload::Build,
+        (Some(_), None) => GroundUpload::Drop,
+        _ => GroundUpload::Keep,
+    }
+}
+
+/// An egui colour as three-d takes it. `egui::Color32` stores premultiplied components and
+/// three-d's are not, so a translucent colour crosses unmultiplied, or the scene's ground
+/// would come out darker than the projection's by its alpha (DN-35 §6).
+#[must_use]
+pub fn srgba_of(colour: egui::Color32) -> three_d::Srgba {
+    let [r, g, b, a] = colour.to_srgba_unmultiplied();
+    three_d::Srgba::new(r, g, b, a)
+}
+
+/// The terrain surface as a CPU mesh: the same vertices, colours and triangles the
+/// projection draws (DN-35 §6), in ENU metres at their placed up.
+#[must_use]
+pub fn ground_mesh(surface: &TerrainSurface) -> three_d::CpuMesh {
+    three_d::CpuMesh {
+        positions: three_d::Positions::F32(
+            surface
+                .positions
+                .iter()
+                .map(|p| three_d::vec3(p[0], p[1], p[2]))
+                .collect(),
+        ),
+        indices: three_d::Indices::U32(surface.indices.clone()),
+        colors: Some(surface.colors.iter().map(|c| srgba_of(*c)).collect()),
+        ..three_d::CpuMesh::default()
     }
 }
 
@@ -427,6 +546,167 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A placed grid whose up runs from -430 m to 8 850 m, more relief than any DEM on
+    /// Earth, as a terrain surface.
+    #[allow(clippy::cast_precision_loss)]
+    fn tall_surface() -> TerrainSurface {
+        let (rows, columns) = (40_u32, 50_u32);
+        let mut positions = Vec::new();
+        for r in 0..rows {
+            for c in 0..columns {
+                let (e, n) = (
+                    c as f32 * 400.0 - 9_000.0,
+                    (rows - 1 - r) as f32 * 400.0 - 7_000.0,
+                );
+                let t = (r * columns + c) as f32 / (rows * columns - 1) as f32;
+                positions.push([e, n, -430.0 + t * 9_280.0]);
+            }
+        }
+        crate::layers::terrain_surface(
+            &theme::Palette::day(),
+            crate::layers::TerrainLayer {
+                positions: &positions,
+                rows,
+                columns,
+                revision: 1,
+            },
+        )
+        .expect("a surface")
+    }
+
+    /// GAP-252, DN-35 §8.1 row c: **the scene puts the ground where the projection does.**
+    /// Every vertex of a surface from -430 m to 8 850 m lands within 0.05 point of
+    /// [`TopDownView::project`], and inside the camera's near and far planes, at the zooms,
+    /// viewport shapes and display scales `the_camera_puts_a_track_where_the_projection_does`
+    /// uses.
+    #[test]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "test figures: small positive pixel sizes"
+    )]
+    fn the_camera_puts_the_ground_where_the_projection_does() {
+        let surface = tall_surface();
+        let (lo, hi) = surface
+            .positions
+            .iter()
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), p| {
+                (lo.min(p[2]), hi.max(p[2]))
+            });
+        assert!(
+            lo <= -430.0 && hi >= 8_849.0,
+            "the fixture's extremes: {lo} to {hi}"
+        );
+        for (meters_per_px, size_points, pixels_per_point) in [
+            (10.0, egui::vec2(800.0, 600.0), 1.0),
+            (40.0, egui::vec2(1_200.0, 500.0), 1.5),
+            (2.5, egui::vec2(400.0, 900.0), 2.0),
+        ] {
+            let view = TopDownView {
+                center_e: 1_500.0,
+                center_n: -700.0,
+                meters_per_px,
+            };
+            let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, size_points);
+            let viewport = three_d::Viewport::new_at_origo(
+                (size_points.x * pixels_per_point) as u32,
+                (size_points.y * pixels_per_point) as u32,
+            );
+            let camera = camera(&view, viewport, pixels_per_point);
+            for p in &surface.positions {
+                let expected =
+                    view.project([f64::from(p[0]), f64::from(p[1]), f64::from(p[2])], rect);
+                let drawn = on_screen(&camera, *p, size_points);
+                assert!(
+                    (drawn - expected).length() < 0.05,
+                    "at {meters_per_px} m/pt, {size_points:?} points, {pixels_per_point} px/pt: \
+                     {p:?} drawn at {drawn:?}, the projection puts it at {expected:?}"
+                );
+                let clip =
+                    camera.projection() * camera.view() * three_d::vec4(p[0], p[1], p[2], 1.0);
+                let depth = clip.z / clip.w;
+                assert!(
+                    (-1.0..=1.0).contains(&depth),
+                    "{p:?} is outside the near and far planes: depth {depth}"
+                );
+            }
+        }
+    }
+
+    /// GAP-252, DN-35 §8.1 row f: a translucent terrain colour reaches three-d with its
+    /// unmultiplied components and its alpha. Read premultiplied, as the opaque glyphs are,
+    /// the scene's ground would be darker than the projection's by the alpha.
+    #[test]
+    fn a_terrain_colour_crosses_unmultiplied() {
+        let palette = theme::Palette::day();
+        for t in [0.0, 0.4, 1.0] {
+            let colour = crate::layers::terrain_color(&palette, t);
+            let crossed = srgba_of(colour);
+            let ramp = crate::layers::terrain_rgb(t);
+            assert_eq!(crossed.a, palette.terrain_alpha);
+            for (got, want) in [
+                (crossed.r, ramp[0]),
+                (crossed.g, ramp[1]),
+                (crossed.b, ramp[2]),
+            ] {
+                assert!(got.abs_diff(want) <= 1, "{got} is not the ramp's {want}");
+            }
+            assert!(
+                colour.r() < crossed.r,
+                "the premultiplied component {} would have darkened it",
+                colour.r()
+            );
+        }
+    }
+
+    /// The mesh the ground pass uploads is the surface: the same vertices at their placed
+    /// up, the same triangles, and one colour per vertex.
+    #[test]
+    fn the_ground_mesh_is_the_surface() {
+        let surface = tall_surface();
+        let mesh = ground_mesh(&surface);
+        match &mesh.positions {
+            three_d::Positions::F32(positions) => {
+                assert_eq!(positions.len(), surface.positions.len());
+                for (got, want) in positions.iter().zip(&surface.positions) {
+                    assert_eq!([got.x, got.y, got.z], *want);
+                }
+            }
+            three_d::Positions::F64(_) => panic!("the surface is f32"),
+        }
+        match &mesh.indices {
+            three_d::Indices::U32(indices) => assert_eq!(indices, &surface.indices),
+            _ => panic!("the surface's indices are u32"),
+        }
+        assert_eq!(
+            mesh.colors.as_ref().map(Vec::len),
+            Some(surface.colors.len())
+        );
+        mesh.validate().expect("a valid mesh");
+    }
+
+    /// GAP-252, DN-35 §8.1 row b's GPU half: the ground pass builds its mesh when handed a
+    /// revision it does not hold, keeps it while handed the same one, and drops it when
+    /// handed none.
+    #[test]
+    fn the_ground_is_uploaded_once_per_revision() {
+        assert_eq!(ground_upload(None, None), GroundUpload::Keep);
+        assert_eq!(ground_upload(None, Some(1)), GroundUpload::Build);
+        assert_eq!(ground_upload(Some(1), Some(1)), GroundUpload::Keep);
+        assert_eq!(ground_upload(Some(1), Some(2)), GroundUpload::Build);
+        assert_eq!(ground_upload(Some(1), None), GroundUpload::Drop);
+        // A hundred frames at one revision: one build.
+        let mut held = None;
+        let mut builds = 0;
+        for _ in 0..100 {
+            if ground_upload(held, Some(9)) == GroundUpload::Build {
+                builds += 1;
+                held = Some(9);
+            }
+        }
+        assert_eq!(builds, 1);
     }
 
     /// A glyph is the 2D glyph's size on screen at every zoom, not a fixed size in

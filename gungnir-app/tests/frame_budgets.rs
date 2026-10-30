@@ -808,6 +808,127 @@ fn the_dead_spot_recompute_meets_mop_14() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// **Measured, not gated** (GAP-252, `docs/design/DN-35-terrain-in-the-three-d-scene.md`
+/// §8.1 row g, a draft until the owner agrees it). The viewport's egui pass over the
+/// 1 000 by 1 000 hills DEM, in the scene path with the GL pass holding the surface and in
+/// the projection, against the egui budget the row names; and the once-per-load build of
+/// the surface both renderers draw, which is what used to happen every frame.
+///
+/// Two halves. **Structural, asserted in every profile:** the scene's egui pass draws no
+/// terrain mesh, so the ground is not drawn twice and not built in egui per frame.
+/// **Timed, printed:** the build, and the p99 of each path. Release only, as every budget
+/// above, and not asserted, because the row is not yet a criterion.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn the_scene_path_draws_no_egui_terrain_and_the_surface_is_built_once() {
+    let dir = scratch("scene-ground");
+    let mut state = hills_desktop(&dir);
+    for _ in 0..12_000 {
+        update::tick(&mut state);
+        if !matches!(
+            state.terrain,
+            gungnir_app::terrain::TerrainStatus::Loading { .. }
+                | gungnir_app::terrain::TerrainStatus::NotConfigured
+        ) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(state.terrain.is_masking(), "{:?}", state.terrain);
+    let layer = gungnir_app::terrain::layer(&state.terrain, &state.data).expect("placed");
+    let palette = state.palette;
+
+    let started = Instant::now();
+    let surface = gungnir_viewport3d::layers::terrain_surface(&palette, layer).expect("a surface");
+    let build = started.elapsed();
+    let kept = surface.positions.len();
+
+    let inputs = || gungnir_viewport3d::layers::LayerInputs {
+        coverage: gungnir_viewport3d::layers::CoverageLayer::Circles {
+            circles: &[],
+            nominal: None,
+        },
+        gaps: &[],
+        hazards: &[],
+        geofences: &[],
+        predictions: &[],
+        terrain: Some(layer),
+        point_clouds: &[],
+        laydown_preview: None,
+        dense_group: None,
+        dead_spots: gungnir_viewport3d::layers::DeadSpotLayer::NotComputed { reason: "a test" },
+    };
+    let screen = || egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(1_600.0, 1_000.0),
+        )),
+        ..egui::RawInput::default()
+    };
+    let is_terrain = |s: &egui::epaint::ClippedShape| matches!(&s.shape, egui::Shape::Mesh(m) if m.vertices.len() == kept);
+    let ctx = egui::Context::default();
+    let mut viewport = gungnir_viewport3d::ViewportState::new();
+    viewport.view.meters_per_px = 20.0;
+    let plan = state.last_plan.clone();
+    let pass = |scene: bool, viewport: &mut gungnir_viewport3d::ViewportState| {
+        let started = Instant::now();
+        let output = ctx.run_ui(screen(), |ui| {
+            if scene {
+                gungnir_viewport3d::prepare_3d(
+                    ui,
+                    &palette,
+                    viewport,
+                    &[],
+                    &[],
+                    &plan,
+                    inputs(),
+                    Some(layer.revision),
+                );
+            } else {
+                gungnir_viewport3d::render(ui, &palette, viewport, &[], &[], &plan, inputs());
+            }
+        });
+        (
+            started.elapsed(),
+            output.shapes.iter().filter(|s| is_terrain(s)).count(),
+        )
+    };
+    // The first frame builds the surface; every frame after reads it.
+    let (load, _) = pass(true, &mut viewport);
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    for (scene, name) in [(true, "scene"), (false, "projection")] {
+        let mut samples = Vec::with_capacity(EGUI_PASSES);
+        for _ in 0..EGUI_PASSES {
+            let (took, terrain_meshes) = pass(scene, &mut viewport);
+            assert_eq!(
+                terrain_meshes,
+                usize::from(!scene),
+                "the {name}'s egui pass drew the terrain {terrain_meshes} times"
+            );
+            samples.push(took);
+        }
+        let worst = samples.iter().copied().max().unwrap_or_default();
+        let p = p99(&mut samples);
+        println!(
+            "viewport egui pass, {name} path, terrain {} vertices kept: p99 {p:?}, worst {worst:?} \
+             over {} passes (egui budget {BUDGET_EGUI_P99:?}, {profile} profile; not asserted, \
+             DN-35 §8.1 row g is a draft)",
+            kept,
+            samples.len()
+        );
+    }
+    println!(
+        "terrain surface built once per load: {build:?} over {} by {} vertices; the load frame \
+         took {load:?} ({profile} profile)",
+        layer.columns, layer.rows
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// A desktop over the hills DEM with three 12 km radars at standby, ready to switch on.
 fn hills_desktop(dir: &Path) -> AppState {
     let dem = dir.join("hills.asc");
