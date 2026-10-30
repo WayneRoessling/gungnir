@@ -3822,7 +3822,16 @@
   raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` §3 and §10"
   decider: Owner
   unblocks: GAP-227
-  outcome: ""
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, past the recommended default: staged first, and
+    fetched to fill gaps when connected.** The pinned store stays the ground every
+    deployment has. A desktop or node with a connection fetches the tiles the store lacks
+    into a fill cache of its own, never into the pinned store. The fetch needs an HTTP
+    client, whose crate is a §2.9 decision for the build, and a source the baseline names.
+    How a fetched tile is marked, and whether it enters line of sight, is D-164. Rejected:
+    staged only; fetched at run time with the store as a cache. See
+    `../../design/DN-36-staged-terrain-and-map-tiles.md` amendment 1.
 
 - id: D-161
   decision: The terrain store's tile format
@@ -3837,7 +3846,12 @@
   raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` §4.1 and §10"
   decider: Owner
   unblocks: GAP-227
-  outcome: ""
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default: a pyramid of GeoTIFF DEM
+    tiles** in the source's own CRS and vertical system, read by the existing loader and
+    placed by the existing path. Fetched fill tiles take the same form. Rejected:
+    quantized-mesh or 3D Tiles terrain.
 
 - id: D-162
   decision: Who stages the terrain store
@@ -3850,7 +3864,15 @@
   raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` §4.3 and §10"
   decider: Owner
   unblocks: GAP-227
-  outcome: ""
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, past the recommended default: a subcommand in the
+    binaries**, `terrain stage`, under `gungnir-app` and `gungnir-node` with one
+    implementation, as `account` is. It shares the fetch code D-160's fill needs, so the
+    network client enters the binaries once, for both. The pyramid's averaging is the
+    workspace's own code, held by DN-36 §8.1 row b. Rejected: a script outside the binary
+    with the pinned GDAL image. See `../../design/DN-36-staged-terrain-and-map-tiles.md`
+    amendment 1.
 
 - id: D-163
   decision: The order of GAP-227's parts
@@ -3861,6 +3883,26 @@
     readout, the declutter and the symbols proceed independently in parallel. The
     alternative: symbology and the readout first, the tiles after.
   raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` §1 and §10"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default: the staged terrain
+    first**; the cursor readout, the declutter and D-139's symbols proceed independently in
+    parallel. Rejected: symbology and the readout first.
+
+- id: D-164
+  decision: Whether a fetched fill tile enters line of sight
+  question: >-
+    Under D-160 a connected desktop or node fetches the tiles its pinned store lacks into a
+    fill cache. Nobody pinned those tiles. Recommended: a fill tile is drawn, marked on the
+    map and counted on PN-09 as fetched and unpinned, and enters line of sight, and so the
+    dead spots and every coverage claim, only once it is staged into the pinned store; a
+    sector whose coverage extent reaches past the pinned store says its line of sight there
+    is flat, as it does today past the one DEM. The alternative: a fill tile enters line of
+    sight as soon as its digest is recorded in the cache, with the coverage report saying
+    which of its ground is unpinned.
+  raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` amendment 1"
   decider: Owner
   unblocks: GAP-227
   outcome: ""

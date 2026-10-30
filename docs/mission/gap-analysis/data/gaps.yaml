@@ -12831,7 +12831,7 @@
   effort: L
   target: I4
   owner: UI engineer
-  deps: [D-139, D-160, D-161, D-162, D-163]
+  deps: [D-139, D-160, D-161, D-162, D-163, D-164]
   impact: >-
     The picture is a top-down local projection on a metric grid with no tiles or imagery,
     no latitude, longitude or MGRS readout, custom frame-by-affiliation glyphs rather than
@@ -12868,6 +12868,13 @@
       at the edge of the one DEM. DN-36 designs the action's basemap tiles as a staged
       store, terrain first and imagery on it after, and raises D-160 to D-163. Nothing is
       built; effort stays L.
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      D-160 to D-163 taken by the owner the same day, D-160 and D-162 past the default:
+      staged first and fetched to fill gaps when connected, and a `terrain stage`
+      subcommand in the binaries. GeoTIFF tiles and terrain first stand. DN-36 amendment 1
+      says what they change and raises D-164, whether a fetched tile enters line of sight.
 
 - id: GAP-228
   name: No operator-initiated escalation
