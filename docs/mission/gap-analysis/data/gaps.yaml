@@ -13624,3 +13624,40 @@
       in. Tested by `gungnir-app/tests/dead_spots.rs` and the comparison test in
       `gungnir-analytics/tests/shadow_geometry.rs`
       (`../../record/2026-10-30/gap-249-a-sensor-what-if-against-the.md`).
+- id: GAP-250
+  name: An empty approval queue in a rehearsal says there are no tracks while nine are on screen
+  type: Technical
+  caps: [CAP-4.1, CAP-5.9]
+  layer: UI and data ecosystem
+  sev: 3
+  effort: S
+  target: I4
+  owner: UI engineer
+  deps: [GAP-038, GAP-089]
+  impact: >-
+    A usability participant reads PN-06 telling them no plan can be produced because there
+    are no tracks, beside a picture of nine tracks and a decided plan, and is taught that the
+    queue's explanation of its own emptiness is not to be believed.
+  evidence: >-
+    `gungnir-app/src/decisions.rs::queue_empty_reason` took the tracking health flag as the
+    cause, and `gungnir-app/src/rehearsal.rs::RehearsalPicture` holds it false on purpose;
+    PN-07's tracking condition in `gungnir-app/src/workspace.rs` said the picture was not
+    being updated. Past that check, a single denial made the queue say every plan was denied
+    and nothing reached a human, though plans had been decided.
+  action: >-
+    Keep the flag. During a rehearsal, explain an empty queue by whether the seed has put a
+    track up, and name the scripted picture in PN-07's condition; say "denied every plan"
+    only while no plan has reached the queue.
+  ref: >-
+    The owner's round-1 screenshots of 2026-10-30; GAP-226; GAP-089
+  history:
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      Spotted by the owner in the screenshots taken checking the three-d scene (GAP-226).
+  - date: 2026-10-30
+    status: Closed
+    note: >-
+      Fixed in `queue_empty_reason` and `degraded_conditions`; the health flag is unchanged.
+      Tested by `gungnir-app/tests/rehearsal.rs`
+      (`../../record/2026-10-30/an-empty-queue-in-a-rehearsal-blamed-a.md`).

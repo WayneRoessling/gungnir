@@ -1679,7 +1679,16 @@ fn interim_item_condition(
 /// clear it, while the planner recovering and going stale again does.
 fn degraded_conditions(state: &AppState) -> Vec<(&'static str, String)> {
     let mut out = Vec::new();
-    if !state.health().tracking_healthy {
+    // GAP-250: a rehearsal's picture is updated, by its seed, so its condition says that
+    // rather than that the picture stands still. Still a condition: no sensor is behind it.
+    if state.rehearsal.is_some() {
+        out.push((
+            "tracking",
+            "the picture is a rehearsal's script, not a tracker's output; no sensor is \
+             updating it"
+                .to_owned(),
+        ));
+    } else if !state.health().tracking_healthy {
         out.push((
             "tracking",
             "the tracking pipeline is not running; the picture is not being updated".to_owned(),

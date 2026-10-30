@@ -525,9 +525,26 @@ pub fn verdict_sentence(verdict: PolicyVerdict) -> String {
 /// The order of the checks is the order of the causes: if no plan is being produced,
 /// that is the reason, whatever policy has been doing; only when plans are flowing and
 /// policy is refusing them all is the denial history the reason.
+///
+/// **A rehearsal's tracking flag is not a cause** (GAP-250). Its picture is a script, so
+/// the flag is false on purpose, yet the seed's tracks are on screen and the planner plans
+/// against them; "no tracks to plan against" was false there. During a rehearsal the
+/// question is whether the seed has put a track up yet.
+///
+/// **"Denied every plan" needs every plan denied.** A denial count alone also held once a
+/// plan had reached the queue and been decided or had expired, and "nothing reached a
+/// human" was then false; the decision history says whether anything did.
 #[must_use]
 pub fn queue_empty_reason(state: &AppState) -> EmptyBecause<'_> {
-    if !state.health().tracking_healthy {
+    use gungnir_command::ApprovalWorkflow;
+    if state.rehearsal.is_some() {
+        if state.tracking.tracks().is_empty() {
+            return EmptyBecause::NoPlanProduced {
+                because: "the rehearsal's seed has put no track on the picture yet, so \
+                          there is nothing to plan against",
+            };
+        }
+    } else if !state.health().tracking_healthy {
         return EmptyBecause::NoPlanProduced {
             because: "the tracking pipeline is not running, so there are no tracks \
                       to plan against",
@@ -546,7 +563,9 @@ pub fn queue_empty_reason(state: &AppState) -> EmptyBecause<'_> {
         };
     }
     match (&state.desk.denials.last_reason, state.desk.denials.count) {
-        (Some(reason), count) if count > 0 => EmptyBecause::AllDenied { reason, count },
+        (Some(reason), count) if count > 0 && state.desk.approvals.records().is_empty() => {
+            EmptyBecause::AllDenied { reason, count }
+        }
         _ => EmptyBecause::NothingPending,
     }
 }

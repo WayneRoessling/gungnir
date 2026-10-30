@@ -244,8 +244,9 @@ history, and an entry is never edited once it has merged.
 | GAP-247 | Terrain line of sight scans every DEM vertex per sample, on a report computed every frame | Technical | CAP-2.11, CAP-1.4 | 3 | 4 | S | 12 | I4 | Services engineer | Closed |
 | GAP-248 | A laydown option's dead spots are not computed on PN-16 | Mission | CAP-1.4, CAP-2.11 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
 | GAP-249 | A sensor change cannot be tried against the dead spots without editing the baseline | Mission | CAP-1.4, CAP-2.11, CAP-3.9 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
+| GAP-250 | An empty approval queue in a rehearsal says there are no tracks while nine are on screen | Technical | CAP-4.1, CAP-5.9 | 3 | 10 | S | 30 | I4 | UI engineer | Closed |
 
-Counts: 231 gaps, 6 mission, 225 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 232 gaps, 6 mission, 226 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3555,4 +3556,19 @@ Counts: 231 gaps, 6 mission, 225 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: Services engineer. Status: Closed.
 - Reference: `../../design/DN-34-sensor-dead-spots.md` amendment 4; GAP-246; GAP-248 (laydown options, the other way to ask).
 - Depends on: GAP-246, D-149, D-150, D-151, D-152.
+
+**GAP-250 An empty approval queue in a rehearsal says there are no tracks while nine are on screen**
+
+- Type: Technical.
+- Capability: CAP-4.1 Present for decision; CAP-5.9 Role workspaces and workflow.
+- History:
+  - 2026-10-30, Open: Spotted by the owner in the screenshots taken checking the three-d scene (GAP-226).
+  - 2026-10-30, Closed: Fixed in `queue_empty_reason` and `degraded_conditions`; the health flag is unchanged. Tested by `gungnir-app/tests/rehearsal.rs` (`../../record/2026-10-30/an-empty-queue-in-a-rehearsal-blamed-a.md`).
+- Evidence: `gungnir-app/src/decisions.rs::queue_empty_reason` took the tracking health flag as the cause, and `gungnir-app/src/rehearsal.rs::RehearsalPicture` holds it false on purpose; PN-07's tracking condition in `gungnir-app/src/workspace.rs` said the picture was not being updated. Past that check, a single denial made the queue say every plan was denied and nothing reached a human, though plans had been decided..
+- Severity: 3. Reach: 10 threads. Effort: S. Priority: 30.
+- Impact: A usability participant reads PN-06 telling them no plan can be produced because there are no tracks, beside a picture of nine tracks and a decided plan, and is taught that the queue's explanation of its own emptiness is not to be believed.
+- Closing action: Keep the flag. During a rehearsal, explain an empty queue by whether the seed has put a track up, and name the scripted picture in PN-07's condition; say "denied every plan" only while no plan has reached the queue.
+- Target: I4. Owner: UI engineer. Status: Closed.
+- Reference: The owner's round-1 screenshots of 2026-10-30; GAP-226; GAP-089.
+- Depends on: GAP-038, GAP-089.
 
