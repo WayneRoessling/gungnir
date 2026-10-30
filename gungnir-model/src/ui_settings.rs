@@ -204,15 +204,16 @@ pub struct UiSettings {
     #[serde(default)]
     pub layouts: BTreeMap<String, RoleLayout>,
     /// Draw the viewport with the three-d scene rather than the 2D projection
-    /// (GAP-022). **Default on**, by the owner's decision of 2026-09-05.
+    /// (GAP-022). **Default on**, by the owner's decisions of 2026-09-05 and 2026-10-30
+    /// (D-153).
     ///
-    /// The GL draw call has not been rendered anywhere anyone could see it, and there is
-    /// no headless probe for one, so this is the setting that decides whether an
-    /// unverified renderer or a verified one draws the picture. Two things follow from
-    /// it being on, and both are in place: the viewport's status line is drawn by egui
-    /// *over* the callback's output, so a GL draw that produces nothing still reports
-    /// how many tracks exist; and the operator can switch back to the projection at
-    /// runtime without editing a baseline or restarting.
+    /// The owner looked at the GL draw on 2026-10-30 and it passed (GAP-226), but there
+    /// is no headless probe for one, so this is the setting that decides whether a
+    /// renderer no test can see or one every test sees draws the picture. Two things
+    /// follow from it being on, and both are in place: the viewport's status line is
+    /// drawn by egui before the callback, which draws without clearing it, so a GL draw
+    /// that produces nothing still reports how many tracks exist; and the operator can
+    /// switch back to the projection at runtime without editing a baseline or restarting.
     #[serde(default = "default_scene_3d")]
     pub scene_3d: bool,
     /// Which colour variant the chrome renders (D-35, DS-07; GAP-095): `"day"` or

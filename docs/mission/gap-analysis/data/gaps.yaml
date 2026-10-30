@@ -12804,6 +12804,14 @@
       the display scaling, three-d clipped its draw to a box at the window's corner, and a
       glyph was 120 m whatever the zoom. The two comments and the IA sentence already
       agreed. The owner's look and the track table remain.
+  - date: 2026-10-30
+    status: In progress
+    note: >-
+      The owner looked at the scene the same day and reported all eight checks passed:
+      it attached, the tracks sat where the projection puts them through pan, zoom,
+      resizing and 100 % and 150 % scaling, and the colours matched
+      (`../../record/2026-10-30/the-owner-s-look-at-the-three-d.md`). The scene half is
+      done; no test can see the GL draw, so it stays one look. The track table remains.
 
 - id: GAP-227
   name: No basemap, no standard symbology, no declutter, no geographic readout

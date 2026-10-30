@@ -26,19 +26,22 @@
 //! is drawn is a pure function over plain data -- [`instances`] and [`camera`] -- and is
 //! tested; the GL shell around them is as thin as it can be made.
 //!
-//! **The drawn result has not been looked at.** No display was available where this was
-//! written, and unlike the egui panels there is no headless probe for a GL draw call:
-//! `RenderProbe` reads egui's shape list, and three-d does not produce one.
+//! **The drawn result has been seen once: by the owner, on 2026-10-30** (GAP-226), with
+//! every check in `docs/record/2026-10-30/the-owner-s-look-at-the-three-d.md`
+//! passed. No test can see it again. Unlike the egui panels there is no headless probe
+//! for a GL draw call -- `RenderProbe` reads egui's shape list, and three-d does not
+//! produce one -- so a change to this draw is unseen until somebody looks, and that
+//! record's checks are what to look for.
 //!
-//! This path is nonetheless the **default** (`ui.scene_3d`, on), by the owner's decision
-//! of 2026-09-05. Two things carry the weight that a verified renderer would otherwise
-//! have carried, and both are deliberate: the viewport's status line is painted by egui
-//! and this callback draws after it without clearing anything, so a draw that produces
-//! nothing still leaves the line reporting how many tracks exist -- an empty viewport
-//! that says twelve tracks is a fault someone can
-//! report, an empty viewport that says nothing is an operator concluding the sector is
-//! clear; and the operator can switch to the projection at runtime, without editing a
-//! baseline and restarting during whatever is happening at the time.
+//! This path is the **default** (`ui.scene_3d`, on), by the owner's decisions of
+//! 2026-09-05 and 2026-10-30 (D-153). Two things carry the weight that a test would
+//! otherwise have carried, and both are deliberate: the viewport's status line is
+//! painted by egui and this callback draws after it without clearing anything, so a
+//! draw that produces nothing still leaves the line reporting how many tracks exist --
+//! an empty viewport that says twelve tracks is a fault someone can report, an empty
+//! viewport that says nothing is an operator concluding the sector is clear; and the
+//! operator can switch to the projection at runtime, without editing a baseline and
+//! restarting during whatever is happening at the time.
 
 /// The OpenGL context type three-d accepts.
 ///
