@@ -3700,3 +3700,19 @@
   commit: 84fb96167c7d0f2b218411d0160544ad362b4b21
   pre_repository: false
   record: "GAP-246; DN-34 §11; docs/record/2026-10-29/dn-34-s-verification-rows-agreed-and-the.md; PR #258"
+
+- date: 2026-10-29
+  signer: Owner
+  subject: >-
+    DN-34 amendment 1, items 1 to 10: what the GAP-246 and GAP-247 build changed against
+    the design -- half-cell ray sampling (item 1, superseded since by amendment 2 item 3's
+    exact line of sight), the height field on the DEM's vertices, the sweep's error bound
+    handing doubtful cells to the reference, the grown types, one sensor's shadow chosen on
+    PN-11 rather than PN-10, the approach-report cache, the map's cells folded on the
+    worker, the two restated criteria, the measured recompute, and PN-09's terrain line.
+  kind: design-note
+  paths:
+  - docs/design/DN-34-sensor-dead-spots.md
+  commit: bd04573aa54a8624b31ad15f7fc0902e4254af33
+  pre_repository: false
+  record: "DN-34 amendment 1; GAP-246; GAP-247; docs/record/2026-10-29/gap-246-and-gap-247-terrain-dead-spots.md; PR #258"
