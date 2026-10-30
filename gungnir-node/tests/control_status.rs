@@ -848,7 +848,13 @@ async fn the_two_person_rule_needs_a_second_person_who_may_set_the_status() {
         })
     );
     node.settle().await;
-    let entries = node.audit_entries();
+    assert_two_person_audit(&node.audit_entries(), before);
+    node.cleanup();
+}
+
+/// The two-person test's audit trail after `before`: its five refusals under the
+/// Supervisor, then the change naming both people, and no passphrase anywhere.
+fn assert_two_person_audit(entries: &[AuditEntry], before: usize) {
     let under_action: Vec<&AuditEntry> = entries[before..]
         .iter()
         .filter(|e| e.action == actions::SET_CONTROL_STATUS)
@@ -877,7 +883,6 @@ async fn the_two_person_rule_needs_a_second_person_who_may_set_the_status() {
         !entries.iter().any(|e| e.detail.contains(PASSPHRASE)),
         "no passphrase reaches the record"
     );
-    node.cleanup();
 }
 
 /// A restart on the same journal folds the change back over the baseline; a baseline

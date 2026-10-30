@@ -3716,3 +3716,17 @@
   commit: bd04573aa54a8624b31ad15f7fc0902e4254af33
   pre_repository: false
   record: "DN-34 amendment 1; GAP-246; GAP-247; docs/record/2026-10-29/gap-246-and-gap-247-terrain-dead-spots.md; PR #258"
+- date: 2026-10-30
+  signer: Owner
+  subject: >-
+    The gungnir-ui row's evidence re-read at Scenario 4's count: the gating figure of
+    386 microseconds marked as measured on about four tracks, and the figures at 212 tracks
+    added, p99 0.92 ms for the operator's workspace and 0.37 ms for the commander's. The
+    criterion, egui pass p99 under 8 ms at Scenario 4 track counts, is unchanged.
+  kind: criterion
+  paths:
+  - docs/verification-capability-table.md
+  - gungnir-app/tests/frame_budgets.rs
+  commit: f9778a32b52795f09737b744e6f7488f2e4efb1b
+  pre_repository: false
+  record: "GAP-226; docs/record/2026-10-30/the-egui-gate-s-figure-re-read-at.md; docs/record/2026-10-30/gap-226-the-track-table-draws-only-the.md; PR #267; PR #268"
