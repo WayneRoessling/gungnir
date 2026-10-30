@@ -245,7 +245,7 @@ history, and an entry is never edited once it has merged.
 | GAP-248 | A laydown option's dead spots are not computed on PN-16 | Mission | CAP-1.4, CAP-2.11 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
 | GAP-249 | A sensor change cannot be tried against the dead spots without editing the baseline | Mission | CAP-1.4, CAP-2.11, CAP-3.9 | 2 | 4 | M | 8 | I4 | Services engineer | Closed |
 | GAP-250 | An empty approval queue in a rehearsal says there are no tracks while nine are on screen | Technical | CAP-4.1, CAP-5.9 | 3 | 10 | S | 30 | I4 | UI engineer | Closed |
-| GAP-251 | The three-d scene draws no terrain, and its one paint callback would cover every layer if it did | Technical | CAP-5.9, CAP-5.10 | 3 | 10 | M | 30 | I4 | UI engineer | Open |
+| GAP-252 | The three-d scene draws no terrain, and its one paint callback would cover every layer if it did | Technical | CAP-5.9, CAP-5.10 | 3 | 10 | M | 30 | I4 | UI engineer | Open |
 
 Counts: 233 gaps, 6 mission, 227 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
@@ -3573,7 +3573,7 @@ Counts: 233 gaps, 6 mission, 227 technical; 1 already covered by a plan in `../.
 - Reference: The owner's round-1 screenshots of 2026-10-30; GAP-226; GAP-089.
 - Depends on: GAP-038, GAP-089.
 
-**GAP-251 The three-d scene draws no terrain, and its one paint callback would cover every layer if it did**
+**GAP-252 The three-d scene draws no terrain, and its one paint callback would cover every layer if it did**
 
 - Type: Technical.
 - Capability: CAP-5.9 Role workspaces and workflow; CAP-5.10 Performance budgets.

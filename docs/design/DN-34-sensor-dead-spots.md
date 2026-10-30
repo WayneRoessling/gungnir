@@ -653,7 +653,7 @@ it slowly stands, now for a path that has been seen once. Rows 1 to 9 are unbloc
 §13.2 order. The sentences in §8 and §13 that say the draw has never been seen describe
 the note as written.
 
-## Amendment 6, 2026-10-30: §13.2 step 1 designed in DN-35 (GAP-251)
+## Amendment 6, 2026-10-30: §13.2 step 1 designed in DN-35 (GAP-252)
 
 Rows 1 and 2 of §13.1, the terrain in GL and the layers on it, are designed in
 `DN-35-terrain-in-the-three-d-scene.md`. Its answers change three statements in §13.1:

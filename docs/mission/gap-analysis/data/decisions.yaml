@@ -3709,7 +3709,7 @@
     as line geometry on the surface.
   raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §5.3 and §10"
   decider: Owner
-  unblocks: GAP-251
+  unblocks: GAP-252
   outcome: ""
 
 - id: D-155
@@ -3721,7 +3721,7 @@
     smooths away, so the two renderers no longer show the same ground.
   raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §6 and §10"
   decider: Owner
-  unblocks: GAP-251
+  unblocks: GAP-252
   outcome: ""
 
 - id: D-156
@@ -3734,7 +3734,7 @@
     added to the notices.
   raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §9 and §10"
   decider: Owner
-  unblocks: GAP-251
+  unblocks: GAP-252
   outcome: ""
 
 - id: D-157
@@ -3747,5 +3747,5 @@
     changes the verified projection in the same increment.
   raised_in: "`../../design/DN-35-terrain-in-the-three-d-scene.md` §10"
   decider: Owner
-  unblocks: GAP-251
+  unblocks: GAP-252
   outcome: ""

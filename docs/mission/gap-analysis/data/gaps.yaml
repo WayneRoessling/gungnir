@@ -13661,7 +13661,7 @@
       Fixed in `queue_empty_reason` and `degraded_conditions`; the health flag is unchanged.
       Tested by `gungnir-app/tests/rehearsal.rs`
       (`../../record/2026-10-30/an-empty-queue-in-a-rehearsal-blamed-a.md`).
-- id: GAP-251
+- id: GAP-252
   name: The three-d scene draws no terrain, and its one paint callback would cover every layer if it did
   type: Technical
   caps: [CAP-5.9, CAP-5.10]

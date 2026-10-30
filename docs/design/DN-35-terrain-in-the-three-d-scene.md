@@ -1,6 +1,6 @@
 # DN-35 Terrain in the three-d scene, with the layers on it
 
-Closes GAP-251: rows 1 and 2 of `DN-34-sensor-dead-spots.md` §13.1, taken together as §13.2
+Closes GAP-252: rows 1 and 2 of `DN-34-sensor-dead-spots.md` §13.1, taken together as §13.2
 step 1 orders them. Status: design, 2026-10-30; **nothing is built**. Four choices are
 raised for the owner as D-154 to D-157 (§10), each with a recommended default. The build
 waits for the owner's answers. What the owner has signed of this note is in
@@ -43,7 +43,7 @@ Read from the code at `f9778a32`:
 | The 2D terrain | `gungnir-viewport3d/src/layers.rs::draw_terrain_2d` | Builds an `egui::Mesh` **every frame**: folds every vertex of the full grid for the lowest and highest height, keeps every `terrain_stride`-th row and column so at most `TERRAIN_VERTEX_BUDGET` (16 384) vertices remain, projects each, colours it by `terrain_color` at `palette.terrain_alpha`, and leaves a hole wherever a corner has no height. No hillshade: the "shading" is the height ramp |
 | The terrain input | `layers::TerrainLayer` (positions, rows, columns), from `gungnir-app/src/terrain.rs::layer` | Borrowed from the loaded `TerrainMesh`. **Carries no revision.** The terrain loads once per session (`terrain::start` is idempotent), so nothing has needed one |
 | The GL scene | `gungnir-viewport3d/src/gl.rs::SceneRenderer` | One instanced sphere mesh and the palette, both created in `attach`. `paint` uploads the instances and calls `render_partially` into egui's clip box. Clears nothing |
-| The order on screen | `lib.rs::prepare_3d`, then `gungnir-app/src/main.rs` | `prepare_3d` paints the background, the metre grid, **every layer** through `draw_layers`, the bearing rays and the status line. The binary then adds the paint callback. **The GL draw lands on top of everything egui painted in the viewport before it.** Harmless while it draws only discs |
+| The order on screen | `lib.rs::prepare_3d`, then `gungnir-app/src/main.rs` | `prepare_3d` paints the background, the metre grid, **every layer** through `draw_layers`, the bearing rays and the status line. The binary then adds the paint callback. **The GL draw lands on top of everything egui painted in the viewport before it.** Harmless while it draws only discs. PR #269 (GAP-251, open as this is written) keeps that order up to the status line, then reserves a slot for the callback (`Prepared3d::scene_slot`, an `egui::Shape::Noop` the binary fills with `Painter::set`) and draws each track's frame, labels and assignment after it. A ground in that one callback would still cover every layer |
 | Depth | `gungnir-app/src/main.rs`'s `NativeOptions` | Sets only the renderer. eframe 0.34.3's default `depth_buffer` is **0** (`epi.rs`: "egui doesn't need the depth buffer"). **The window has no depth buffer**, so draw order is the only depth there is. three-d's materials enable a depth test, and with no depth buffer OpenGL passes every fragment |
 | The camera | `gl::camera` | Orthographic, straight down, 100 km above the origin's up, far plane at 200 km. `the_camera_puts_a_track_where_the_projection_does` holds a point from −40 m to 9 000 m up to `TopDownView::project` |
 | The one-`draw_layers` rule | `lib.rs::draw_layers` | One function draws terrain, point clouds, dead spots, geofences, rings, gaps, hazards, predictions, the dense group, the laydown preview and the hidden-layer sentence, for both renderers. Terrain, point clouds, predictions, the dense group and the preview have no toggle |
@@ -73,8 +73,8 @@ float at ground level zero while the ground rises". It has four parts.
    the tilt, and §13.1 row 3 owns it.
 2. **Draw order is the depth, and the order is the projection's.** Background and grid
    (egui), then the ground (GL), then the layers (egui, one `draw_layers`), then the bearing
-   rays (egui), then the glyphs (GL), then the status line, the track labels and the corner
-   control (egui). That is the projection's own order, with two of its steps drawn by GL.
+   rays (egui), then the glyphs (GL), then each track's frame, labels and assignment (egui,
+   PR #269), then the status line and the corner control (egui). That is the projection's own order, with two of its steps drawn by GL.
    "A track symbol is never under anything" (GAP-007) holds because the glyph pass comes
    after every layer, not because of a depth test. A track flying lower than the ground's
    up at its position, which a sensor's height error can produce over a ridge, is still
@@ -102,13 +102,14 @@ float at ground level zero while the ground rises". It has four parts.
 - `paint_glyphs(...)` is today's `paint`, unchanged.
 
 Each pass is its own `egui::PaintCallback`. The binary builds them, because the callback
-type belongs to `egui_glow` and only the binary depends on eframe. The viewport crate places
-them. `prepare_3d` takes a builder, `&dyn Fn(egui::Rect, ScenePass) -> egui::PaintCallback`
-with `ScenePass::{Ground, Glyphs}`, and adds each callback to the painter at its place in
-the order of §4 item 2. **The order is one function in `gungnir-viewport3d`, and a test can
-read it** (§8 row e). The status line, the hidden-layer sentence and the corner control move
-after the glyph pass, which also stops the discs drawing over the status line as they can
-today.
+type belongs to `egui_glow` and only the binary depends on eframe. The viewport crate decides
+where they go, by the slot PR #269 introduces: `prepare_3d` reserves a place in the paint
+order with an `egui::Shape::Noop`, and the binary fills it with `Painter::set`. This note
+adds a second slot. `Prepared3d` gains `ground_slot`, reserved after the grid and before
+`draw_layers`, beside #269's `scene_slot` for the glyph pass. **The order is one function in
+`gungnir-viewport3d`, and a test can read it** (§8 row e), as #269's tests already read
+what is painted after the scene's slot. The status line and the corner control move after
+the glyph pass, which also stops the discs drawing over the status line as they can today.
 
 ### 5.2 The rule
 
@@ -239,7 +240,7 @@ human-owned. These are drafts until the owner agrees them, and are not gates.
 | b. Built once | the same | Over a hundred frames at one revision the surface is built once. A new revision rebuilds it once. `None` drops it. The GL upload's key, `(revision held, revision wanted)`, is the same pure test |
 | c. The scene puts the ground where the projection does | `gl.rs` tests, beside `the_camera_puts_a_track_where_the_projection_does` | Every surface vertex of a fixture whose up runs from −430 m to 8 850 m lands within 0.05 point of `TopDownView::project`, and inside the camera's near and far planes, at the three zooms, viewport shapes and display scales the existing test uses |
 | d. The ground is drawn exactly once | `ground_source` unit test | For every pairing of wanted and resident revision, `None` included, `Scene` only when both are `Some` and equal. A frame driven through the hand-over draws the 2D ground on the load frame and the GL ground after |
-| e. The order on screen | a viewport frame through `RenderProbe` | In the scene: background, grid, ground callback, dead-spot image, the layers in `draw_layers`' order, the bearing rays, the glyph callback, the status line, the corner control. With `Ground::Overlay`: the terrain mesh before the dead-spot image and no ground callback. **`DrawnFrame` learns to record a paint callback's place in the draw order**, a small change to `gungnir-ui/src/harness.rs`, which today keeps text only |
+| e. The order on screen | `gungnir-viewport3d/src/lib.rs` tests, walking egui's output shapes with stand-in callbacks in both slots, as PR #269's `painted_over_the_scene` does for one | In the scene: background, grid, ground callback, dead-spot image, the layers in `draw_layers`' order, the bearing rays, the glyph callback, each track's frame and labels, the status line. With `Ground::Overlay`: the terrain mesh before the dead-spot image and the ground slot left empty |
 | f. Colours cross unmultiplied | `gl.rs` unit test | A `terrain_color` at `terrain_alpha` reaches three-d's `Srgba` with the unmultiplied components and that alpha |
 | g. The scene's egui pass with terrain | `gungnir-app/tests/frame_budgets.rs`, release | Over the 1 000 by 1 000 synthetic DEM in the scene path: the egui pass p99 within the existing 8 ms budget and no terrain mesh in its shape list. The once-per-load build is measured and stated |
 
@@ -289,12 +290,11 @@ the look should be over real terrain instead.
 
 - `layers::TerrainLayer` gains `revision: u64`. `layers::TerrainSurface`,
   `layers::terrain_surface`, `Ground` and `ground_source` are new.
-- `draw_layers` takes a `Ground`. `prepare_3d` takes the pass builder of §5.1 and places
-  both callbacks itself.
+- `draw_layers` takes a `Ground`. `Prepared3d` gains `ground_slot` beside PR #269's
+  `scene_slot`, and the binary sets the ground callback into it.
 - `gl::SceneRenderer::paint` becomes `paint_ground` and `paint_glyphs`, and the renderer
   reports the surface revision it holds.
 - `ViewportState` holds the `Arc<TerrainSurface>`.
-- `gungnir_ui::harness::DrawnFrame` records a paint callback's place in the draw order.
 - PN-09's terrain line says which renderer draws the ground in the scene.
 
 **No dependency edge**: `gungnir-viewport3d` already has `three-d` and `egui`, and
@@ -306,17 +306,16 @@ schema change**: `SCHEMA_VERSION` stands. No `NotImplemented` is added or remove
 - **No tilt, and no depth buffer.** §13.1 row 3, and §4 item 4.
 - **No drape in GL**, under D-154's default.
 - **No hillshade, no finer surface**, under D-157's and D-155's defaults.
-- **No change to the glyphs, the bearing rays, or the 2D-only track details.** A separate
-  session is moving track labels, heading lines and assignment lines into the scene. Under
-  §5.1 they are egui shapes drawn after the glyph pass. Both changes touch
-  `gungnir-viewport3d/src/lib.rs::prepare_3d` and `gl.rs`, so whichever lands second rebases
-  onto the other through its pull request.
+- **No change to the glyphs, the bearing rays, or the track details.** PR #269 (GAP-251)
+  draws each track's frame, labels and assignment over the scene's discs, as egui shapes
+  after the glyph slot. This note builds on that slot and keeps those shapes where #269
+  puts them. The build of this note starts from main with #269 merged.
 - **No point clouds in GL** (§13.1 row 7) and **no basemap** (row 8).
 
 ## Traceability
 
-GAP-251; D-154, D-155, D-156, D-157; DN-34 §13.1 rows 1 and 2, §13.2 step 1, §13.3,
-amendment 5; GAP-226, D-153; GAP-007, GAP-022, GAP-023; CAP-5.9, CAP-5.10; PN-02, PN-09;
+GAP-252; D-154, D-155, D-156, D-157; DN-34 §13.1 rows 1 and 2, §13.2 step 1, §13.3,
+amendment 5; GAP-226, D-153; GAP-251 (PR #269); GAP-007, GAP-022, GAP-023; CAP-5.9, CAP-5.10; PN-02, PN-09;
 `ARCHITECTURE.md` §9 and §10 items 52 and 53; `../rust-ui-architecture-coding-standards.md`
 §5; `../record/2026-10-30/the-owner-s-look-at-the-three-d.md`;
 `../performance-budgets.md` (the egui pass).
