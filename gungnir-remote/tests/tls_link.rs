@@ -440,8 +440,12 @@ async fn a_serving_certificate_does_not_authenticate_a_client() {
     .await;
     assert!(!peer.connected());
     let reason = peer.last_error().unwrap_or_default();
+    // Refused at the handshake: the request failed with no HTTP response at all. A refusal
+    // by the agreement would have answered, and reads "snapshot returned 403 Forbidden".
+    // This once asserted only that the reason held no "403", which the URL's ephemeral port
+    // satisfies whenever it starts with 403 (CI on PR #263: port 40341).
     assert!(
-        !reason.contains("403"),
+        reason.starts_with("snapshot request failed"),
         "refused at the handshake, not by the agreement: {reason}"
     );
 }
