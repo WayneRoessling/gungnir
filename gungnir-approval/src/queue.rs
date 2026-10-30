@@ -92,7 +92,7 @@ impl DenialHistory {
 /// The authority engine is the one engine of the four that reads the role at all
 /// (`chain::offer_to`'s own doc comment), so an insufficient-authority denial is exactly
 /// the refusal a different role might not get. Every other denial is everybody's.
-fn denied_for_authority(verdict: &PolicyVerdict) -> bool {
+fn denied_for_authority(verdict: PolicyVerdict) -> bool {
     matches!(
         verdict,
         PolicyVerdict::Denied {
@@ -167,7 +167,7 @@ impl ApprovalDesk {
             return superseded;
         }
         let verdict = crate::chain::evaluate(cx, policy, &plan);
-        if denied_for_authority(&verdict) {
+        if denied_for_authority(verdict) {
             let offering = crate::chain::offer_to(cx, policy, &plan);
             if let Some(role) = offering.offered_to {
                 return self.queue_evaluated(
