@@ -3730,3 +3730,15 @@
   commit: f9778a32b52795f09737b744e6f7488f2e4efb1b
   pre_repository: false
   record: "GAP-226; docs/record/2026-10-30/the-egui-gate-s-figure-re-read-at.md; docs/record/2026-10-30/gap-226-the-track-table-draws-only-the.md; PR #267; PR #268"
+- date: 2026-10-30
+  signer: Owner
+  subject: >-
+    gungnir-approval's denied_for_authority takes PolicyVerdict by value rather than by
+    reference, clearing clippy's trivially_copy_pass_by_ref at queue.rs:95. A private
+    function with one caller; what it matches, and so every verdict's answer, is unchanged.
+  kind: code
+  paths:
+  - gungnir-approval/src/queue.rs
+  commit: 155ca8213320d63fd2ede4205e5bf1560644658a
+  pre_repository: false
+  record: "D-65; PR #272; PR #276"

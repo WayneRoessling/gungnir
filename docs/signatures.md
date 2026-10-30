@@ -21,7 +21,7 @@ the owner reviewed. A signature from before the repository existed on 2026-09-07
 the first commit and is marked as such. An entry is never edited; a withdrawn signature
 gets a new entry.
 
-279 signatures.
+280 signatures.
 
 | Date | Signer | What was signed | Kind | Paths | Commit | Record |
 |---|---|---|---|---|---|---|
@@ -304,3 +304,4 @@ gets a new entry.
 | 2026-10-29 | Owner | DN-34's six verification rows agreed as criteria and made gates, as section 11 drafts them and amendment 1 item 8 restates two: terrain shadow geometry, the sweep against the reference, shadow monotonicity, agreement with the approach report, the dead-spot layer, and the MOP-14 recompute budget, the last asserted in the release profile. | criterion | `docs/design/DN-34-sensor-dead-spots.md`<br>`gungnir-analytics/tests/shadow_geometry.rs`<br>`gungnir-app/tests/dead_spots.rs`<br>`gungnir-app/tests/frame_budgets.rs` | `84fb96167c` | GAP-246; DN-34 §11; docs/record/2026-10-29/dn-34-s-verification-rows-agreed-and-the.md; PR #258 |
 | 2026-10-29 | Owner | DN-34 amendment 1, items 1 to 10: what the GAP-246 and GAP-247 build changed against the design -- half-cell ray sampling (item 1, superseded since by amendment 2 item 3's exact line of sight), the height field on the DEM's vertices, the sweep's error bound handing doubtful cells to the reference, the grown types, one sensor's shadow chosen on PN-11 rather than PN-10, the approach-report cache, the map's cells folded on the worker, the two restated criteria, the measured recompute, and PN-09's terrain line. | design-note | `docs/design/DN-34-sensor-dead-spots.md` | `bd04573aa5` | DN-34 amendment 1; GAP-246; GAP-247; docs/record/2026-10-29/gap-246-and-gap-247-terrain-dead-spots.md; PR #258 |
 | 2026-10-30 | Owner | The gungnir-ui row's evidence re-read at Scenario 4's count: the gating figure of 386 microseconds marked as measured on about four tracks, and the figures at 212 tracks added, p99 0.92 ms for the operator's workspace and 0.37 ms for the commander's. The criterion, egui pass p99 under 8 ms at Scenario 4 track counts, is unchanged. | criterion | `docs/verification-capability-table.md`<br>`gungnir-app/tests/frame_budgets.rs` | `f9778a32b5` | GAP-226; docs/record/2026-10-30/the-egui-gate-s-figure-re-read-at.md; docs/record/2026-10-30/gap-226-the-track-table-draws-only-the.md; PR #267; PR #268 |
+| 2026-10-30 | Owner | gungnir-approval's denied_for_authority takes PolicyVerdict by value rather than by reference, clearing clippy's trivially_copy_pass_by_ref at queue.rs:95. A private function with one caller; what it matches, and so every verdict's answer, is unchanged. | code | `gungnir-approval/src/queue.rs` | `155ca82133` | D-65; PR #272; PR #276 |
