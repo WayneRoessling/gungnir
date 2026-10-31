@@ -174,7 +174,16 @@ pub(crate) fn context(
     state: &AppState,
 ) -> Result<(Arc<HeightField>, gungnir_model::LocalFrame), String> {
     let terrain = match (&state.terrain, state.height_field.as_ref()) {
-        (TerrainStatus::Loaded { .. }, Some(field)) => Arc::clone(field),
+        // GAP-227 (DN-36 §5.2): a staged store's field is painted from the pinned store over
+        // the coverage extent, never the view.
+        (
+            TerrainStatus::Loaded { .. }
+            | TerrainStatus::StoreVerified {
+                sight: crate::terrain::SightState::Built { .. },
+                ..
+            },
+            Some(field),
+        ) => Arc::clone(field),
         (TerrainStatus::NotConfigured, _) => {
             return Err("no DEM is configured in this baseline (terrain)".to_owned())
         }

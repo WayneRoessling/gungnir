@@ -152,7 +152,12 @@ fn lendable(state: &AppState) -> Result<PlacedGround, String> {
             return Err(format!("{path} did not load: {reason}"))
         }
         TerrainStatus::Loaded { path, .. } => path,
-        status @ TerrainStatus::StoreVerified { .. } => return Err(status.line()),
+        TerrainStatus::StoreVerified { store, .. } => {
+            return Err(format!(
+                "{store} is a staged store, and the ground a UAS height is placed on reads one \
+                 placed DEM (GAP-199); placing it on a store is not built (GAP-227)"
+            ))
+        }
     };
     let Some(sigma_m) = state
         .config
