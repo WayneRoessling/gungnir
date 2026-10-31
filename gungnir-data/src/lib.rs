@@ -20,6 +20,7 @@ pub mod geospatial;
 pub mod nad83;
 pub mod pointcloud;
 pub mod scientific;
+pub mod terrain_store;
 
 use std::path::PathBuf;
 
@@ -31,6 +32,15 @@ pub enum LoadRequest {
     CopcBounded(PathBuf, [f32; 6]),
     VtkMesh(PathBuf),
     Terrain(PathBuf),
+    /// A staged terrain store's directory and the manifest digest the baseline pins
+    /// (GAP-227, DN-36 §4.2): opened and verified off the render thread.
+    TerrainStore(PathBuf, String),
+    /// One tile of a store already opened, verified against its manifest entry and
+    /// meshed (DN-36 §5.1).
+    TerrainTile(
+        std::sync::Arc<terrain_store::TerrainStore>,
+        terrain_store::TileKey,
+    ),
     GltfAsset(PathBuf),
 }
 
@@ -39,6 +49,9 @@ pub enum LoadResult {
     CopcBounded(Result<pointcloud::PointBuffer, DataError>),
     VtkMesh(Result<scientific::MeshData, DataError>),
     Terrain(Result<geospatial::TerrainMesh, DataError>),
+    /// Boxed: a verified store carries its whole manifest.
+    TerrainStore(Result<Box<terrain_store::TerrainStore>, terrain_store::StoreError>),
+    TerrainTile(Result<geospatial::TerrainMesh, terrain_store::TileError>),
     GltfAsset(Result<assets::StaticMesh, DataError>),
 }
 
@@ -90,6 +103,19 @@ pub fn spawn_loader() -> (
                 }
                 LoadRequest::VtkMesh(path) => LoadResult::VtkMesh(scientific::load_vtk(&path)),
                 LoadRequest::Terrain(path) => LoadResult::Terrain(geospatial::load_dem(&path)),
+                LoadRequest::TerrainStore(dir, sha256) => LoadResult::TerrainStore(
+                    terrain_store::TerrainStore::open(&dir, &sha256).map(Box::new),
+                ),
+                LoadRequest::TerrainTile(store, key) => {
+                    LoadResult::TerrainTile(store.read_tile(key).and_then(|grid| {
+                        geospatial::TerrainMesh::from_grid(&grid).map_err(|e| {
+                            terrain_store::TileError {
+                                key,
+                                reason: terrain_store::TileRefusal::NotItsEntry(e.to_string()),
+                            }
+                        })
+                    }))
+                }
                 LoadRequest::GltfAsset(path) => LoadResult::GltfAsset(assets::load_gltf(&path)),
             };
             // The receiver is gone when the desktop has closed; nothing to report to.

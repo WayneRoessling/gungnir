@@ -324,6 +324,14 @@ fn describe(result: &LoadResult) -> String {
         LoadResult::CopcBounded(r) => format!("copc: {}", state(r)),
         LoadResult::VtkMesh(r) => format!("vtk: {}", state(r)),
         LoadResult::Terrain(r) => format!("terrain: {}", state(r)),
+        LoadResult::TerrainStore(r) => format!(
+            "terrain store: {}",
+            r.as_ref().map_or_else(ToString::to_string, |_| "ok".into())
+        ),
+        LoadResult::TerrainTile(r) => format!(
+            "terrain tile: {}",
+            r.as_ref().map_or_else(ToString::to_string, |_| "ok".into())
+        ),
         LoadResult::GltfAsset(r) => format!("gltf: {}", state(r)),
     }
 }

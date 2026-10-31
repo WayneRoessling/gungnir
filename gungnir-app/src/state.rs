@@ -95,6 +95,10 @@ pub struct AppState {
     /// desktop reads (GAP-247, [`crate::terrain::height_field_of`]). `Some` exactly when the
     /// terrain is loaded; shared with the dead-spot worker without a copy.
     pub height_field: Option<std::sync::Arc<gungnir_analytics::HeightField>>,
+    /// The staged terrain store the baseline pins, once its manifest is verified (GAP-227,
+    /// `docs/design/DN-36-staged-terrain-and-map-tiles.md` §4.2); shared with the loader
+    /// thread, which reads its tiles. `None` for a single DEM or none.
+    pub terrain_store: Option<std::sync::Arc<gungnir_data::terrain_store::TerrainStore>>,
     /// The coverage reports computed so far, by their inputs, so the several callers a
     /// frame has share one computation (GAP-247, [`crate::sustainment::CoverageCache`]).
     pub coverage_cache: crate::sustainment::CoverageCache,
@@ -819,6 +823,7 @@ impl AppState {
             terrain_feeds: feeds.terrain.clone(),
             terrain_lent: None,
             height_field: None,
+            terrain_store: None,
             coverage_cache: crate::sustainment::CoverageCache::default(),
             dead_spots: crate::dead_spots::DeadSpots::default(),
             registration: crate::pointcloud::RegistrationOutcome::NoPair,

@@ -60,6 +60,9 @@ proj-sys = { workspace = true, optional = true }
 # The EGM2008 geoid grid is accepted only by its SHA-256 (GAP-108, `geoid::GeoidGrid`);
 # §2.9's `sha2` row, "dataset hashes".
 sha2.workspace = true
+# A staged terrain store's manifest is JSON (GAP-227, DN-36 §4.2); §2.9's serde rows.
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 crossbeam-channel.workspace = true

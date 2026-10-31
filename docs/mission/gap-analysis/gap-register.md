@@ -221,7 +221,7 @@ history, and an entry is never edited once it has merged.
 | GAP-224 | The desktop has no keyboard operation | Technical | CAP-5.9 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
 | GAP-225 | The map cannot hook a track and draws no defended assets or effectors | Technical | CAP-5.9, CAP-3.1, CAP-4.1 | 4 | 10 | M | 40 | I4 | UI engineer | Open |
 | GAP-226 | The three-d scene is the default and has never been seen; the track table is not virtualised | Technical | CAP-5.10, CAP-5.9 | 2 | 10 | S | 20 | I4 | UI engineer | Closed |
-| GAP-227 | No basemap, no standard symbology, no declutter, no geographic readout | Technical | CAP-2.10, CAP-5.9 | 3 | 10 | L | 30 | I4 | UI engineer | Open |
+| GAP-227 | No basemap, no standard symbology, no declutter, no geographic readout | Technical | CAP-2.10, CAP-5.9 | 3 | 10 | L | 30 | I4 | UI engineer | In progress |
 | GAP-228 | No operator-initiated escalation | Technical | CAP-3.7, CAP-3.6 | 3 | 7 | S | 21 | I4 | Security engineer (human-owned crate) | Open |
 | GAP-229 | No system safety assessment for the engagement authority path | Technical | CAP-4.3, CAP-3.6 | 4 | 7 | L | 28 | I4 | Owner | Open |
 | GAP-230 | No cybersecurity accreditation package | Technical | CAP-6.5, CAP-6.4 | 4 | 2 | L | 8 | I4 | Owner | Open |
@@ -3259,11 +3259,12 @@ Counts: 241 gaps, 6 mission, 235 technical; 1 already covered by a plan in `../.
   - 2026-10-30, Open: D-160 to D-163 taken by the owner the same day, D-160 and D-162 past the default: staged first and fetched to fill gaps when connected, and a `terrain stage` subcommand in the binaries. GeoTIFF tiles and terrain first stand. DN-36 amendment 1 says what they change and raises D-164, whether a fetched tile enters line of sight.
   - 2026-10-30, Open: D-164 taken by the owner the same day, to the default: a fetched fill tile is drawn and marked, and enters line of sight only once staged into the pinned store (DN-36 amendment 2). Every DN-36 decision is taken; nothing is built.
   - 2026-10-30, Open: The other three parts designed in DN-37: D-139's MIL-STD-2525D symbols, a cursor readout in MGRS and degrees-minutes-seconds, and declutter. The owner walked D-165 to D-172 the same day and took each to its default. The symbols are built for four identities until GAP-216 widens the type; nothing is built.
+  - 2026-10-30, In progress: DN-36's store reader built. A baseline's terrain names one DEM `path` or a staged `store` pinned by `manifest_sha256`; `gungnir_data::terrain_store` verifies the manifest and each tile by digest, refusing by name, and stages a pyramid by averaging; the desktop opens a pinned store off the render thread and places tiles through the single DEM's path. A verified store is not yet drawn or read by line of sight, and PN-09 says so. DN-36 amendment 3 records what the build made exact.
 - Evidence: `gungnir-viewport3d/src/interaction.rs:94-123`; `gungnir-viewport3d/src/tracks.rs:170-230`; no `2525` in any source; `gungnir-viewport3d/src/streaming/`.
 - Severity: 3. Reach: 10 threads. Effort: L. Priority: 30.
 - Impact: The picture is a top-down local projection on a metric grid with no tiles or imagery, no latitude, longitude or MGRS readout, custom frame-by-affiliation glyphs rather than a standard set, fixed-offset labels that overprint on a dense picture, and 3D Tiles streaming that is three `NotImplemented` stubs. The ground under the picture is one DEM file, and stops at its edge: zoomed out, there is no terrain beyond it and nothing says why.
 - Closing action: Per D-139 on symbology; a cursor latitude, longitude and MGRS readout; speed-scaled leaders; label collision avoidance; basemap tiles as the first consumer of the streaming stubs, widened by DN-36 to staged terrain tiles first and imagery on the same store after, under D-160 to D-163.
-- Target: I4. Owner: UI engineer. Status: Open.
+- Target: I4. Owner: UI engineer. Status: In progress.
 - Reference: GAP-022; `../../review/2026-10-26-comprehensive-review.md` §8 finding 6; `../../design/DN-36-staged-terrain-and-map-tiles.md`; `../../design/DN-37-symbology-cursor-readout-and-declutter.md`.
 - Depends on: D-139, D-160, D-161, D-162, D-163, D-164, D-165, D-166, D-167, D-168, D-169, D-170, D-171, D-172.
 

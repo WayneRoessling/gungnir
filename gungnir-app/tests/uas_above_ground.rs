@@ -52,7 +52,9 @@ fn desktop(name: &str, vertical_sigma_m: Option<f64>) -> (AppState, PathBuf) {
         data_dir: dir.to_string_lossy().into_owned(),
         origin: Some(ORIGIN),
         terrain: Some(TerrainConfig {
-            path: dem.to_string_lossy().into_owned(),
+            path: Some(dem.to_string_lossy().into_owned()),
+            store: None,
+            manifest_sha256: None,
             frame: "local-enu".into(),
             vertical: None,
             nad83_realisation: None,

@@ -108,7 +108,9 @@ fn desktop_with(
 ) -> (AppState, PathBuf) {
     let dir = scratch(name);
     let terrain = terrain.then(|| TerrainConfig {
-        path: ridge_dem(&dir),
+        path: Some(ridge_dem(&dir)),
+        store: None,
+        manifest_sha256: None,
         frame: "local-enu".into(),
         vertical: None,
         nad83_realisation: None,

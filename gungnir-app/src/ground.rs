@@ -152,6 +152,7 @@ fn lendable(state: &AppState) -> Result<PlacedGround, String> {
             return Err(format!("{path} did not load: {reason}"))
         }
         TerrainStatus::Loaded { path, .. } => path,
+        status @ TerrainStatus::StoreVerified { .. } => return Err(status.line()),
     };
     let Some(sigma_m) = state
         .config

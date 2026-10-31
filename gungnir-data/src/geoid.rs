@@ -602,7 +602,7 @@ impl GeoidGrid {
 
 /// The SHA-256 of everything `reader` yields, lowercase hexadecimal, read in 1 MiB
 /// pieces so an 80 MB grid is never held whole.
-fn sha256_hex(mut reader: impl Read) -> std::io::Result<String> {
+pub(crate) fn sha256_hex(mut reader: impl Read) -> std::io::Result<String> {
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; 1 << 20];
     loop {

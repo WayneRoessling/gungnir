@@ -12889,6 +12889,15 @@
       readout in MGRS and degrees-minutes-seconds, and declutter. The owner walked D-165 to
       D-172 the same day and took each to its default. The symbols are built for four
       identities until GAP-216 widens the type; nothing is built.
+  - date: 2026-10-30
+    status: In progress
+    note: >-
+      DN-36's store reader built. A baseline's terrain names one DEM `path` or a staged
+      `store` pinned by `manifest_sha256`; `gungnir_data::terrain_store` verifies the manifest
+      and each tile by digest, refusing by name, and stages a pyramid by averaging; the
+      desktop opens a pinned store off the render thread and places tiles through the single
+      DEM's path. A verified store is not yet drawn or read by line of sight, and PN-09 says
+      so. DN-36 amendment 3 records what the build made exact.
 
 - id: GAP-228
   name: No operator-initiated escalation
