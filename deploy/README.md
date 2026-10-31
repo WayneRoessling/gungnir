@@ -609,6 +609,46 @@ file dropped beside a deployment:
    `proj-crs` job fetches every grid the manifest lists and runs the full-grid tests.
 5. **Install it** as above; PN-09 gains its line.
 
+## Staging terrain
+
+A baseline names its ground either as one DEM file (`terrain.path`) or as a staged store
+of tiles (`terrain.store`, pinned by `terrain.manifest_sha256`;
+`docs/design/DN-36-staged-terrain-and-map-tiles.md`). A store is drawn by view past the edge
+of any one file, and line of sight reads it over the sensors' coverage. The desktop and the
+node only ever read a store. Staging one is done once, before deployment, with the same
+command in either binary:
+
+```sh
+gungnir-node terrain stage \
+    --source USGS_1_n44w124.tif \
+    --source-sha256 aef61c1fb0674819a939dc134bbc14a8e534ccda3678c06ab44f21ce720b5db9 \
+    --source-url https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1/TIFF/current/n44w124/USGS_1_n44w124.tif \
+    --retrieved 2026-10-30 --licence "public domain (USGS 3DEP)" \
+    --frame epsg:4269 --vertical epsg:5703 --nad83-realisation epsg:6318 \
+    --bbox -123.9,43.1,-123.1,43.9 \
+    --out terrain/oregon
+```
+
+1. **Download the source on a connected machine and check it.** `--source-sha256` is the
+   digest the source publishes, when it publishes one; a file that differs is refused and
+   nothing is written. Fetching the source from a URL in the command itself waits on the
+   owner's choice of HTTP client (GAP-227), so `--source` is a file path.
+2. **Declare what the file does not say**, as the baseline does: `--frame`, and
+   `--vertical` and `--nad83-realisation` where the file is silent. A frame the file's
+   own tags contradict is refused. `--bbox` is in the file's own frame and keeps the cells
+   whose centres lie inside it.
+3. **The command prints the manifest's SHA-256.** Put it in the baseline as
+   `terrain.manifest_sha256`, with `terrain.store` naming the directory, and sign the
+   baseline (`gungnir-node baseline sign`). The chain then runs from the signed baseline to
+   the manifest to every tile.
+4. **Copy the directory to each machine unchanged.** A tile whose digest differs from its
+   manifest entry is refused by name on PN-09, and its ground is drawn as missing; the rest
+   of the store loads. `--out` must not already hold a store: a store is never staged
+   over, only staged anew and pinned again.
+
+Tiles are 512 cells on a side with one cell of apron (`--tile-cells` changes the side),
+each level the mean of the level below, and Float32 DEFLATE GeoTIFFs any GIS reads.
+
 ## Cloud
 
 The same image runs unchanged in a cloud container platform. Differences from

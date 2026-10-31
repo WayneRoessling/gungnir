@@ -27,6 +27,8 @@
 //! Placement is not here: a tile is a [`HeightGrid`] in the source's own CRS and vertical
 //! system, which `gungnir-app` places through the same path as a single DEM.
 
+pub mod cli;
+
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
