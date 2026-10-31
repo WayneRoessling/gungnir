@@ -20,6 +20,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use gungnir_analytics::placement::{Declared, StoreSight};
 use gungnir_data::geospatial::{GridCrs, TerrainMesh};
 use gungnir_data::terrain_store::fill::{self, OneDegree};
 use gungnir_data::terrain_store::{TerrainStore, TileKey};
@@ -64,16 +65,7 @@ enum Done {
     Tile(TileKey, Result<PlacedTile, String>),
     Fill(OneDegree, FillOpened),
     FillTile(OneDegree, TileKey, Result<PlacedTile, String>),
-    Sight([[f64; 2]; 2], Result<Box<Sight>, String>),
-}
-
-/// Line of sight's field painted from the pinned store, and what went into it.
-struct Sight {
-    field: gungnir_analytics::HeightField,
-    level: u8,
-    tiles: usize,
-    refused: usize,
-    past_edge: bool,
+    Sight([[f64; 2]; 2], Result<Box<StoreSight>, String>),
 }
 
 /// What a tile needs to be placed, moved onto the worker thread.
@@ -96,42 +88,29 @@ impl Placement {
         )
     }
 
-    /// The level-0 tile corners placed into local ENU (DN-36 §5.1). The corners carry no
-    /// height, so their vertical system is declared ellipsoidal for this placement only:
-    /// a missing height is placed horizontally and stays missing.
+    /// The baseline's declaration read for [`gungnir_analytics::placement`].
+    fn declared(&self) -> Result<Declared, String> {
+        crate::terrain::read_declared(
+            &self.declaration.frame,
+            self.declaration.vertical.as_deref(),
+            self.declaration.nad83_realisation.as_deref(),
+        )
+    }
+
+    /// The level-0 tile corners placed into local ENU (DN-36 §5.1), by the path the node's
+    /// footprint takes too (`gungnir_analytics::placement::place_footprint`).
     fn footprint(&self, store: &TerrainStore, revision: u64) -> Result<StoreFootprint, String> {
-        let index = store.index().clone();
-        let (columns, rows, lattice) = StoreFootprint::lattice(&index);
-        let origin = lattice.first().copied().unwrap_or([0.0, 0.0]);
-        let mesh = TerrainMesh {
-            positions: lattice
-                .iter()
-                .map(|p| {
-                    #[allow(clippy::cast_possible_truncation)]
-                    let offset = |v: f64, o: f64| (v - o) as f32;
-                    [offset(p[0], origin[0]), offset(p[1], origin[1]), f32::NAN]
-                })
-                .collect(),
-            indices: Vec::new(),
-            origin,
-            crs: GridCrs::Unstated,
-            vertical: None,
-            rows,
-            columns,
-        };
-        let declaration = StoreDeclaration {
-            vertical: Some("ellipsoidal".to_string()),
-            ..self.declaration.clone()
-        };
-        let placed =
-            crate::terrain::place_tile(mesh, &declaration, self.origin, self.epoch, &self.geoid)
-                .map_err(|reason| format!("its tile corners could not be placed: {reason}"))?;
-        let corners: Vec<[f64; 2]> = placed
-            .positions
-            .iter()
-            .map(|p| [f64::from(p[0]), f64::from(p[1])])
-            .collect();
-        StoreFootprint::new(index, &corners, revision)
+        let declared = self
+            .declared()
+            .map_err(|reason| format!("its tile corners could not be placed: {reason}"))?;
+        gungnir_analytics::placement::place_footprint(
+            store.index(),
+            &declared,
+            self.origin,
+            self.epoch,
+            &|pinned| self.geoid.grid(pinned),
+            revision,
+        )
     }
 
     /// A tile read, verified against its manifest entry, meshed and placed, with the
@@ -194,73 +173,15 @@ impl Placement {
     }
 
     /// Line of sight's field over `extent` (DN-36 §5.2, amendment 2): from the pinned store
-    /// alone, at the finest level whose cells keep the field within
-    /// `HEIGHT_FIELD_CELL_BUDGET`, each tile of that level under the extent painted in and
-    /// dropped. A refused tile, and the extent past the store's edge, stay no data: flat.
-    fn sight(&self, footprint: &StoreFootprint, extent: [[f64; 2]; 2]) -> Result<Sight, String> {
-        let index = footprint.index();
-        let [[e0, n0], [e1, n1]] = extent;
-        let overlaps =
-            |q: [[f64; 2]; 2]| q[0][0] < e1 && q[1][0] > e0 && q[0][1] < n1 && q[1][1] > n0;
-        let held = |level: u8| -> Vec<TileKey> {
-            let [across, down] = index.level_tiles(level).unwrap_or([0, 0]);
-            (0..down)
-                .flat_map(|row| (0..across).map(move |column| TileKey { level, column, row }))
-                .filter(|&k| index.tile(k).is_some() && footprint.tile_box(k).is_some_and(overlaps))
-                .collect()
-        };
-        // A level's cell in the frame: the smallest of its tiles' boxes over their cells.
-        let cell_of = |level: u8| {
-            held(level)
-                .iter()
-                .filter_map(|&k| {
-                    let q = footprint.tile_box(k)?;
-                    let t = index.tile(k)?;
-                    Some(
-                        ((q[1][0] - q[0][0]) / f64::from(t.columns))
-                            .min((q[1][1] - q[0][1]) / f64::from(t.rows)),
-                    )
-                })
-                .fold(f64::INFINITY, f64::min)
-        };
-        let budget = gungnir_analytics::HEIGHT_FIELD_CELL_BUDGET;
-        let fits = |cell: f64| {
-            let cells = ((e1 - e0) / cell).ceil() * ((n1 - n0) / cell).ceil();
-            #[allow(clippy::cast_precision_loss)]
-            let budget = budget as f64;
-            cell.is_finite() && cells <= budget
-        };
-        let chosen = (0..index.levels()).find_map(|level| {
-            let cell = cell_of(level);
-            fits(cell).then_some((level, cell))
-        });
-        // No level fits: the coarsest, at a cell made coarser still to fit.
-        let (level, cell) = chosen.unwrap_or_else(|| {
-            let level = index.levels() - 1;
-            let (cell, _) =
-                gungnir_analytics::terrain::fit_cell(e1 - e0, n1 - n0, cell_of(level), budget);
-            (level, cell)
-        });
-        if !cell.is_finite() {
-            return Err("no staged tile lies under the coverage extent".to_string());
-        }
-        let mut field =
-            gungnir_analytics::HeightField::blank(extent, cell).map_err(|e| e.to_string())?;
-        let (mut tiles, mut refused) = (0, 0);
-        for key in held(level) {
-            match self.placed(key) {
-                Ok((mesh, _)) if field.paint(&mesh).is_ok() => tiles += 1,
-                _ => refused += 1,
-            }
-        }
-        let [[s0, t0], [s1, t1]] = footprint.extent();
-        let past_edge = e0 < s0 || n0 < t0 || e1 > s1 || n1 > t1;
-        Ok(Sight {
-            field,
-            level,
-            tiles,
-            refused,
-            past_edge,
+    /// alone, by the build the node's line of sight takes too
+    /// ([`gungnir_analytics::placement::store_sight`]).
+    fn sight(
+        &self,
+        footprint: &StoreFootprint,
+        extent: [[f64; 2]; 2],
+    ) -> Result<StoreSight, String> {
+        gungnir_analytics::placement::store_sight(footprint, extent, &|key| {
+            self.placed(key).map(|(mesh, _)| mesh)
         })
     }
 }
@@ -274,46 +195,7 @@ impl Placement {
 ///
 /// Why there is none: no local frame origin, or nothing declared to cover.
 pub fn coverage_extent(config: &gungnir_config::ConfigBaseline) -> Result<[[f64; 2]; 2], String> {
-    let Some(frame) = config.local_frame() else {
-        return Err("this deployment declares no local frame origin (origin)".to_string());
-    };
-    let enu = |p: &[f64; 3]| {
-        frame.to_enu(gungnir_model::Geodetic {
-            lat_rad: p[0],
-            lon_rad: p[1],
-            alt_m: p[2],
-        })
-    };
-    let mut lo = [f64::INFINITY; 2];
-    let mut hi = [f64::NEG_INFINITY; 2];
-    let mut take = |e: f64, n: f64, reach: f64| {
-        lo = [lo[0].min(e - reach), lo[1].min(n - reach)];
-        hi = [hi[0].max(e + reach), hi[1].max(n + reach)];
-    };
-    let mut margin = 0.0_f64;
-    for sensor in &config.sensors {
-        let p = enu(&sensor.position);
-        let range = if sensor.max_range_m.is_finite() {
-            sensor.max_range_m.max(0.0)
-        } else {
-            0.0
-        };
-        take(p[0], p[1], range);
-        margin = margin.max(range);
-    }
-    for approach in &config.approaches {
-        for point in &approach.points {
-            let p = enu(point);
-            take(p[0], p[1], 0.0);
-        }
-    }
-    if !(lo[0].is_finite() && lo[1].is_finite() && hi[0] > lo[0] && hi[1] > lo[1]) {
-        return Err("no sensor with a range or approach is declared for it to cover".to_string());
-    }
-    Ok([
-        [lo[0] - margin, lo[1] - margin],
-        [hi[0] + margin, hi[1] + margin],
-    ])
+    config.coverage_extent()
 }
 
 /// A staged store's tiles as the desktop holds them.
@@ -693,7 +575,7 @@ impl TileStreaming {
                 Done::Sight(asked, built) if Some(asked) == self.sight_asked => {
                     sight = Some(match built {
                         Ok(built) => {
-                            let Sight {
+                            let StoreSight {
                                 field,
                                 level,
                                 tiles,

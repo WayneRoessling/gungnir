@@ -349,6 +349,55 @@ fn line_of_sight_reads_the_coverage_extent_and_ignores_the_view() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// DN-36 §9: the node reads the same pinned store for its line of sight, by the same
+/// placement and the same build, so over one baseline its field is the desktop's, cell for
+/// cell. A gap a commander accepted on one is then judged against the same ground on the
+/// other (GAP-194).
+#[test]
+fn the_node_reads_the_same_field_as_the_desktop() {
+    same_field("parity", Frame::Local);
+}
+
+/// The same through PROJ: a UTM store's tiles placed by the one path both binaries share.
+#[cfg(feature = "crs")]
+#[test]
+fn the_node_reads_the_same_utm_field_as_the_desktop() {
+    same_field("parity-utm", Frame::Utm);
+}
+
+fn same_field(name: &str, frame: Frame) {
+    let (mut state, dir) = desktop_in(name, None, frame, true);
+    let mut picture = PictureCache::default();
+    until(&mut state, &mut picture, "line of sight built", |s| {
+        s.terrain.is_masking()
+    });
+    let desktop = std::sync::Arc::clone(state.height_field.as_ref().expect("a field"));
+    let mut node = gungnir_node::terrain::NodeTerrain::start(&state.config);
+    for _ in 0..3_000 {
+        node.poll(&state.config);
+        if node.field().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let field = node.field().unwrap_or_else(|| panic!("{}", node.line()));
+    assert_eq!(
+        field.origin_enu.map(f64::to_bits),
+        desktop.origin_enu.map(f64::to_bits)
+    );
+    assert_eq!(field.cell_m.to_bits(), desktop.cell_m.to_bits());
+    assert_eq!((field.columns, field.rows), (desktop.columns, desktop.rows));
+    assert!(
+        field
+            .up_m
+            .iter()
+            .zip(&desktop.up_m)
+            .all(|(a, b)| a.to_bits() == b.to_bits()),
+        "the node's field differs from the desktop's"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn the_coverage_extent_is_the_sensors_and_approaches_with_a_range_to_spare() {
     let mut config = ConfigBaseline::default();

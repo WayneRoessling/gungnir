@@ -26,7 +26,8 @@
 //!   acceptance is stamped with what the node runs, not with what the caller's console
 //!   ran.
 //! - **The gap is judged against the node's own coverage answer**, the one
-//!   `GET /v3/coverage` serves, flat line of sight and all. A gap the caller drew from a
+//!   `GET /v3/coverage` serves, its line of sight flat or masked by the node's pinned
+//!   terrain store as that answer's parameters say (GAP-227). A gap the caller drew from a
 //!   different answer is refused by name rather than recorded against ground the node
 //!   cannot see.
 //!

@@ -12949,6 +12949,15 @@
       height. Past the extent or the store's edge the height stays unknown and the reason
       says which. The node still reads no terrain. See
       `../../record/2026-10-31/gap-227-a-uas-height-above-ground-lands.md`.
+  - date: 2026-10-31
+    status: In progress
+    note: >-
+      The node reads the pinned store for its line of sight (DN-36 §9, amendment 7). The
+      desktop's placement, footprint and field moved unchanged to `gungnir-data`,
+      `gungnir-config` and `gungnir_analytics::placement`, which both binaries call, with no
+      new edge; the node's field equals the desktop's cell for cell. Its coverage answer is
+      masked while the field is held, and its health line says what it reads or why
+      nothing. D-139's symbols, the readout and declutter (DN-37) remain.
 
 - id: GAP-228
   name: No operator-initiated escalation

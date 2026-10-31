@@ -312,30 +312,10 @@ pub fn frame_epoch(config: &gungnir_config::ConfigBaseline) -> f64 {
         .unwrap_or_else(gungnir_data::nad83::current_epoch)
 }
 
-/// What a file's horizontal system says its datum is, read through PROJ from `source`
-/// (`"EPSG:<code>"` or a WKT).
-///
-/// # Errors
-///
-/// PROJ cannot read `source`.
-#[cfg(feature = "crs")]
-pub fn file_datum(source: &str) -> Result<gungnir_data::nad83::HorizontalDatum, String> {
-    gungnir_data::nad83::horizontal_datum(source).map_err(|e| e.to_string())
-}
-
-/// The same in a build without the `crs` feature: refused by name, since reading a
-/// datum needs PROJ, and so does converting a file that has one.
-///
-/// # Errors
-///
-/// Always, naming the feature.
-#[cfg(not(feature = "crs"))]
-pub fn file_datum(source: &str) -> Result<gungnir_data::nad83::HorizontalDatum, String> {
-    Err(format!(
-        "reading the horizontal datum of {source} and converting from it needs the crs \
-         feature, which this build was not compiled with"
-    ))
-}
+/// What a file's horizontal system says its datum is, read through PROJ, or refused by name
+/// in a build without `crs`: one function for the desktop's placement and the node's
+/// (DN-36 §9).
+pub use gungnir_analytics::placement::file_datum;
 
 /// Where to look for each grid: the file and where it was named, or `None` for a grid
 /// with no candidate at all.

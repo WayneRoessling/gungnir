@@ -452,6 +452,39 @@ that answer. Five things are worth stating:
 loopback interface. They stay drafts, outside the verification table. `ci.yml` runs them
 with `terrain-fetch` in the test job's first shard.
 
+## Amendment 7, 2026-10-31: the node reads the store, as built
+
+§9's last sentence, "the node reads the same store for its line of sight", is built. Until
+now `gungnir-node` read no terrain: its coverage answer was flat and said so. Four things
+are worth stating:
+
+1. **One path, moved down rather than copied.** The desktop's placement, its footprint and
+   its field were in `gungnir-app` and `gungnir-viewport3d`, which the node may not depend
+   on. They moved, unchanged, to crates both binaries already reach: `StoreFootprint` to
+   `gungnir_data::terrain_store`; the agreement of baseline and manifest (§4.2, amendment 3
+   item 4) and the coverage extent (§5.2) to `gungnir-config`, beside `local_frame`; the
+   placement (GAP-023, GAP-108, GAP-197, GAP-200), the footprint's placement and the
+   field's build to `gungnir_analytics::placement`, with a `crs` feature of its own that
+   both binaries' `crs` turn on. `gungnir-analytics` has no edge to `gungnir-config`, so
+   each binary reads its baseline's strings into `placement::Declared` itself. **No
+   dependency edge is added.**
+2. **The node's field is the desktop's.** Over one baseline the node's field equals the
+   desktop's cell for cell, in the local frame and through PROJ in UTM
+   (`gungnir-app/tests/terrain_tiles.rs`). It is built on a thread of its own, asked for
+   again only when the coverage extent moves, and the thread is joined when the node stops
+   (GAP-260). The coverage answer's line of sight reads it, and its parameters carry
+   `terrain_masking_applied` only while it is held.
+3. **The pinned store alone (D-164).** The node has no view and reads no fill tile. A
+   baseline naming `terrain.fill_source` is said to be read by desktops for context only.
+   One DEM named by `terrain.path` is still the desktop's alone, and the node says so.
+4. **Said on the health line.** The node's health log carries a `terrain` field: no terrain,
+   one DEM it does not read, a store refused and why, a field building, one not built and
+   why, or the level and tiles it reads, with refused tiles and ground past the store's edge
+   flat. A store in a projected frame is refused by name in a build without `crs`. A store
+   in WGS84 degrees with ellipsoidal heights needs no PROJ and is read by any build. A
+   height in a geoid datum is made ellipsoidal through the pinned grid, found where the
+   desktop finds it and verified the first time a tile needs it.
+
 ## Traceability
 
 GAP-227 (action, last item, widened); D-164; D-173; D-174; D-139; D-160 to D-163; GAP-252 and

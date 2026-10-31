@@ -878,6 +878,81 @@ fn default_terrain_frame() -> String {
     "local-enu".to_string()
 }
 
+impl TerrainConfig {
+    /// The frame, vertical system and NAD83 realisation every tile of a staged store is
+    /// placed with (GAP-227, `docs/design/DN-36-staged-terrain-and-map-tiles.md` §4.2 and
+    /// amendment 3 item 4): this baseline's, which the store's manifest, stating
+    /// `staged_frame`, `staged_vertical` and `staged_realisation`, has to agree with. The
+    /// frame must be the same frame; a vertical system or a realisation the baseline leaves
+    /// out is the manifest's, pinned by the same digest, and one stated in both must be the
+    /// same.
+    ///
+    /// Here rather than in a binary since the node came to read the store for its own line
+    /// of sight (DN-36 §9), so the two agree with a manifest by one rule.
+    ///
+    /// # Errors
+    ///
+    /// A frame that differs, or a vertical system or realisation the two state differently,
+    /// by name.
+    pub fn store_declaration(
+        &self,
+        staged_frame: &str,
+        staged_vertical: Option<&str>,
+        staged_realisation: Option<&str>,
+    ) -> Result<StoreDeclaration, String> {
+        let parse_frame = |field: &str, text: &str| {
+            text.parse::<Frame>()
+                .map_err(|reason| format!("{field} {reason}"))
+        };
+        let baseline = parse_frame("terrain.frame", &self.frame)?;
+        let staged = parse_frame("the store manifest's frame", staged_frame)?;
+        if baseline != staged {
+            return Err(format!(
+                "terrain.frame declares {baseline} and the store was staged in {staged}"
+            ));
+        }
+        let agree = |field: &str,
+                     ours: Option<&str>,
+                     theirs: Option<&str>,
+                     same: &dyn Fn(&str, &str) -> bool|
+         -> Result<Option<String>, String> {
+            match (ours, theirs) {
+                (Some(a), Some(b)) if !same(a, b) => Err(format!(
+                    "terrain.{field} declares {a:?} and the store manifest states {b:?}"
+                )),
+                (Some(a), _) => Ok(Some(a.to_string())),
+                (None, b) => Ok(b.map(str::to_string)),
+            }
+        };
+        let vertical = agree(
+            "vertical",
+            self.vertical.as_deref(),
+            staged_vertical,
+            &|a, b| a.parse::<VerticalFrame>().ok() == b.parse::<VerticalFrame>().ok(),
+        )?;
+        let nad83_realisation = agree(
+            "nad83_realisation",
+            self.nad83_realisation.as_deref(),
+            staged_realisation,
+            &|a, b| a.parse::<Nad83Realisation>().ok() == b.parse::<Nad83Realisation>().ok(),
+        )?;
+        Ok(StoreDeclaration {
+            frame: self.frame.clone(),
+            vertical,
+            nad83_realisation,
+        })
+    }
+}
+
+/// What every tile of a staged store is placed with, once the baseline and the manifest
+/// agree ([`TerrainConfig::store_declaration`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoreDeclaration {
+    pub frame: String,
+    pub vertical: Option<String>,
+    pub nad83_realisation: Option<String>,
+}
+
 /// One point-cloud file a deployment names (GAP-098): a LAS/LAZ path, or a COPC path
 /// with the octree bounds to read within it.
 ///
@@ -2158,6 +2233,64 @@ impl ConfigBaseline {
                 alt_m,
             })
         })
+    }
+
+    /// The ground line of sight has to read over a staged store (GAP-227,
+    /// `docs/design/DN-36-staged-terrain-and-map-tiles.md` §5.2): the union of every declared
+    /// sensor's range and every approach point, in the deployment's local ENU frame, with a
+    /// margin of one maximum range. It moves only when the baseline's sensors or approaches
+    /// do, never with a view.
+    ///
+    /// Here rather than in a binary since the node came to read the store for its own line
+    /// of sight (DN-36 §9): one extent, so a desktop and a node over the same baseline mask
+    /// the same ground. `gungnir-app`'s `terrain_tiles::coverage_extent` calls this.
+    ///
+    /// # Errors
+    ///
+    /// Why there is none: no local frame origin, or nothing declared to cover.
+    pub fn coverage_extent(&self) -> Result<[[f64; 2]; 2], String> {
+        let Some(frame) = self.local_frame() else {
+            return Err("this deployment declares no local frame origin (origin)".to_string());
+        };
+        let enu = |p: &[f64; 3]| {
+            frame.to_enu(gungnir_model::Geodetic {
+                lat_rad: p[0],
+                lon_rad: p[1],
+                alt_m: p[2],
+            })
+        };
+        let mut lo = [f64::INFINITY; 2];
+        let mut hi = [f64::NEG_INFINITY; 2];
+        let mut take = |e: f64, n: f64, reach: f64| {
+            lo = [lo[0].min(e - reach), lo[1].min(n - reach)];
+            hi = [hi[0].max(e + reach), hi[1].max(n + reach)];
+        };
+        let mut margin = 0.0_f64;
+        for sensor in &self.sensors {
+            let p = enu(&sensor.position);
+            let range = if sensor.max_range_m.is_finite() {
+                sensor.max_range_m.max(0.0)
+            } else {
+                0.0
+            };
+            take(p[0], p[1], range);
+            margin = margin.max(range);
+        }
+        for approach in &self.approaches {
+            for point in &approach.points {
+                let p = enu(point);
+                take(p[0], p[1], 0.0);
+            }
+        }
+        if !(lo[0].is_finite() && lo[1].is_finite() && hi[0] > lo[0] && hi[1] > lo[1]) {
+            return Err(
+                "no sensor with a range or approach is declared for it to cover".to_string(),
+            );
+        }
+        Ok([
+            [lo[0] - margin, lo[1] - margin],
+            [hi[0] + margin, hi[1] + margin],
+        ])
     }
 
     /// The asset list as the picture sees it, stamped with this baseline's version
