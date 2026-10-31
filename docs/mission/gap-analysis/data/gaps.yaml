@@ -12831,7 +12831,7 @@
   effort: L
   target: I4
   owner: UI engineer
-  deps: [D-139, D-160, D-161, D-162, D-163, D-164]
+  deps: [D-139, D-160, D-161, D-162, D-163, D-164, D-165, D-166, D-167, D-168, D-169, D-170, D-171, D-172]
   impact: >-
     The picture is a top-down local projection on a metric grid with no tiles or imagery,
     no latitude, longitude or MGRS readout, custom frame-by-affiliation glyphs rather than
@@ -12850,7 +12850,8 @@
   ref: >-
     GAP-022;
     `../../review/2026-10-26-comprehensive-review.md` §8 finding 6;
-    `../../design/DN-36-staged-terrain-and-map-tiles.md`
+    `../../design/DN-36-staged-terrain-and-map-tiles.md`;
+    `../../design/DN-37-symbology-cursor-readout-and-declutter.md`
   history:
   - date: 2026-10-26
     status: Open
@@ -12881,6 +12882,13 @@
       D-164 taken by the owner the same day, to the default: a fetched fill tile is drawn
       and marked, and enters line of sight only once staged into the pinned store (DN-36
       amendment 2). Every DN-36 decision is taken; nothing is built.
+  - date: 2026-10-30
+    status: Open
+    note: >-
+      The other three parts designed in DN-37: D-139's MIL-STD-2525D symbols, a cursor
+      readout in MGRS and degrees-minutes-seconds, and declutter. The owner walked D-165 to
+      D-172 the same day and took each to its default. The symbols are built for four
+      identities until GAP-216 widens the type; nothing is built.
 
 - id: GAP-228
   name: No operator-initiated escalation

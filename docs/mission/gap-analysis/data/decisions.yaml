@@ -3913,3 +3913,139 @@
     the pinned store a sector's line of sight stays flat, and says so, as it does past the
     one DEM today. Rejected: a fill tile entering line of sight once its digest is recorded.
     See `../../design/DN-36-staged-terrain-and-map-tiles.md` amendment 2.
+
+- id: D-165
+  decision: The order of the 2525D symbols and the identity widening
+  question: >-
+    D-139's frames derive from the widened identity (D-136), which is GAP-216 and unbuilt.
+    Recommended: build the symbols now for the four identities tracks hold, the other five
+    appearing when GAP-216 lands, the renderer written once for all nine. The alternative:
+    GAP-216 first.
+  raised_in: "`../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default:** the symbols now, for the
+    four identities; the other five appear when GAP-216 widens the type, because the drawing
+    reads the symbol code, not the enum. Rejected: GAP-216 first. See
+    `../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8.
+
+- id: D-166
+  decision: Where a symbol's battle dimension comes from
+  question: >-
+    A 2525D frame's shape depends on the battle dimension, which tracks do not carry.
+    Recommended: a new `TrackView::dimension`, set from the sources that formed the track
+    where they state it, Unknown otherwise. The alternatives: air for every track; a
+    dimension declared per sensor in the baseline.
+  raised_in: "`../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default:** from the track's
+    sources, where they state it: AIS sea surface, ADS-B and Remote ID air, a radar only
+    once its detection model states one; Unknown otherwise, or when sources disagree.
+    Rejected: air for every track; a dimension per sensor in the baseline. See
+    `../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8.
+
+- id: D-167
+  decision: What carries a track's lifecycle once the fill is its affiliation
+  question: >-
+    2525D fills a symbol with its affiliation colour; today the fill is the lifecycle
+    colour. Recommended: the frame's status, the 2525D way, dashed for tentative and faded
+    with a stale amplifier for coasting or stale, the track table keeping its lifecycle
+    colours. The alternative: unfilled 2525D frames round today's lifecycle fill.
+  raised_in: "`../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default:** the frame's status, the
+    2525D way: a tentative track's frame dashed, a coasting or stale one faded with a stale
+    amplifier; the fill is the affiliation colour in both renderers, the scene's disc
+    included; the track table keeps its lifecycle colours. Rejected: the lifecycle fill
+    inside unfilled frames. See
+    `../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8.
+
+- id: D-168
+  decision: How the 2525D symbols are drawn
+  question: >-
+    Recommended: in-house vector shapes drawn by egui from the symbol code, with icons for
+    the classes the picture holds, no dependency and every shape visible to `RenderProbe`.
+    The alternative: a symbol library or font, a §2.9 decision with a licence review.
+  raised_in: "`../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default:** in-house vector shapes
+    from the symbol code; a track with no class, or a class with no mapping, shows its frame
+    and no icon. Rejected: a symbol library or font. See
+    `../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8.
+
+- id: D-169
+  decision: What the cursor readout shows
+  question: >-
+    Recommended: MGRS to 1 m, latitude and longitude in degrees, minutes and seconds, WGS
+    84, and the ground height under the cursor when terrain is loaded. The alternatives: one
+    format the operator picks; MGRS with decimal degrees and no ground.
+  raised_in: "`../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default:** MGRS to 1 m,
+    degrees-minutes-seconds and the ground under the cursor in the terrain's declared
+    vertical system, in the viewport's corner; with no origin it says positions are local
+    only. Rejected: one operator-chosen format; MGRS with decimal degrees. See
+    `../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8.
+
+- id: D-170
+  decision: Where the MGRS conversion comes from
+  question: >-
+    Recommended: in-house in `gungnir-coord`, UTM, UPS and MGRS, held to GeographicLib's
+    `GeoConvert` on committed test vectors. The alternative: adopting a crate, a section 2.9
+    decision needing the same oracle tests.
+  raised_in: "`../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default:** in-house in
+    `gungnir-coord`, held to `GeoConvert` on committed vectors across zone and band edges,
+    the Norway and Svalbard exceptions and both poles. Rejected: adopting a crate. See
+    `../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8.
+
+- id: D-171
+  decision: How long a track's leader is
+  question: >-
+    The direction-of-movement leader is a fixed 10 s and vanishes zoomed out. Recommended:
+    an operator-selected time, 10 s to 5 min, default 1 min. The alternative: a
+    zoom-adaptive time.
+  raised_in: "`../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default:** an operator-selected
+    time, 10 s, 30 s, 1 min, 2 min or 5 min, default 1 min, session state like the renderer
+    choice. Rejected: zoom-adaptive. See
+    `../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8.
+
+- id: D-172
+  decision: What happens when track labels would overlap
+  question: >-
+    Recommended: each label takes the first free of eight places round its symbol, with a
+    leader line when moved; where none is free, higher priority stays and the rest collapse
+    into a count, a hostile's label never collapsed. The alternatives: move then hide; hide
+    by priority only.
+  raised_in: "`../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-30
+  outcome: >-
+    **Taken by the owner, 2026-10-30, to the recommended default:** move, then collapse, a
+    hostile's label never collapsed: two hostile labels with no free place are both drawn,
+    overlapping. Rejected: move then hide; hide by priority only. See
+    `../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8.
