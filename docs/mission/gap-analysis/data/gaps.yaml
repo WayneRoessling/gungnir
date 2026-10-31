@@ -14203,3 +14203,44 @@
       `geoid` binary on eight test threads aborted in 27 of 100 runs without it and in
       none of 500 with it
       (`../../record/2026-10-31/gap-261-every-proj-call-in-gungnir-data.md`).
+- id: GAP-262
+  name: Reading the datum of a source with no WKT1 form panicked inside proj
+  type: Technical
+  caps: [CAP-1.7, CAP-2.10]
+  layer: UI and data ecosystem
+  sev: 3
+  effort: S
+  target: I4
+  owner: Services engineer
+  deps: [GAP-200, GAP-261]
+  impact: >-
+    `gungnir_data::nad83::horizontal_datum` asks PROJ for a source's WKT1 to read its
+    datum, and `proj` 0.31's `as_wkt` asserts that PROJ returned a string. PROJ returns
+    none for a geographic 3D CRS or any coordinate operation, so a baseline declaring
+    `terrain.frame` or `point_cloud.frame` as `"epsg:4979"` panicked inside the desktop's
+    frame tick, where terrain and point clouds are placed, instead of being refused.
+  evidence: >-
+    On the WSL Ubuntu rig with libproj 9.7.1, `EPSG:4979`, `EPSG:7912`, a transformation
+    by URN and a bare `+proj=` string each panicked at `proj-0.31.0/src/proj.rs:183`;
+    `"EPSG:1671"` did not, as PROJ reads `EPSG:` codes only as CRSs. `gungnir-app --test
+    terrain` with `terrain.frame: "epsg:4979"` panicked inside `update::tick`.
+  action: >-
+    Read what the object is from its PROJJSON, which `proj` checks for null, and refuse a
+    non-CRS or a geographic or projected 3D CRS by name before the WKT call; catch the
+    assertion in `LockedProj::as_wkt` for anything else PROJ declines. No `unsafe`.
+  ref: >-
+    `../../record/2026-10-31/gap-262-a-proj-object-with-no-wkt1.md`; GAP-261
+  history:
+  - date: 2026-10-31
+    status: Open
+    note: >-
+      Recorded as found and not fixed by GAP-261, whose test first asked a UTM operation
+      for WKT1 and panicked; confirmed reachable from a baseline with `epsg:4979`.
+  - date: 2026-10-31
+    status: Closed
+    note: >-
+      `horizontal_datum` refuses an operation or a 3D geographic or projected CRS by name
+      from `LockedProj::kind`, and `LockedProj::as_wkt` returns an error where `proj`
+      asserted. The terrain test that panicked passes, with the `crs` suites in
+      `gungnir-data` and `gungnir-app --test terrain`
+      (`../../record/2026-10-31/gap-262-a-proj-object-with-no-wkt1.md`).

@@ -19,8 +19,8 @@
 //! it.
 //!
 //! [`LockedProj`] is the only way this crate holds a PROJ object, and its construction,
-//! each conversion, its WKT and its drop each hold [`PROJ`] for their whole PROJ call. No
-//! two PROJ calls overlap, so no `proj_cleanup` runs under another.
+//! each conversion, its WKT and PROJJSON and its drop each hold [`PROJ`] for their whole
+//! PROJ call. No two PROJ calls overlap, so no `proj_cleanup` runs under another.
 //!
 //! **Why a `proj_cleanup` between two calls is harmless to an object kept alive.** What
 //! it clears is the default context's database (each `Proj` has a context of its own,
@@ -135,9 +135,51 @@ impl LockedProj {
     }
 
     /// `proj::Proj::as_wkt` under the lock, with PROJ's default options.
+    ///
+    /// **An object with no WKT of `version` is an error here, not a panic (GAP-262).**
+    /// `proj` 0.31's `as_wkt` hands what `proj_as_wkt` returns to a helper that asserts
+    /// it is not null, and PROJ returns null for an object the version cannot describe:
+    /// any coordinate operation in WKT1 ("Transformation can only be exported to WKT2"),
+    /// or a geographic 3D CRS in strict WKT1 ("WKT1 does not support Geographic 3D
+    /// CRS"). The assertion is caught and returned as a [`proj::ProjError`]. Nothing on
+    /// the Rust side is part-written when it fires -- PROJ has returned and only the
+    /// string is missing -- so the object is used as before afterwards. A caller that can
+    /// tell beforehand, from [`Self::kind`], refuses by name before it gets here, since
+    /// the panic hook still prints the assertion.
     pub(crate) fn as_wkt(&self, version: proj::wkt::WktVersion) -> Result<String, proj::ProjError> {
         let _guard = lock();
-        self.inner()?.as_wkt(Some(version), None)
+        let inner = self.inner()?;
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            inner.as_wkt(Some(version), None)
+        }))
+        .unwrap_or_else(|_| {
+            Err(proj::ProjError::Projection(
+                "PROJ has no WKT of that version for this object".to_string(),
+            ))
+        })
+    }
+
+    /// What PROJ says this object is, from its PROJJSON: `proj` 0.31 checks that one's
+    /// pointer before reading it, so it is an error, never a panic, where WKT is not.
+    pub(crate) fn kind(&self) -> Result<ObjectKind, proj::ProjError> {
+        let json = {
+            let _guard = lock();
+            self.inner()?.to_projjson(Some(false), None, None)?
+        };
+        let unreadable =
+            |what: &str| proj::ProjError::Projection(format!("PROJ's PROJJSON {what}"));
+        let value: serde_json::Value =
+            serde_json::from_str(&json).map_err(|_| unreadable("does not parse"))?;
+        let kind = value
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| unreadable("names no type"))?
+            .to_string();
+        let axes = value
+            .pointer("/coordinate_system/axis")
+            .and_then(serde_json::Value::as_array)
+            .map(Vec::len);
+        Ok(ObjectKind { kind, axes })
     }
 
     /// The object; always there outside `drop`.
@@ -145,6 +187,30 @@ impl LockedProj {
         self.inner
             .as_ref()
             .ok_or_else(|| proj::ProjError::Projection("the PROJ object is gone".to_string()))
+    }
+}
+
+/// What a PROJ object is, as [`LockedProj::kind`] reads it from PROJJSON.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ObjectKind {
+    /// PROJJSON's `type`: `"GeographicCRS"`, `"CompoundCRS"`, `"Transformation"`,
+    /// `"Conversion"` (a bare `+proj=` string is one) and so on.
+    pub(crate) kind: String,
+    /// How many axes its coordinate system has: `None` for an object with no coordinate
+    /// system of its own, a compound or bound CRS or an operation.
+    pub(crate) axes: Option<usize>,
+}
+
+impl ObjectKind {
+    /// A coordinate reference system of any kind: every PROJJSON CRS type ends so.
+    pub(crate) fn is_crs(&self) -> bool {
+        self.kind.ends_with("CRS")
+    }
+
+    /// A geographic or projected CRS with an ellipsoidal height as its third axis, which
+    /// PROJ refuses to write as strict WKT1.
+    pub(crate) fn is_3d_geographic_or_projected(&self) -> bool {
+        matches!(self.kind.as_str(), "GeographicCRS" | "ProjectedCRS") && self.axes == Some(3)
     }
 }
 
@@ -233,6 +299,39 @@ mod tests {
         done.store(true, std::sync::atomic::Ordering::Relaxed);
         kept.join()
             .expect("the kept pipeline's thread did not panic");
+    }
+
+    /// GAP-262: a coordinate operation has no WKT1 form, and asking for one is an error,
+    /// where `proj` 0.31's own `as_wkt` panicked; the lock is served on afterwards, and
+    /// the object still converts. `kind` says beforehand what it is.
+    #[test]
+    fn an_object_with_no_wkt1_form_is_an_error_not_a_panic() {
+        let utm = LockedProj::new_known_crs("EPSG:32610", "EPSG:4326").expect("a transform");
+        // The inverse of the UTM projection and the axis normalisation, chained.
+        assert_eq!(
+            utm.kind().expect("PROJJSON"),
+            ObjectKind {
+                kind: "ConcatenatedOperation".to_string(),
+                axes: None
+            }
+        );
+        assert!(utm.as_wkt(proj::wkt::WktVersion::Wkt1_Gdal).is_err());
+        assert!(!utm
+            .as_wkt(proj::wkt::WktVersion::Wkt2_2019)
+            .expect("WKT2 describes it")
+            .is_empty());
+        // The zone's central meridian on the equator: 123 W, 0 N.
+        let (lon, lat) = utm.convert((500_000.0, 0.0)).expect("converts");
+        assert!((lon + 123.0).abs() < 1e-9, "{lon}");
+        assert!(lat.abs() < 1e-9, "{lat}");
+
+        let wgs84_3d = LockedProj::new("EPSG:4979").expect("a CRS");
+        let kind = wgs84_3d.kind().expect("PROJJSON");
+        assert!(
+            kind.is_crs() && kind.is_3d_geographic_or_projected(),
+            "{kind:?}"
+        );
+        assert!(wgs84_3d.as_wkt(proj::wkt::WktVersion::Wkt1_Gdal).is_err());
     }
 
     /// The lock only holds if nothing builds a PROJ object around it: no code line in
