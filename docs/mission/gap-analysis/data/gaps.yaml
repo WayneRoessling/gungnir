@@ -14171,6 +14171,13 @@
       the change; the new unit test failed 50 of 50 times against the detached thread and
       0 of 200 with the join
       (`../../record/2026-10-31/gap-260-the-geoid-lookup-thread-ends-before.md`).
+  - date: 2026-10-31
+    status: Closed
+    note: >-
+      The fix stands; its test did not. `main`'s `proj-crs` run after PR #305 failed it with
+      the thread still listed in `/proc/self/task` after the join, which Linux allows for a
+      moment. The thread now sets a flag after dropping its pipeline and the test reads that
+      (`../../record/2026-10-31/gap-260-s-test-reads-the-thread-s.md`).
 - id: GAP-261
   name: Dropping a PROJ object runs proj_cleanup under every other thread using PROJ
   type: Technical
