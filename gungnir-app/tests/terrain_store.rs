@@ -9,8 +9,9 @@
 //! baseline's by name, and places each tile through the single DEM's path. §8.1 row a is
 //! a draft criterion, not a gate; these tests are its desktop half.
 //!
-//! The store is drawn and masks line of sight in DN-36 §5's next increments. Until then
-//! the desktop says that in the terrain line, and line of sight stays flat.
+//! Line of sight over the store is DN-36 §5.2's increment. Until then the desktop says so
+//! in the terrain line, and line of sight stays flat; drawing the store by view is
+//! `tests/terrain_tiles.rs`.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -117,7 +118,7 @@ fn local_store(name: &str) -> (PathBuf, PathBuf, String) {
 }
 
 #[test]
-fn a_pinned_store_is_verified_and_says_it_is_not_drawn_yet() {
+fn a_pinned_store_is_verified_and_says_line_of_sight_is_flat() {
     let (dir, store, digest) = local_store("verified");
     let mut state = desktop(&dir, &store, &digest, "local-enu");
     settle(&mut state);

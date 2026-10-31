@@ -335,6 +335,49 @@ a tile, made four things exact that the note left open, and moved one forward.
 Until §5's increments land, a verified store is neither drawn nor read by line of sight, and
 the terrain line on PN-09 says so.
 
+## Amendment 4, 2026-10-30: the picture's tiles, as built
+
+The second increment, §5.1, §5.3 and §6, changed five things in how the design said it would
+draw the store.
+
+1. **Tiles are chosen from a placed footprint, not the manifest alone.** The manifest's
+   bounds are in the store's own frame, and the view is in local ENU. So `tiles_in_view`
+   takes a `StoreFootprint`: the level-0 tile corners, placed once per store through the
+   tiles' own placement, from which every tile's box at every level is read. Its signature is
+   `tiles_in_view(footprint, view, rect)`.
+2. **One level and one stride for the frame.** A 512-cell tile is 264 196 vertices with its
+   apron, sixteen times the frame's budget. So the choice is a level and a power-of-two
+   stride together: every pair whose tiles in view fit `TERRAIN_VERTEX_BUDGET`, then the
+   finest whose drawn cells are at least `MIN_CELL_POINTS` (4) across. A tile is drawn every
+   stride cells out to its far apron, which is the neighbour's first cell, so tiles at one
+   level share their edge vertices.
+3. **One surface, not a GL mesh per tile.** The tiles drawn are joined into one
+   `TerrainSurface` whose revision has its top bit set, so it never equals a single DEM's.
+   The projection's mesh and the scene's ground pass draw it unchanged (DN-35 §6). It is
+   joined again only when the set drawn changes, and it is under the budget, so such a frame
+   uploads at most 16 384 vertices. `tile_cache::TileCache` stays the 3D Tiles stub it was,
+   and the per-tile surfaces are kept in the viewport's own `SurfaceCache`. §5.1's "a tile's
+   surface carries its key as DN-35's revision" does not apply: the joined surface carries
+   its own.
+4. **The ramp and the shade (§6).** `terrain_surface` is unchanged, so the single DEM's
+   surface is the same bytes as before, and `the_surface_is_the_projections_ground` still
+   holds it. A tile is built by `tile_surface` instead, coloured over the manifest's range
+   from the file's own heights, not the placed up. The placed up bends away with the earth's
+   curvature, by some 200 m at 50 km, and a store is wide enough for that to show. The
+   hillshade is taken one cell each way on the level's own grid, whatever the stride, and
+   toward the north and west at a tile's first row and column and at its far apron. Two
+   tiles hold the same cells there, so a shared vertex has the same colour and shade in both.
+   In the local frame its position is the same to the bit. In a real CRS each tile is placed
+   from its own origin, so the two copies of a shared vertex can differ by the rounding of an
+   `f32` offset, under a millimetre.
+5. **A stand-in replaces its children.** A tile not yet resident is stood in for by its
+   nearest resident ancestor, and that ancestor replaces every wanted tile under it, so no
+   ground is drawn twice at double alpha. With none resident, nothing is drawn there.
+
+The desktop places tiles on a worker thread of its own, keeps at most 24 placed (about four
+megabytes each at 512 cells), and asks for at most 8 at once. The sentence for missing ground
+is drawn on the map, and PN-09's terrain line counts the tiles placed, loading and refused.
+
 ## Traceability
 
 GAP-227 (action, last item, widened); D-164; D-139; D-160 to D-163; GAP-252 and

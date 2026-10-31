@@ -114,6 +114,7 @@ pub fn tick(state: &mut AppState) {
     // 1b. The terrain, if one is loading (GAP-023): polled here so a slow file never
     //     stalls a frame, and refused by name if its frame is not the picture's.
     crate::terrain::poll(state);
+    crate::terrain_tiles::poll(state);
     // GAP-199: and lent to every bound radar feed once placed, so a UAS's height above
     // ground is placed on it from the next report on, or carried as unknown with the
     // reason.

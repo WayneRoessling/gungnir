@@ -99,6 +99,9 @@ pub struct AppState {
     /// `docs/design/DN-36-staged-terrain-and-map-tiles.md` §4.2); shared with the loader
     /// thread, which reads its tiles. `None` for a single DEM or none.
     pub terrain_store: Option<std::sync::Arc<gungnir_data::terrain_store::TerrainStore>>,
+    /// That store's tiles: placed by view on a worker thread and held for the viewport
+    /// (GAP-227, DN-36 §5.1, [`crate::terrain_tiles`]).
+    pub terrain_tiles: crate::terrain_tiles::TileStreaming,
     /// The coverage reports computed so far, by their inputs, so the several callers a
     /// frame has share one computation (GAP-247, [`crate::sustainment::CoverageCache`]).
     pub coverage_cache: crate::sustainment::CoverageCache,
@@ -824,6 +827,7 @@ impl AppState {
             terrain_lent: None,
             height_field: None,
             terrain_store: None,
+            terrain_tiles: crate::terrain_tiles::TileStreaming::default(),
             coverage_cache: crate::sustainment::CoverageCache::default(),
             dead_spots: crate::dead_spots::DeadSpots::default(),
             registration: crate::pointcloud::RegistrationOutcome::NoPair,

@@ -982,6 +982,7 @@ fn the_scene_path_draws_no_egui_terrain_and_the_surface_is_built_once() {
         geofences: &[],
         predictions: &[],
         terrain: Some(layer),
+        terrain_tiles: None,
         point_clouds: &[],
         laydown_preview: None,
         dense_group: None,

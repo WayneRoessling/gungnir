@@ -180,6 +180,7 @@ fn draw_viewport(state: &mut AppState) -> gungnir_ui::harness::DrawnFrame {
                 geofences: &[],
                 predictions: &[],
                 terrain: None,
+                terrain_tiles: None,
                 point_clouds: &[],
                 laydown_preview: None,
                 dense_group: None,
