@@ -6,17 +6,24 @@
 //! amendment 1 item 2): one implementation behind `gungnir-app terrain stage` and
 //! `gungnir-node terrain stage`, as `account` is one implementation behind both.
 //!
-//! **From a file on this machine.** Given a DEM, a bounding box in the DEM's own frame and
-//! an output directory, it checks the file against its published SHA-256 when one is given,
-//! crops it to the box, cuts and averages the pyramid ([`super::stage`]), writes the tiles
-//! and the manifest, and prints the manifest's digest for the baseline. Fetching the source
-//! from a service is amendment 1's other half and waits on the owner's choice of HTTP client
-//! (§2.9); a URL given as `--source` is refused by name rather than guessed at.
+//! Given a DEM, a bounding box in the DEM's own frame and an output directory, it checks
+//! the DEM against its published SHA-256 when one is given, crops it to the box, cuts and
+//! averages the pyramid ([`super::stage`]), writes the tiles and the manifest, and prints
+//! the manifest's digest for the baseline.
+//!
+//! **The source is a file, or a URL with `terrain-fetch`** (D-173). A URL is fetched with
+//! `reqwest`'s blocking client into a file beside `--out`, which is staged from and then
+//! removed. TLS is verified against the operating system's trust store
+//! (`rustls-platform-verifier`, which `reqwest`'s `rustls` feature selects), since a
+//! source such as the USGS is signed by a public authority, not by the deployment's own
+//! roots. Only `https://` is fetched, or `http://` to this machine (a mirror on the
+//! loopback interface), so nothing crosses a network unauthenticated. A build without the
+//! feature refuses a URL by name, as a build without `crs` refuses a real-world CRS.
 //!
 //! The binary only ever reads a store; this command is the one place the workspace writes
 //! one, and it refuses a directory that already holds a manifest.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::{stage, ManifestSource, StageOptions};
 use crate::geospatial::{GridCrs, HeightGrid};
@@ -28,7 +35,7 @@ pub const DEFAULT_TILE_CELLS: u32 = 512;
 #[must_use]
 pub fn usage(binary: &str) -> String {
     format!(
-        "usage: {binary} terrain stage --source <dem.tif|dem.asc> --out <directory> \
+        "usage: {binary} terrain stage --source <dem.tif|dem.asc|https://...> --out <directory> \
          --frame <local-enu|epsg:CODE> --licence <text> --retrieved <date> \
          [--source-url <url>] [--source-sha256 <hex>] [--bbox <min_x,min_y,max_x,max_y>] \
          [--vertical <ellipsoidal|epsg:CODE>] [--nad83-realisation <epsg:CODE>] \
@@ -51,7 +58,7 @@ pub fn run(binary: &str, args: &[String]) -> Result<String, String> {
 /// The parsed `terrain stage` arguments.
 #[derive(Debug, Clone, PartialEq)]
 struct Stage {
-    source: PathBuf,
+    source: Source,
     out: PathBuf,
     frame: String,
     licence: String,
@@ -104,14 +111,7 @@ fn parse(binary: &str, args: &[String]) -> Result<Stage, String> {
         }
     }
     let missing = |name: &str| format!("{name} is required\n{}", usage(binary));
-    let source = source.ok_or_else(|| missing("--source"))?;
-    if source.contains("://") {
-        return Err(format!(
-            "--source {source:?} is a URL; fetching a source is not built until the owner \
-             chooses its HTTP client (GAP-227, DN-36 amendment 1). Download the file, check \
-             it, and give its path"
-        ));
-    }
+    let source = Source::parse(&source.ok_or_else(|| missing("--source"))?)?;
     let frame = frame.ok_or_else(|| missing("--frame"))?;
     if frame != "local-enu" && epsg_code(&frame).is_none() {
         return Err(format!(
@@ -126,7 +126,7 @@ fn parse(binary: &str, args: &[String]) -> Result<Stage, String> {
         }
     }
     Ok(Stage {
-        source: PathBuf::from(source),
+        source,
         out: out.ok_or_else(|| missing("--out"))?,
         frame,
         licence: licence.ok_or_else(|| missing("--licence"))?,
@@ -167,32 +167,165 @@ fn epsg_code(frame: &str) -> Option<u32> {
     digits.parse().ok().filter(|code| *code != 0)
 }
 
+/// Where the source DEM is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Source {
+    File(PathBuf),
+    /// Fetched with `terrain-fetch`; the extension its path ends in, which the loader reads
+    /// the format by.
+    Url {
+        url: String,
+        extension: String,
+    },
+}
+
+impl Source {
+    /// A path, or a URL this command will fetch: `https://`, or `http://` to this machine,
+    /// whose path ends in `.tif`, `.tiff` or `.asc`.
+    fn parse(text: &str) -> Result<Source, String> {
+        let Some((scheme, rest)) = text.split_once("://") else {
+            return Ok(Source::File(PathBuf::from(text)));
+        };
+        let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+        let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+        let host_only = match host.strip_prefix('[') {
+            Some(v6) => v6.split(']').next().unwrap_or_default(),
+            None => host.split(':').next().unwrap_or_default(),
+        };
+        let loopback = matches!(host_only, "127.0.0.1" | "localhost" | "::1");
+        match scheme.to_ascii_lowercase().as_str() {
+            "https" => {}
+            "http" if loopback => {}
+            "http" => {
+                return Err(format!(
+                    "--source {text:?} is plain http to another machine; only https:// is \
+                     fetched, or http:// to this machine's loopback"
+                ))
+            }
+            other => return Err(format!("--source {text:?}: {other}:// is not fetched")),
+        }
+        let path = rest.split(['?', '#']).next().unwrap_or_default();
+        let extension = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_ascii_lowercase)
+            .filter(|e| matches!(e.as_str(), "tif" | "tiff" | "asc"))
+            .ok_or_else(|| {
+                format!("--source {text:?} does not end in .tif, .tiff or .asc, a DEM this reads")
+            })?;
+        Ok(Source::Url {
+            url: text.to_string(),
+            extension,
+        })
+    }
+}
+
+/// The source on disk: the file named, or the URL fetched beside `out`, which the caller
+/// removes once staged. Also what the manifest records it as.
+fn resolve(options: &Stage) -> Result<(PathBuf, Option<PathBuf>, String), String> {
+    match &options.source {
+        Source::File(path) => Ok((path.clone(), None, format!("file:{}", path.display()))),
+        Source::Url { url, extension } => {
+            let name = options
+                .out
+                .file_name()
+                .map_or_else(|| "store".into(), |n| n.to_string_lossy().into_owned());
+            let download = options
+                .out
+                .with_file_name(format!("{name}.source.{extension}"));
+            fetch(url, &download)?;
+            Ok((download.clone(), Some(download), url.clone()))
+        }
+    }
+}
+
+/// The most a fetched source may be: past this it is not a DEM tile.
+#[cfg(feature = "terrain-fetch")]
+const MAX_FETCH_BYTES: u64 = 4 << 30;
+
+/// Fetch `url` into a new file `dest`, verifying TLS against the operating system's trust
+/// store.
+#[cfg(feature = "terrain-fetch")]
+fn fetch(url: &str, dest: &Path) -> Result<(), String> {
+    use std::io::Read as _;
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_mins(30))
+        .build()
+        .map_err(|e| format!("the HTTP client did not start: {e}"))?;
+    let response = client
+        .get(url)
+        .send()
+        .map_err(|e| format!("{url} was not fetched: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("{url} answered {}", response.status()));
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(dest)
+        .map_err(|e| format!("{}: {e}", dest.display()))?;
+    let copied = std::io::copy(&mut response.take(MAX_FETCH_BYTES + 1), &mut file);
+    let refuse = |why: String| {
+        let _ = std::fs::remove_file(dest);
+        Err(why)
+    };
+    match copied {
+        Ok(n) if n > MAX_FETCH_BYTES => refuse(format!(
+            "{url} is larger than {MAX_FETCH_BYTES} bytes, past any DEM tile"
+        )),
+        Ok(_) => Ok(()),
+        Err(e) => refuse(format!("{url} was not fetched whole: {e}")),
+    }
+}
+
+/// Without `terrain-fetch` there is no HTTP client in this binary.
+#[cfg(not(feature = "terrain-fetch"))]
+fn fetch(url: &str, _dest: &Path) -> Result<(), String> {
+    Err(format!(
+        "--source {url:?} is a URL, and this binary was built without the terrain-fetch \
+         feature, which holds the only HTTP client that fetches one (D-173); download the \
+         file, check it, and give its path"
+    ))
+}
+
 fn stage_command(binary: &str, args: &[String]) -> Result<String, String> {
     let options = parse(binary, args)?;
+    let (source, download, recorded) = resolve(&options)?;
+    let staged = stage_from(binary, &options, &source, recorded);
+    if let Some(download) = download {
+        let _ = std::fs::remove_file(download);
+    }
+    staged
+}
+
+fn stage_from(
+    binary: &str,
+    options: &Stage,
+    source: &Path,
+    recorded: String,
+) -> Result<String, String> {
+    let digest_of = || -> Result<String, String> {
+        let file = std::fs::File::open(source).map_err(|e| format!("{}: {e}", source.display()))?;
+        crate::geoid::sha256_hex(std::io::BufReader::new(file))
+            .map_err(|e| format!("{}: {e}", source.display()))
+    };
+    let found = digest_of()?;
     if let Some(expected) = &options.source_sha256 {
-        let file = std::fs::File::open(&options.source)
-            .map_err(|e| format!("{}: {e}", options.source.display()))?;
-        let found = crate::geoid::sha256_hex(std::io::BufReader::new(file))
-            .map_err(|e| format!("{}: {e}", options.source.display()))?;
         if !found.eq_ignore_ascii_case(expected) {
             return Err(format!(
-                "{} is not the published source: its SHA-256 is {found}, and the source \
-                 publishes {}",
-                options.source.display(),
+                "{recorded} is not the published source: its SHA-256 is {found}, and the \
+                 source publishes {}",
                 expected.to_ascii_lowercase()
             ));
         }
     }
-    let grid = crate::geospatial::load_height_grid(&options.source).map_err(|e| e.to_string())?;
+    let grid = crate::geospatial::load_height_grid(source).map_err(|e| e.to_string())?;
     check_frame(&options.frame, grid.crs)?;
     let grid = match options.bbox {
         Some(bbox) => crop(&grid, bbox)?,
         None => grid,
     };
-    let source_url = options
-        .source_url
-        .clone()
-        .unwrap_or_else(|| format!("file:{}", options.source.display()));
+    let source_url = options.source_url.clone().unwrap_or(recorded);
     let (manifest, digest) = stage(
         &grid,
         &options.out,
@@ -213,8 +346,10 @@ fn stage_command(binary: &str, args: &[String]) -> Result<String, String> {
     )
     .map_err(|e| e.to_string())?;
     Ok(format!(
-        "staged {} tiles over {} levels into {}\nmanifest SHA-256 {digest}\n\
+        "source {} SHA-256 {found}\n\
+         staged {} tiles over {} levels into {}\nmanifest SHA-256 {digest}\n\
          pin it in the baseline: terrain.store {:?}, terrain.manifest_sha256 {digest:?}",
+        manifest.source.url,
         manifest.tiles.len(),
         manifest.levels,
         options.out.display(),
@@ -313,15 +448,38 @@ mod tests {
             let err = parse("g", &args(&format!("{}{extra}", &base[6..]))).expect_err(said);
             assert!(err.contains(said), "{said}: {err}");
         }
-        let err = parse(
-            "g",
-            &args("--source https://x/y.tif --out o --frame local-enu --licence p --retrieved d"),
-        )
-        .expect_err("a URL");
-        assert!(err.contains("HTTP client"), "{err}");
+        let source = |s: &str| Source::parse(s);
+        assert!(
+            matches!(source("https://x.example/a/b.TIF?x=1"), Ok(Source::Url { extension, .. }) if extension == "tif")
+        );
+        assert!(source("http://127.0.0.1:8080/b.asc").is_ok());
+        assert!(source("http://[::1]/b.tif").is_ok());
+        assert!(source("http://user@localhost/b.tiff").is_ok());
+        let plain = source("http://example.com/b.tif").expect_err("plain http");
+        assert!(plain.contains("only https://"), "{plain}");
+        assert!(source("ftp://x/b.tif").is_err());
+        assert!(source("https://x/b.zip")
+            .expect_err("not a DEM")
+            .contains(".tif"));
+        assert_eq!(
+            source("dem/b.tif"),
+            Ok(Source::File(PathBuf::from("dem/b.tif")))
+        );
         assert!(run("g", &args("fetch"))
             .expect_err("usage")
             .starts_with("usage: g terrain stage"));
+    }
+
+    /// A build without `terrain-fetch` has no HTTP client, and says so for a URL source.
+    #[cfg(not(feature = "terrain-fetch"))]
+    #[test]
+    fn a_url_without_terrain_fetch_is_refused_by_name() {
+        let err = run(
+            "g",
+            &args("stage --source https://x.example/y.tif --out o --frame local-enu --licence p --retrieved d"),
+        )
+        .expect_err("no client");
+        assert!(err.contains("terrain-fetch"), "{err}");
     }
 
     #[test]
