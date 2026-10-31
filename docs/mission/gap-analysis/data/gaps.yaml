@@ -12967,6 +12967,14 @@
       same string and a millimetre. The symbols wait on MIL-STD-2525D's tables, which the
       repository does not hold; the readout, leaders and labels are next. See
       `../../record/2026-10-31/gap-227-mgrs-utm-and-ups-in-gungnir.md`.
+  - date: 2026-10-31
+    status: In progress
+    note: >-
+      DN-37's leaders (D-171): the direction-of-movement line reaches an operator-selected time,
+      10 s, 30 s, 1 min (default), 2 min or 5 min, set by a `leaders` control beside the
+      renderer toggle and drawn through the one `draw_tracks` both renderers call; session
+      state. Symbols, the readout and label placement remain. See
+      `../../record/2026-10-31/gap-227-leaders-at-an-operator-selected-time.md`.
 
 - id: GAP-228
   name: No operator-initiated escalation
