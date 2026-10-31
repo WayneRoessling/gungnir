@@ -195,8 +195,9 @@ fn ground_callback(
 ) -> egui::PaintCallback {
     let callback = eframe::egui_glow::CallbackFn::new(move |info, _painter| {
         let (viewport, clip) = gl_region(&info);
-        // As in `scene_callback`: a poisoned lock skips the draw, and the next frame reads
-        // no resident surface, so egui draws the ground.
+        // As in `scene_callback`: the pass runs under `gl::guard` inside the renderer, so a
+        // panic or a GL error is kept as its fault and read by `App::note_gl_fault` before
+        // the next frame (GAP-259). A poisoned lock skips the draw and is reported there.
         if let Ok(mut renderer) = scene.lock() {
             renderer.paint_ground(
                 surface.as_deref(),
@@ -267,9 +268,11 @@ fn scene_callback(
 ) -> egui::PaintCallback {
     let callback = eframe::egui_glow::CallbackFn::new(move |info, _painter| {
         let (viewport, clip) = gl_region(&info);
-        // A poisoned lock means a previous frame panicked inside the callback. Skipping
-        // the draw leaves the status line and the panels intact rather than taking the
-        // window down with it.
+        // The pass runs under `gl::guard` inside the renderer (GAP-259): a panic is caught
+        // there, under this lock, so the lock is not poisoned and the window stays up, and
+        // the fault is read by `App::note_gl_fault` before the next frame. A poisoned lock
+        // can therefore only mean a panic the guard did not see; the draw is skipped and
+        // `note_gl_fault` reports it.
         if let Ok(mut renderer) = scene.lock() {
             renderer.paint_glyphs(
                 &glyphs,
@@ -854,6 +857,7 @@ impl App {
         // layer says so on whichever one is running. Each is recomputed only when the state
         // it reads changed (GAP-257, `gungnir_app::picture`).
         self.picture.sync(&self.state);
+        self.note_gl_fault();
         let (sources, viewport) = picture::Sources::split(&mut self.state);
         let Some(scene) = self.scene.clone().filter(|_| viewport.use_3d) else {
             picture::render_projection(ui, &self.picture, &sources, viewport);
@@ -882,6 +886,34 @@ impl App {
 
         set_gl_passes(ui, scene, &prepared, viewport, resident);
         gungnir_viewport3d::draw_renderer_toggle(ui, sources.palette, prepared.rect, viewport);
+    }
+
+    /// GAP-259: if either GL pass faulted on an earlier frame, say so once, here, before
+    /// anything is drawn. The callbacks run after the frame and own no `AppState`, so the
+    /// fault waits in the renderer under its lock and this is the read. The first sight of
+    /// it is logged, goes on the alert list, and turns the viewport to the projection with
+    /// the sentence saying why (`ViewportState::note_gl_fault`). A poisoned lock is a fault
+    /// of its own rather than "nothing to draw": `gl::guard` means a pass cannot poison it,
+    /// so a poisoned lock is something the guard did not see.
+    fn note_gl_fault(&mut self) {
+        let Some(scene) = &self.scene else {
+            return;
+        };
+        if self.state.viewport.gl_fault.is_some() {
+            return;
+        }
+        let fault = match scene.lock() {
+            Ok(renderer) => renderer.fault().cloned(),
+            Err(_) => Some(gungnir_viewport3d::gl::GlFault::Poisoned),
+        };
+        let Some(fault) = fault else {
+            return;
+        };
+        tracing::error!(%fault, "three-d scene stopped after a fault; the projection is drawn instead");
+        self.state.alerts.push(format!(
+            "three-d scene stopped: {fault}; the projection is drawn instead"
+        ));
+        self.state.viewport.note_gl_fault(&fault);
     }
 
     /// Apply what was clicked. Exhaustive on purpose: a new panel action must be given

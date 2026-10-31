@@ -159,6 +159,11 @@ pub struct ViewportState {
     /// session is doing: switching back does not change the deployment's configuration,
     /// and the next launch starts from the baseline again.
     pub use_3d: bool,
+    /// Why the three-d scene stopped, as the sentence the projection draws, once a GL
+    /// pass has faulted (GAP-259; `gl::GlFault`). Set by [`note_gl_fault`](Self::note_gl_fault),
+    /// which also turns `gl_ready` and `use_3d` off, so there is no control back to a
+    /// renderer that is not drawing. Formatted once, at the fault, never per frame.
+    pub gl_fault: Option<String>,
     /// Which coverage layers to draw (PN-11, GAP-007).
     pub layers: CoverageLayers,
     /// The dead-spot field's texture, built when the field changes and never per frame
@@ -224,6 +229,7 @@ impl ViewportState {
             view: interaction::TopDownView::default(),
             gl_ready: false,
             use_3d: false,
+            gl_fault: None,
             layers: CoverageLayers::default(),
             dead_spot_texture: None,
             terrain_surface: None,
@@ -231,6 +237,22 @@ impl ViewportState {
             ground: Ground::Overlay,
             terrain_tiles: streaming::terrain::TerrainTiles::default(),
         }
+    }
+
+    /// A GL pass faulted (GAP-259): the scene is over for this session. The projection
+    /// draws from the next frame, the corner control goes with `gl_ready`, so nothing
+    /// offers a way back to a renderer that is not drawing, and the sentence kept here says
+    /// what happened, under the status line, until the desktop restarts. Idempotent: the
+    /// first fault is the one said.
+    pub fn note_gl_fault(&mut self, fault: &gl::GlFault) {
+        if self.gl_fault.is_some() {
+            return;
+        }
+        self.gl_ready = false;
+        self.use_3d = false;
+        self.gl_fault = Some(format!(
+            "The three-d scene stopped and is not drawn again this session: {fault}. The projection is drawn instead."
+        ));
     }
 
     /// Rebuild the glyph lists from the snapshot where they no longer match it, and mark
@@ -256,6 +278,7 @@ impl ViewportState {
             &StatusKey {
                 scene,
                 gl_ready: self.gl_ready,
+                faulted: self.gl_fault.is_some(),
                 tracks: self.glyphs.len(),
                 bearing_rays: self.bearing_rays.len(),
                 assignments: self.plan_labels.assignments(),
@@ -267,6 +290,12 @@ impl ViewportState {
                     write!(
                         text,
                         "three-d scene: {} tracks, {} bearing rays, {} assignments. Drag to pan, scroll to zoom.",
+                        p.tracks, p.bearing_rays, p.assignments
+                    )
+                } else if p.faulted {
+                    write!(
+                        text,
+                        "Top-down projection ({} tracks, {} bearing rays, {} assignments). The three-d scene stopped after a fault; the line below says what happened. Drag to pan, scroll to zoom.",
                         p.tracks, p.bearing_rays, p.assignments
                     )
                 } else if p.gl_ready {
@@ -449,6 +478,9 @@ pub struct StatusKey {
     /// The three-d scene's line, or the projection's.
     pub scene: bool,
     pub gl_ready: bool,
+    /// The scene stopped after a fault (GAP-259), so the projection's line says so rather
+    /// than offering a switch.
+    pub faulted: bool,
     pub tracks: usize,
     pub bearing_rays: usize,
     pub assignments: usize,
@@ -826,8 +858,25 @@ pub fn render(
         egui::FontId::proportional(palette.small_font_size),
         palette.viewport_text_color,
     );
+    // GAP-259: what stopped the scene, in the alert colour under the status line, for as
+    // long as the session runs. A viewport that fell back without saying why would read as
+    // a deployment that opted out.
+    if let Some(fault) = &state.gl_fault {
+        painter.text(
+            rect.left_top()
+                + egui::vec2(
+                    palette.panel_spacing,
+                    palette.panel_spacing + palette.small_font_size + palette.row_spacing,
+                ),
+            egui::Align2::LEFT_TOP,
+            fault,
+            egui::FontId::proportional(palette.small_font_size),
+            palette.alert_color,
+        );
+    }
 
-    // Drawn from here too, or switching to the projection would be one-way.
+    // Drawn from here too, or switching to the projection would be one-way. After a
+    // fault `gl_ready` is off, so nothing is drawn: there is no scene to switch to.
     draw_renderer_toggle(ui, palette, rect, state);
 }
 
@@ -1258,6 +1307,84 @@ mod tests {
     /// it once. The scene's glyph pass uploads its instances on that key, so a revision
     /// that moved every frame would put the per-frame upload back, and one that never moved
     /// would draw stale glyphs.
+    /// GAP-259: a fault in a GL pass ends the scene for the session. Both flags go off, so
+    /// the corner control is gone and no frame can pick the scene; the projection's status
+    /// line says the scene stopped, and the fault's own sentence is painted under it in the
+    /// alert colour. A second fault does not replace the first.
+    #[test]
+    fn a_gl_fault_turns_the_scene_off_and_the_projection_says_why() {
+        let palette = theme::Palette::day();
+        let mut state = ViewportState::new();
+        state.gl_ready = true;
+        state.use_3d = true;
+        let tracks = [track(41, 0.0, Classification::Hostile)];
+        let frame = |state: &mut ViewportState| -> Vec<egui::Shape> {
+            egui::Context::default()
+                .run_ui(screen(), |ui| {
+                    render(ui, &palette, state, &tracks, &[], &no_plan(), no_layers());
+                })
+                .shapes
+                .into_iter()
+                .map(|c| c.shape)
+                .collect()
+        };
+        let before = texts(&frame(&mut state));
+        assert!(
+            before
+                .iter()
+                .any(|t| t.contains("The three-d scene is attached")),
+            "{before:?}"
+        );
+        // The label names the renderer in front, so either word is the control.
+        assert!(
+            before.iter().any(|t| t == "2D" || t == "3D"),
+            "the corner control is drawn while there is a scene to switch to: {before:?}"
+        );
+
+        state.note_gl_fault(&gl::GlFault::Gl {
+            pass: gl::GlPass::Glyphs,
+            error: "Out of memory".to_owned(),
+        });
+        assert!(!state.gl_ready, "no scene is ready after a fault");
+        assert!(!state.use_3d, "the projection draws after a fault");
+        state.note_gl_fault(&gl::GlFault::Poisoned);
+
+        let shapes = frame(&mut state);
+        let after = texts(&shapes);
+        assert!(
+            after.iter().any(|t| t.contains(
+                "The three-d scene stopped after a fault; the line below says what happened"
+            )),
+            "{after:?}"
+        );
+        let said = after
+            .iter()
+            .find(|t| t.contains("Out of memory"))
+            .expect("the fault is said on the projection");
+        assert_eq!(
+            said,
+            "The three-d scene stopped and is not drawn again this session: the glyph pass \
+             left OpenGL in error: Out of memory. The projection is drawn instead."
+        );
+        assert!(
+            !after.iter().any(|t| t.contains("poisoned")),
+            "the first fault is the one said: {after:?}"
+        );
+        assert!(
+            !after.iter().any(|t| t == "2D" || t == "3D"),
+            "no control back to a scene that is not drawing: {after:?}"
+        );
+        assert!(
+            shapes.iter().any(|s| matches!(
+                s,
+                egui::Shape::Text(t)
+                    if t.galley.text().contains("Out of memory")
+                        && t.fallback_color == palette.alert_color
+            )),
+            "the fault is drawn in the alert colour"
+        );
+    }
+
     #[test]
     fn the_glyph_revision_changes_only_when_the_glyphs_are_rebuilt() {
         let palette = theme::Palette::day();
