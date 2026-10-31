@@ -19,6 +19,8 @@ pub mod geoid;
 pub mod geospatial;
 pub mod nad83;
 pub mod pointcloud;
+#[cfg(feature = "crs")]
+mod proj_lock;
 pub mod scientific;
 pub mod terrain_store;
 

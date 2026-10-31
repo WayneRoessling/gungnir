@@ -255,7 +255,7 @@ history, and an entry is never edited once it has merged.
 | GAP-258 | The point clouds are up to forty thousand egui circles a frame | Technical | CAP-5.10 | 2 | 8 | S | 16 | I4 | UI engineer | Open |
 | GAP-259 | A fault in a GL pass took the window down or left a blank region, and said nothing | Technical | CAP-5.10, CAP-5.5 | 3 | 8 | S | 24 | I4 | UI engineer | Closed |
 | GAP-260 | A crs test binary aborted at exit while the geoid lookup thread tore PROJ down | Technical | CAP-1.7 | 2 | 6 | S | 12 | I4 | Services engineer | Closed |
-| GAP-261 | Dropping a PROJ object runs proj_cleanup under every other thread using PROJ | Technical | CAP-1.7, CAP-2.10 | 3 | 8 | M | 24 | I4 | Services engineer | Open |
+| GAP-261 | Dropping a PROJ object runs proj_cleanup under every other thread using PROJ | Technical | CAP-1.7, CAP-2.10 | 3 | 8 | M | 24 | I4 | Services engineer | Closed |
 
 Counts: 243 gaps, 6 mission, 237 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
@@ -3750,11 +3750,12 @@ Counts: 243 gaps, 6 mission, 237 technical; 1 already covered by a plan in `../.
 - Capability: CAP-1.7 Cooperative identity; CAP-2.10 Terrain and map context.
 - History:
   - 2026-10-31, Open: Found while verifying GAP-260, by looping the `geoid` test binary.
+  - 2026-10-31, Closed: `gungnir_data::proj_lock::LockedProj` holds one process-wide lock, served first come first served so the geoid lookup thread is not starved, for every PROJ construction, conversion, WKT and drop in the crate. On the same Linux rig the `geoid` binary on eight test threads aborted in 27 of 100 runs without it and in none of 500 with it (`../../record/2026-10-31/gap-261-every-proj-call-in-gungnir-data.md`).
 - Evidence: `gungnir-data --test geoid` under `crs`, eight test threads, Ubuntu 26.04 with libproj 9.7.1: 43 of 200 runs aborted partway through the tests before GAP-260's change and 68 of 200 after it, and 200 of 200 passed on one test thread. Under gdb one test thread was inside `sqlite3BtreeClose` on PROJ's shared database while another parsed SQL on it and a third aborted in `proj_destroy`. The `proj-crs` job runs the binary once per pull request on a four-core runner, which is why CI has not shown it..
 - Severity: 3. Reach: 8 threads. Effort: M. Priority: 24.
 - Impact: `proj` 0.31's `Drop` for `Proj` calls `proj_cleanup` after destroying the object and its context. `proj_cleanup` closes the default context's database and clears PROJ's process-wide caches, and PROJ documents it for process end, once nothing else is in use. In this workspace a `Proj` is built and dropped per conversion, on whatever thread converts, while the geoid lookup thread holds one for the life of the process, so a terrain, point-cloud or geoid conversion that ends during another thread's PROJ call can corrupt the heap of the desktop or the node.
-- Closing action: Not decided. Either one process-wide lock in `gungnir-data` held around every `Proj` construction, conversion and drop, or a wrapper that tears a `Proj` down without `proj_cleanup`, which is `unsafe` and human-owned. Then the geoid binary looped on eight threads as GAP-260's was.
-- Target: I4. Owner: Services engineer. Status: Open.
-- Reference: `../../record/2026-10-31/gap-260-the-geoid-lookup-thread-ends-before.md`; GAP-260.
+- Closing action: One process-wide lock in `gungnir-data` held around every `Proj` construction, conversion and drop: `proj_lock::LockedProj` is the only PROJ object the crate holds, and a test refuses `proj::Proj` in any other module. The teardown without `proj_cleanup` was not taken: it is `unsafe` and human-owned, and the lock needs neither. Then the geoid binary looped on eight threads as GAP-260's was.
+- Target: I4. Owner: Services engineer. Status: Closed.
+- Reference: `../../record/2026-10-31/gap-260-the-geoid-lookup-thread-ends-before.md`; `../../record/2026-10-31/gap-261-every-proj-call-in-gungnir-data.md`; GAP-260.
 - Depends on: GAP-102, GAP-108, GAP-196.
 

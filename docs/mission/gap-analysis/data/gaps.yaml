@@ -14197,14 +14197,25 @@
     SQL on it and a third aborted in `proj_destroy`. The `proj-crs` job runs the binary
     once per pull request on a four-core runner, which is why CI has not shown it.
   action: >-
-    Not decided. Either one process-wide lock in `gungnir-data` held around every
-    `Proj` construction, conversion and drop, or a wrapper that tears a `Proj` down
-    without `proj_cleanup`, which is `unsafe` and human-owned. Then the geoid binary looped
-    on eight threads as GAP-260's was.
+    One process-wide lock in `gungnir-data` held around every `Proj` construction,
+    conversion and drop: `proj_lock::LockedProj` is the only PROJ object the crate holds,
+    and a test refuses `proj::Proj` in any other module. The teardown without
+    `proj_cleanup` was not taken: it is `unsafe` and human-owned, and the lock needs
+    neither. Then the geoid binary looped on eight threads as GAP-260's was.
   ref: >-
-    `../../record/2026-10-31/gap-260-the-geoid-lookup-thread-ends-before.md`; GAP-260
+    `../../record/2026-10-31/gap-260-the-geoid-lookup-thread-ends-before.md`;
+    `../../record/2026-10-31/gap-261-every-proj-call-in-gungnir-data.md`; GAP-260
   history:
   - date: 2026-10-31
     status: Open
     note: >-
       Found while verifying GAP-260, by looping the `geoid` test binary.
+  - date: 2026-10-31
+    status: Closed
+    note: >-
+      `gungnir_data::proj_lock::LockedProj` holds one process-wide lock, served first
+      come first served so the geoid lookup thread is not starved, for every PROJ
+      construction, conversion, WKT and drop in the crate. On the same Linux rig the
+      `geoid` binary on eight test threads aborted in 27 of 100 runs without it and in
+      none of 500 with it
+      (`../../record/2026-10-31/gap-261-every-proj-call-in-gungnir-data.md`).
