@@ -78,6 +78,7 @@ fn desktop(dir: &std::path::Path, store: &std::path::Path, digest: &str, frame: 
             path: None,
             store: Some(store.to_string_lossy().into_owned()),
             manifest_sha256: Some(digest.to_string()),
+            fill_source: None,
             frame: frame.into(),
             vertical: None,
             nad83_realisation: None,

@@ -183,36 +183,10 @@ impl Source {
     /// A path, or a URL this command will fetch: `https://`, or `http://` to this machine,
     /// whose path ends in `.tif`, `.tiff` or `.asc`.
     fn parse(text: &str) -> Result<Source, String> {
-        let Some((scheme, rest)) = text.split_once("://") else {
+        if !text.contains("://") {
             return Ok(Source::File(PathBuf::from(text)));
-        };
-        let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
-        let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
-        let host_only = match host.strip_prefix('[') {
-            Some(v6) => v6.split(']').next().unwrap_or_default(),
-            None => host.split(':').next().unwrap_or_default(),
-        };
-        let loopback = matches!(host_only, "127.0.0.1" | "localhost" | "::1");
-        match scheme.to_ascii_lowercase().as_str() {
-            "https" => {}
-            "http" if loopback => {}
-            "http" => {
-                return Err(format!(
-                    "--source {text:?} is plain http to another machine; only https:// is \
-                     fetched, or http:// to this machine's loopback"
-                ))
-            }
-            other => return Err(format!("--source {text:?}: {other}:// is not fetched")),
         }
-        let path = rest.split(['?', '#']).next().unwrap_or_default();
-        let extension = Path::new(path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(str::to_ascii_lowercase)
-            .filter(|e| matches!(e.as_str(), "tif" | "tiff" | "asc"))
-            .ok_or_else(|| {
-                format!("--source {text:?} does not end in .tif, .tiff or .asc, a DEM this reads")
-            })?;
+        let extension = check_url(text).map_err(|why| format!("--source {why}"))?;
         Ok(Source::Url {
             url: text.to_string(),
             extension,
@@ -220,6 +194,42 @@ impl Source {
     }
 }
 
+/// A URL this command or the fill cache fetches (D-173): `https://`, or `http://` to this
+/// machine, whose path ends in `.tif`, `.tiff` or `.asc`. Returns that extension.
+///
+/// # Errors
+///
+/// Another scheme, plain http to another host, or a path that is not a DEM, in words.
+pub(crate) fn check_url(text: &str) -> Result<String, String> {
+    let Some((scheme, rest)) = text.split_once("://") else {
+        return Err(format!("{text:?} is not a URL"));
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host_only = match host.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or_default(),
+        None => host.split(':').next().unwrap_or_default(),
+    };
+    let loopback = matches!(host_only, "127.0.0.1" | "localhost" | "::1");
+    match scheme.to_ascii_lowercase().as_str() {
+        "https" => {}
+        "http" if loopback => {}
+        "http" => {
+            return Err(format!(
+                "{text:?} is plain http to another machine; only https:// is fetched, or \
+                 http:// to this machine's loopback"
+            ))
+        }
+        other => return Err(format!("{text:?}: {other}:// is not fetched")),
+    }
+    let path = rest.split(['?', '#']).next().unwrap_or_default();
+    Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase)
+        .filter(|e| matches!(e.as_str(), "tif" | "tiff" | "asc"))
+        .ok_or_else(|| format!("{text:?} does not end in .tif, .tiff or .asc, a DEM this reads"))
+}
 /// The source on disk: the file named, or the URL fetched beside `out`, which the caller
 /// removes once staged. Also what the manifest records it as.
 fn resolve(options: &Stage) -> Result<(PathBuf, Option<PathBuf>, String), String> {
@@ -233,59 +243,10 @@ fn resolve(options: &Stage) -> Result<(PathBuf, Option<PathBuf>, String), String
             let download = options
                 .out
                 .with_file_name(format!("{name}.source.{extension}"));
-            fetch(url, &download)?;
+            super::fill::fetch(url, &download)?;
             Ok((download.clone(), Some(download), url.clone()))
         }
     }
-}
-
-/// The most a fetched source may be: past this it is not a DEM tile.
-#[cfg(feature = "terrain-fetch")]
-const MAX_FETCH_BYTES: u64 = 4 << 30;
-
-/// Fetch `url` into a new file `dest`, verifying TLS against the operating system's trust
-/// store.
-#[cfg(feature = "terrain-fetch")]
-fn fetch(url: &str, dest: &Path) -> Result<(), String> {
-    use std::io::Read as _;
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_mins(30))
-        .build()
-        .map_err(|e| format!("the HTTP client did not start: {e}"))?;
-    let response = client
-        .get(url)
-        .send()
-        .map_err(|e| format!("{url} was not fetched: {e}"))?;
-    if !response.status().is_success() {
-        return Err(format!("{url} answered {}", response.status()));
-    }
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(dest)
-        .map_err(|e| format!("{}: {e}", dest.display()))?;
-    let copied = std::io::copy(&mut response.take(MAX_FETCH_BYTES + 1), &mut file);
-    let refuse = |why: String| {
-        let _ = std::fs::remove_file(dest);
-        Err(why)
-    };
-    match copied {
-        Ok(n) if n > MAX_FETCH_BYTES => refuse(format!(
-            "{url} is larger than {MAX_FETCH_BYTES} bytes, past any DEM tile"
-        )),
-        Ok(_) => Ok(()),
-        Err(e) => refuse(format!("{url} was not fetched whole: {e}")),
-    }
-}
-
-/// Without `terrain-fetch` there is no HTTP client in this binary.
-#[cfg(not(feature = "terrain-fetch"))]
-fn fetch(url: &str, _dest: &Path) -> Result<(), String> {
-    Err(format!(
-        "--source {url:?} is a URL, and this binary was built without the terrain-fetch \
-         feature, which holds the only HTTP client that fetches one (D-173); download the \
-         file, check it, and give its path"
-    ))
 }
 
 fn stage_command(binary: &str, args: &[String]) -> Result<String, String> {

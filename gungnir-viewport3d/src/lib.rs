@@ -542,6 +542,18 @@ fn draw_layers(
             state.terrain_mesh_2d.as_ref(),
         );
     }
+    // Fetched fill tiles are outlined, so ground nobody staged never reads as ground the
+    // deployment pinned (GAP-227, DN-36 amendment 1 item 1, D-174).
+    for b in state.terrain_tiles.fill_outlines() {
+        let north_west = state.view.project([b[0][0], b[1][1], 0.0], rect);
+        let south_east = state.view.project([b[1][0], b[0][1], 0.0], rect);
+        painter.rect_stroke(
+            egui::Rect::from_two_pos(north_west, south_east),
+            0.0,
+            egui::Stroke::new(1.5_f32, palette.warning_color),
+            egui::StrokeKind::Inside,
+        );
+    }
     // Where a staged store's ground is missing, the map says so rather than leaving an
     // empty area that looks like a hidden layer (DN-36 §5.3, DN-12 §7).
     let missing = state.texts.terrain_tiles.text();

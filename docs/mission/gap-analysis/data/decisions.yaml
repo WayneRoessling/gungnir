@@ -4079,4 +4079,13 @@
   raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` amendment 5"
   decider: Owner
   unblocks: GAP-227
-  outcome: ""
+  resolved: 2026-10-31
+  outcome: >-
+    **Taken by the owner, 2026-10-31, to the recommended default:** `terrain.fill_source`
+    is a URL template for one-degree geographic source tiles named by their north-west
+    corner, `{ns}{lat}{ew}{lon}` as USGS 3DEP names them; each fetched tile is staged with
+    `terrain stage`'s code into its own sub-store under the data directory, its digest
+    recorded at fetch time; only a geographic store is filled; fill is drawn only where the
+    pinned store has no tile, marked, counted apart, and never in line of sight. Rejected:
+    a mirror store's URL; an OGC Web Coverage Service. See
+    `../../design/DN-36-staged-terrain-and-map-tiles.md` amendments 5 and 6.

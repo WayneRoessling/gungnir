@@ -413,6 +413,45 @@ tile worker, never the render thread. It is never written into the pinned store,
 never enters line of sight (D-164), which the worker's field already guarantees, because the
 field reads the pinned store alone. §8.1 rows h to k test it.
 
+## Amendment 6, 2026-10-31: D-174 taken, and the fill cache as built
+
+The owner took D-174 the same day, to the recommended default: one-degree geographic tiles
+named `{ns}{lat}{ew}{lon}`. The other two forms are rejected. The fill cache is built on
+that answer. Five things are worth stating:
+
+1. **Which tiles.** The fill is fetched for the view, when the view reaches past the pinned
+   store's edge. Each corner of the view is mapped back to degrees through the store's
+   placed corners (`StoreFootprint::frame_of`, an affine map good enough to name a
+   one-degree tile and nothing finer). Of the one-degree tiles the view touches, those
+   wholly inside the store are skipped, at most four are taken per view, and they are
+   fetched one at a time. No tile is asked for twice in a session, so one that failed is
+   said and not retried until the desktop restarts. The coverage extent fetches nothing:
+   line of sight never reads fill (D-164), so fill over the extent would be drawn context
+   only, and the view already asks for that.
+2. **Where it lands.** Each tile goes into `<data_dir>/terrain-fill/<name>/`, staged in the
+   pinned store's frame, vertical system, realisation and tile size. Beside it,
+   `<name>.fetched.json` records the URL, the source file's SHA-256, the sub-store's manifest
+   digest and the time. A later session reopens the sub-store against that recorded digest
+   before it fetches anything. A sub-store changed on disk is refused, the tile is said as not
+   fetched, and it is not fetched again in that session.
+3. **Only where the pinned store has no tile.** A fill tile is drawn with its triangles
+   left out wherever their centre lies inside a level-0 tile the pinned store holds. Both
+   are coloured on the pinned store's height range. The fill's tiles are chosen within
+   what the pinned tiles leave of the frame's budget, and drawn tiles are outlined on the
+   map in the warning colour.
+4. **Said and counted.** Over fetched ground, the map's sentence for missing ground gives
+   way to "past the store's edge, N fetched tiles drawn outlined, outside line of sight",
+   as §8.2's added check asks. While a tile is fetched, or after a fetch fails, the
+   sentence says so. PN-09 counts "pinned P placed … fetched F placed from K one-degree
+   tiles (n51e010), outside line of sight".
+5. **Not a geographic store, not filled.** The worker reads the pinned store's coarsest
+   tile once. If its own tags are not geographic, the fill source is refused on PN-09 and
+   the map, by name.
+
+§8.1 rows h to k are tested in `gungnir-app/tests/terrain_fill.rs` against a mirror on the
+loopback interface. They stay drafts, outside the verification table. `ci.yml` runs them
+with `terrain-fetch` in the test job's first shard.
+
 ## Traceability
 
 GAP-227 (action, last item, widened); D-164; D-173; D-174; D-139; D-160 to D-163; GAP-252 and
