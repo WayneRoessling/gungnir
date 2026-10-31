@@ -14127,3 +14127,84 @@
       and the alert. Tested without GL: the guard against a panic and an error, and the
       projection's sentences and missing control after a fault
       (`../../record/2026-10-30/gap-259-a-fault-in-a-gl-pass.md`).
+- id: GAP-260
+  name: A crs test binary aborted at exit while the geoid lookup thread tore PROJ down
+  type: Technical
+  caps: [CAP-1.7]
+  layer: "Productization: sensing and time"
+  sev: 2
+  effort: S
+  target: I4
+  owner: Services engineer
+  deps: [GAP-196, GAP-198]
+  impact: >-
+    `gungnir-app --test uas_identification` under `--features crs` passed all six tests and
+    then aborted in glibc (`corrupted size vs. prev_size`, `double free or corruption`) in
+    CI on 2026-10-31, runs 41167956948 and 41169458675. `UndulationService`'s thread was
+    detached: dropping the last clone closed its channel and returned, and the thread then
+    dropped its `Proj`, whose `proj` 0.31 `Drop` calls `proj_cleanup`, while `main` had
+    already returned and the exit handlers were destroying the same PROJ statics. The same
+    race is open to the desktop and the node at shutdown.
+  evidence: >-
+    Reproduced on Ubuntu 26.04 with libproj 9.7.1: 80 of 300 runs of the test binary
+    aborted. Under gdb the aborting thread is `geoid-undulation`, in `proj_cleanup` from
+    `Proj::drop` at the end of the thread's closure, while the main thread is in `exit`'s
+    `_dl_fini`. PROJ 9.6.2's `proj_cleanup` closes the database of `pj_get_default_ctx`'s
+    function-local static context.
+  action: >-
+    The thread and its sender live in one `Worker` shared by every clone; its `Drop`
+    closes the channel and joins the thread, so the last clone's drop returns only once
+    PROJ is torn down. A Linux test reads `/proc/self/task` to show the thread gone when
+    the drop returns.
+  ref: >-
+    `../../record/2026-10-31/gap-260-the-geoid-lookup-thread-ends-before.md`; GAP-261
+  history:
+  - date: 2026-10-31
+    status: Open
+    note: >-
+      Filed from the `proj-crs` job's aborts on PR #299 and PR #301, reproduced on Linux.
+  - date: 2026-10-31
+    status: Closed
+    note: >-
+      `gungnir_data::geoid::Worker` joins the lookup thread when the last
+      `UndulationService` clone drops. The test binary ran clean in two loops of 1000 after
+      the change; the new unit test failed 50 of 50 times against the detached thread and
+      0 of 200 with the join
+      (`../../record/2026-10-31/gap-260-the-geoid-lookup-thread-ends-before.md`).
+- id: GAP-261
+  name: Dropping a PROJ object runs proj_cleanup under every other thread using PROJ
+  type: Technical
+  caps: [CAP-1.7, CAP-2.10]
+  layer: UI and data ecosystem
+  sev: 3
+  effort: M
+  target: I4
+  owner: Services engineer
+  deps: [GAP-102, GAP-108, GAP-196]
+  impact: >-
+    `proj` 0.31's `Drop` for `Proj` calls `proj_cleanup` after destroying the object and
+    its context. `proj_cleanup` closes the default context's database and clears PROJ's
+    process-wide caches, and PROJ documents it for process end, once nothing else is in
+    use. In this workspace a `Proj` is built and dropped per conversion, on whatever thread
+    converts, while the geoid lookup thread holds one for the life of the process, so a
+    terrain, point-cloud or geoid conversion that ends during another thread's PROJ call
+    can corrupt the heap of the desktop or the node.
+  evidence: >-
+    `gungnir-data --test geoid` under `crs`, eight test threads, Ubuntu 26.04 with libproj
+    9.7.1: 43 of 200 runs aborted partway through the tests before GAP-260's change and
+    68 of 200 after it, and 200 of 200 passed on one test thread. Under gdb one test
+    thread was inside `sqlite3BtreeClose` on PROJ's shared database while another parsed
+    SQL on it and a third aborted in `proj_destroy`. The `proj-crs` job runs the binary
+    once per pull request on a four-core runner, which is why CI has not shown it.
+  action: >-
+    Not decided. Either one process-wide lock in `gungnir-data` held around every
+    `Proj` construction, conversion and drop, or a wrapper that tears a `Proj` down
+    without `proj_cleanup`, which is `unsafe` and human-owned. Then the geoid binary looped
+    on eight threads as GAP-260's was.
+  ref: >-
+    `../../record/2026-10-31/gap-260-the-geoid-lookup-thread-ends-before.md`; GAP-260
+  history:
+  - date: 2026-10-31
+    status: Open
+    note: >-
+      Found while verifying GAP-260, by looping the `geoid` test binary.
