@@ -55,6 +55,7 @@ fn desktop(name: &str, vertical_sigma_m: Option<f64>) -> (AppState, PathBuf) {
             path: Some(dem.to_string_lossy().into_owned()),
             store: None,
             manifest_sha256: None,
+            fill_source: None,
             frame: "local-enu".into(),
             vertical: None,
             nad83_realisation: None,

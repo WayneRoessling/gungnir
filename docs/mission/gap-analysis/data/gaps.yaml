@@ -12931,6 +12931,15 @@
       `terrain-fetch`, off by default, verifying a public source against the operating
       system's trust store. `terrain stage --source <URL>` built on it. The fill cache waits
       on D-174, raised in DN-36 amendment 5: what form a fill source takes.
+  - date: 2026-10-31
+    status: In progress
+    note: >-
+      D-174 taken by the owner to the default, and the fill cache built: `terrain.fill_source`
+      names one-degree tiles `{ns}{lat}{ew}{lon}`; a geographic store's view past its edge
+      fetches them on the tile worker into sub-stores under the data directory, reopened
+      from the cache by their recorded digests; drawn outlined only where the pinned store
+      has no tile, counted apart on PN-09, never in line of sight. Every DN-36 part is built;
+      D-139's symbols, the readout and declutter (DN-37) remain.
 
 - id: GAP-228
   name: No operator-initiated escalation
