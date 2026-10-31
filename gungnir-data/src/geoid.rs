@@ -848,6 +848,38 @@ struct Lookup {
     reply: crossbeam_channel::Sender<Result<f64, String>>,
 }
 
+/// The service thread and the only way to ask it, shared by every clone of one
+/// [`UndulationService`] and dropped with the last (GAP-260).
+///
+/// **Why the drop joins the thread.** Closing the channel ends the thread's loop, and the
+/// thread then drops its `Proj`, which in `proj` 0.31 calls `proj_destroy`,
+/// `proj_context_destroy` and `proj_cleanup`. `proj_cleanup` closes the database of
+/// PROJ's default context, a function-local C++ static, and clears PROJ's static caches.
+/// A detached thread doing that while the process exits races the exit handlers that
+/// destroy those same statics, and glibc aborted the `crs` test binary after every test
+/// had passed (`double free or corruption`, `corrupted size vs. prev_size`). Joining here
+/// means the last clone's drop returns only once PROJ is torn down, so whatever drops it
+/// before `main` returns leaves no PROJ work running into the exit.
+#[cfg(feature = "crs")]
+#[derive(Debug)]
+struct Worker {
+    /// `None` only inside `drop`, which closes it before joining.
+    lookups: Option<crossbeam_channel::Sender<Lookup>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+#[cfg(feature = "crs")]
+impl Drop for Worker {
+    fn drop(&mut self) {
+        drop(self.lookups.take());
+        if let Some(thread) = self.thread.take() {
+            // A thread that panicked has nothing left to tear down; there is no one to
+            // tell from a drop.
+            let _ = thread.join();
+        }
+    }
+}
+
 /// A pinned geoid model's undulation at one position at a time, for a live feed (GAP-196,
 /// D-123): a Category 129 report's height above mean sea level becomes an ellipsoidal
 /// one by adding EGM2008's.
@@ -859,7 +891,7 @@ struct Lookup {
 /// that asks is owned by the gateway and must be `Send`. So one thread owns the
 /// pipeline for its whole life and answers lookups over a channel; the service is the
 /// sending end, which is `Send + Sync` and cheap to clone. The thread ends when the last
-/// clone is dropped.
+/// clone is dropped, **and that drop waits for it** ([`Worker`] says why).
 ///
 /// Built only from a [`GeoidGrid`], so only a verified file is ever read, and through
 /// the same written-out pipeline [`undulations`] uses: no ballpark fallback, and a
@@ -867,7 +899,7 @@ struct Lookup {
 #[derive(Debug, Clone)]
 pub struct UndulationService {
     #[cfg(feature = "crs")]
-    lookups: crossbeam_channel::Sender<Lookup>,
+    worker: std::sync::Arc<Worker>,
     /// A build without `crs` cannot make one at all: `start` refuses, and this field
     /// has no value to hold.
     #[cfg(not(feature = "crs"))]
@@ -890,7 +922,7 @@ impl UndulationService {
         let (lookups, questions) = crossbeam_channel::unbounded::<Lookup>();
         let (ready_tx, ready_rx) = crossbeam_channel::bounded::<Result<(), DataError>>(1);
         let path = grid.path().to_path_buf();
-        std::thread::Builder::new()
+        let thread = std::thread::Builder::new()
             .name("geoid-undulation".to_string())
             .spawn(move || {
                 let pipeline = match geoid_pipeline(&path) {
@@ -911,9 +943,14 @@ impl UndulationService {
                 }
             })
             .map_err(|e| DataError::Parse(format!("the geoid lookup thread did not start: {e}")))?;
+        // Held from here on, so a refusal below also waits for the thread to end.
+        let worker = Worker {
+            lookups: Some(lookups),
+            thread: Some(thread),
+        };
         match ready_rx.recv() {
             Ok(Ok(())) => Ok(UndulationService {
-                lookups,
+                worker: std::sync::Arc::new(worker),
                 grid: grid.clone(),
             }),
             Ok(Err(e)) => Err(e),
@@ -947,7 +984,10 @@ impl UndulationService {
     #[cfg(feature = "crs")]
     pub fn undulation(&self, lon: f64, lat: f64) -> Result<f64, DataError> {
         let (reply, answer) = crossbeam_channel::bounded(1);
-        self.lookups
+        self.worker
+            .lookups
+            .as_ref()
+            .ok_or_else(|| DataError::Parse("the geoid lookup thread has stopped".to_string()))?
             .send(Lookup { lon, lat, reply })
             .map_err(|_| DataError::Parse("the geoid lookup thread has stopped".to_string()))?;
         match answer.recv_timeout(UNDULATION_LOOKUP_TIMEOUT) {
@@ -1303,6 +1343,56 @@ mod tests {
         assert_eq!(linear_unit_metres(9002), Some(0.3048));
         assert_eq!(linear_unit_metres(9003), Some(1200.0 / 3937.0));
         assert_eq!(linear_unit_metres(9036), None, "the kilometre is not read");
+    }
+
+    /// The lookup threads alive in this process, by the name `start` gives them, which
+    /// Linux truncates to 15 bytes.
+    #[cfg(all(feature = "crs", target_os = "linux"))]
+    fn undulation_threads() -> std::collections::BTreeSet<String> {
+        std::fs::read_dir("/proc/self/task")
+            .expect("Linux lists this process's threads")
+            .filter_map(|task| {
+                let task = task.ok()?.path();
+                let comm = std::fs::read_to_string(task.join("comm")).ok()?;
+                (comm.trim_end() == "geoid-undulatio")
+                    .then(|| task.file_name()?.to_str().map(str::to_string))
+                    .flatten()
+            })
+            .collect()
+    }
+
+    /// GAP-260: once the last clone of a service is dropped, its thread has ended, so its
+    /// PROJ teardown cannot run on into the process's exit. Before the fix the drop only
+    /// closed the channel, and the thread was still tearing PROJ down when this looked.
+    ///
+    /// No other test in this library starts a lookup thread, so the threads that appear
+    /// across `start` are this test's own.
+    #[test]
+    #[cfg(all(feature = "crs", target_os = "linux"))]
+    fn dropping_the_last_clone_waits_for_the_lookup_thread_to_end() {
+        let clip = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../testdata/geoid/egm08_25_clip_53n56n_13e17e.tif");
+        let grid = GeoidGrid::verify(
+            &clip,
+            "60a16af44ca47724fd6cbb58565104a010dd2ef8c2d5ec1c666552052fa83e10",
+        )
+        .expect("the committed clip");
+        let before = undulation_threads();
+        let service = UndulationService::start(&grid).expect("PROJ opens the clip");
+        let ours: Vec<String> = undulation_threads().difference(&before).cloned().collect();
+        assert_eq!(ours.len(), 1, "{ours:?}");
+        let clone = service.clone();
+        assert!(clone.undulation(15.0, 54.5).is_ok());
+        drop(service);
+        assert!(
+            undulation_threads().contains(&ours[0]),
+            "a clone still holds the thread"
+        );
+        drop(clone);
+        assert!(
+            !undulation_threads().contains(&ours[0]),
+            "the thread outlived the last clone"
+        );
     }
 
     #[test]
