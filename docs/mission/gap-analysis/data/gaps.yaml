@@ -14189,7 +14189,8 @@
   - date: 2026-10-31
     status: Closed
     note: >-
-      `gungnir_data::proj_lock::LockedProj` holds one process-wide lock for every PROJ
+      `gungnir_data::proj_lock::LockedProj` holds one process-wide lock, served first
+      come first served so the geoid lookup thread is not starved, for every PROJ
       construction, conversion, WKT and drop in the crate. On the same Linux rig the
       `geoid` binary on eight test threads aborted in 27 of 100 runs without it and in
       none of 500 with it
