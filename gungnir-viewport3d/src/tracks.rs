@@ -110,15 +110,80 @@ pub fn glyphs_need_rebuild(glyphs: &[TrackGlyph], tracks: &[TrackView]) -> bool 
     glyphs.len() != tracks.len() || glyphs.iter().zip(tracks).any(|(g, t)| *g != glyph_for(t))
 }
 
-/// Seconds of velocity drawn as the heading vector.
-const HEADING_VECTOR_SECONDS: f64 = 10.0;
+/// How far ahead each track's leader reaches (DN-37 §5.1, D-171).
+///
+/// The leader is the direction-of-movement line, drawn to where the track will be after
+/// this time at its present velocity. It was a fixed ten seconds, which is a speck zoomed
+/// out; an operator-selected time means every leader on screen says the same thing at
+/// every zoom, and the operator chooses how much of the future the picture shows. Session
+/// state like the renderer choice ([`ViewportState::use_3d`](crate::ViewportState)): the next launch
+/// starts from the default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LeaderTime {
+    Seconds10,
+    Seconds30,
+    /// The default (D-171).
+    #[default]
+    Minute1,
+    Minutes2,
+    Minutes5,
+}
+
+impl LeaderTime {
+    /// Every choice, shortest first: the order the control steps through.
+    pub const ALL: [Self; 5] = [
+        Self::Seconds10,
+        Self::Seconds30,
+        Self::Minute1,
+        Self::Minutes2,
+        Self::Minutes5,
+    ];
+
+    /// The time the leader reaches, in seconds.
+    #[must_use]
+    pub fn seconds(self) -> f64 {
+        match self {
+            Self::Seconds10 => 10.0,
+            Self::Seconds30 => 30.0,
+            Self::Minute1 => 60.0,
+            Self::Minutes2 => 120.0,
+            Self::Minutes5 => 300.0,
+        }
+    }
+
+    /// What the control reads, so the screen says what the leaders mean.
+    #[must_use]
+    pub fn control_text(self) -> &'static str {
+        match self {
+            Self::Seconds10 => "leaders 10 s",
+            Self::Seconds30 => "leaders 30 s",
+            Self::Minute1 => "leaders 1 min",
+            Self::Minutes2 => "leaders 2 min",
+            Self::Minutes5 => "leaders 5 min",
+        }
+    }
+
+    /// The next choice, wrapping from the longest to the shortest.
+    #[must_use]
+    pub fn next(self) -> Self {
+        match self {
+            Self::Seconds10 => Self::Seconds30,
+            Self::Seconds30 => Self::Minute1,
+            Self::Minute1 => Self::Minutes2,
+            Self::Minutes2 => Self::Minutes5,
+            Self::Minutes5 => Self::Seconds10,
+        }
+    }
+}
+
 /// In egui points. The three-d scene sizes its spheres from this too (`gl::instances`),
 /// so a track is the same size on screen in either renderer.
 pub(crate) const GLYPH_RADIUS_PX: f32 = 5.0;
 
-/// Classification frame round a lifecycle fill, one-sigma ellipse, heading vector, id
-/// label. Both renderers draw this: the projection alone, the three-d scene over its
-/// discs (GAP-251). `ids` is [`glyph_ids`] of `glyphs`, written with the list.
+/// Classification frame round a lifecycle fill, one-sigma ellipse, leader, id label. Both
+/// renderers draw this: the projection alone, the three-d scene over its discs (GAP-251).
+/// `ids` is [`glyph_ids`] of `glyphs`, written with the list. The leader reaches `leader`
+/// ahead of the track (D-171).
 pub fn draw_glyphs_2d(
     painter: &egui::Painter,
     palette: &theme::Palette,
@@ -126,7 +191,9 @@ pub fn draw_glyphs_2d(
     view: &TopDownView,
     glyphs: &[TrackGlyph],
     ids: &[String],
+    leader: LeaderTime,
 ) {
+    let leader_s = leader.seconds();
     for (i, g) in glyphs.iter().enumerate() {
         let color = theme::track_color(palette, g.status, g.stale);
         let center = view.project(g.position, rect);
@@ -144,8 +211,8 @@ pub fn draw_glyphs_2d(
         draw_classification_frame(painter, palette, center, g, color);
         let head = view.project(
             [
-                g.position[0] + g.velocity[0] * HEADING_VECTOR_SECONDS,
-                g.position[1] + g.velocity[1] * HEADING_VECTOR_SECONDS,
+                g.position[0] + g.velocity[0] * leader_s,
+                g.position[1] + g.velocity[1] * leader_s,
                 0.0,
             ],
             rect,
@@ -674,6 +741,81 @@ mod tests {
             .collect()
     }
 
+    /// DN-37 §6.1 row f, D-171: a leader's length on screen is speed times the selected time
+    /// over the zoom, so it means the same thing at every zoom and a longer time reaches
+    /// further. The track moves at 5 m/s (3 east, 4 north); the leader is the one line
+    /// segment the glyph draws.
+    #[test]
+    fn a_leader_is_as_long_as_speed_times_the_selected_time_over_the_zoom() {
+        let mut moving = track(1, 0.0);
+        moving.state[3] = 3.0;
+        moving.state[4] = 4.0;
+        let glyphs = update_track_symbols(&[moving]);
+        let ids = glyph_ids(&glyphs);
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
+        let palette = theme::Palette::day();
+        for meters_per_px in [0.5, 4.0] {
+            let view = TopDownView {
+                center_e: 0.0,
+                center_n: 0.0,
+                meters_per_px,
+            };
+            for leader in LeaderTime::ALL {
+                let lengths: Vec<f64> = painted(|p| {
+                    draw_glyphs_2d(p, &palette, rect, &view, &glyphs, &ids, leader);
+                })
+                .iter()
+                .filter_map(|s| match s {
+                    egui::Shape::LineSegment { points, .. } => {
+                        Some(f64::from(points[0].distance(points[1])))
+                    }
+                    _ => None,
+                })
+                .collect();
+                let expected = 5.0 * leader.seconds() / meters_per_px;
+                assert_eq!(lengths.len(), 1, "one leader per track: {lengths:?}");
+                assert!(
+                    (lengths[0] - expected).abs() < 1e-3 * expected,
+                    "{} at {meters_per_px} m/px: drawn {} px, expected {expected}",
+                    leader.control_text(),
+                    lengths[0]
+                );
+            }
+        }
+    }
+
+    /// D-171: ten seconds, thirty, a minute, two and five; a minute to begin with; the
+    /// control steps through them and comes back to where it began, and each reads as the
+    /// time it is.
+    #[test]
+    fn the_leader_times_are_the_five_the_owner_chose_and_default_to_a_minute() {
+        assert_eq!(LeaderTime::default().seconds(), 60.0);
+        assert_eq!(
+            LeaderTime::ALL.map(LeaderTime::seconds),
+            [10.0, 30.0, 60.0, 120.0, 300.0]
+        );
+        let mut at = LeaderTime::ALL[0];
+        for expected in LeaderTime::ALL
+            .iter()
+            .skip(1)
+            .chain(LeaderTime::ALL.first())
+        {
+            at = at.next();
+            assert_eq!(at, *expected);
+        }
+        let texts: Vec<_> = LeaderTime::ALL.map(LeaderTime::control_text).to_vec();
+        assert_eq!(
+            texts,
+            [
+                "leaders 10 s",
+                "leaders 30 s",
+                "leaders 1 min",
+                "leaders 2 min",
+                "leaders 5 min"
+            ]
+        );
+    }
+
     /// An outline whose corner radius fits egui's whole-point `u8` is drawn as the
     /// rectangle it always was, stroked outside its edge as egui 0.29 stroked every one.
     #[test]
@@ -759,7 +901,15 @@ mod tests {
         let mut labels = PlanLabels::default();
         labels.sync(&plan);
         painted(|p| {
-            draw_glyphs_2d(p, &palette, rect, &view, &glyphs, &ids);
+            draw_glyphs_2d(
+                p,
+                &palette,
+                rect,
+                &view,
+                &glyphs,
+                &ids,
+                LeaderTime::default(),
+            );
             draw_plan_2d(p, &palette, rect, &view, &glyphs, &ids, &labels);
         })
         .into_iter()

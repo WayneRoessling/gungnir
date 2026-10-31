@@ -3,7 +3,7 @@
 GAP-227's three parts beside the tiles of `DN-36-staged-terrain-and-map-tiles.md`: D-139's
 MIL-STD-2525D symbols, a cursor readout in MGRS and latitude and longitude, and declutter
 (leaders and label placement). D-163 lets them proceed in parallel with the tiles. Status:
-design, 2026-10-30; **MGRS is built (amendment 1), nothing else**. The owner walked eight choices the same day, D-165
+design, 2026-10-30; **MGRS (amendment 1) and the leaders (amendment 2) are built, nothing else**. The owner walked eight choices the same day, D-165
 to D-172, and took every one to its recommended default; §8 records them. What the owner has
 signed of this note is in [`../signatures.md`](../signatures.md).
 
@@ -206,6 +206,18 @@ dependency edge" stands. Row d is held by `gungnir-coord/tests/geoconvert_diff.r
 2 953 cases from `GeoConvert` 2.5.2, the same string and a millimetre; the row is still a
 draft, as §6.1 says. `../record/2026-10-31/gap-227-mgrs-utm-and-ups-in-gungnir.md` records
 what the oracle corrected in the first draft of the lettering.
+
+## Amendment 2, 2026-10-31: the leaders, as built
+
+§5.1 is built. `tracks::LeaderTime` holds the five times (10 s, 30 s, 1 min, 2 min, 5 min), a
+minute to begin with, and `draw_glyphs_2d` draws the direction-of-movement line to where the
+track will be after it. `ViewportState::leader_time` is session state beside `use_3d`, and a
+control beside the renderer toggle, read "leaders 1 min", steps through the five on a click.
+It sits in `draw_renderer_toggle`, so the projection has it without a scene. `draw_tracks`,
+the one function both renderers call, passes the choice. Row f is held by three tests in
+`gungnir-viewport3d`; `../record/2026-10-31/gap-227-leaders-at-an-operator-selected-time.md` has
+them and the display checklist. The default is six times the line the picture drew before, so a
+fast track's leader now reaches far; the control is the operator's way to shorten it.
 
 ## Traceability
 

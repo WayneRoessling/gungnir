@@ -159,6 +159,10 @@ pub struct ViewportState {
     /// session is doing: switching back does not change the deployment's configuration,
     /// and the next launch starts from the baseline again.
     pub use_3d: bool,
+    /// How far ahead each track's leader reaches (DN-37 §5.1, D-171). Session state like
+    /// [`use_3d`](Self::use_3d): changed by the control beside the renderer toggle, and
+    /// the next launch starts from the default, one minute.
+    pub leader_time: tracks::LeaderTime,
     /// Why the three-d scene stopped, as the sentence the projection draws, once a GL
     /// pass has faulted (GAP-259; `gl::GlFault`). Set by [`note_gl_fault`](Self::note_gl_fault),
     /// which also turns `gl_ready` and `use_3d` off, so there is no control back to a
@@ -229,6 +233,7 @@ impl ViewportState {
             view: interaction::TopDownView::default(),
             gl_ready: false,
             use_3d: false,
+            leader_time: tracks::LeaderTime::default(),
             gl_fault: None,
             layers: CoverageLayers::default(),
             dead_spot_texture: None,
@@ -666,6 +671,7 @@ fn draw_tracks(
         &state.view,
         &state.glyphs,
         &state.glyph_ids,
+        state.leader_time,
     );
     tracks::draw_plan_2d(
         painter,
@@ -678,17 +684,62 @@ fn draw_tracks(
     );
 }
 
+/// The renderer toggle's width, egui points.
+const RENDERER_TOGGLE_WIDTH_PX: f32 = 36.0;
+/// The leader control's width, egui points: wide enough for "leaders 10 s".
+const LEADER_CONTROL_WIDTH_PX: f32 = 96.0;
+
+/// The control that sets how far ahead each track's leader reaches (DN-37 §5.1, D-171),
+/// beside the renderer toggle and read as "leaders 1 min". A click steps to the next time.
+///
+/// Drawn by both renderers' callers, through [`draw_renderer_toggle`], because the leaders
+/// it sets are drawn by the one `draw_tracks` both renderers share.
+fn draw_leader_control(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    rect: egui::Rect,
+    state: &mut ViewportState,
+) {
+    let size = egui::vec2(LEADER_CONTROL_WIDTH_PX, 20.0);
+    let corner = egui::Rect::from_min_size(
+        egui::pos2(
+            rect.right()
+                - RENDERER_TOGGLE_WIDTH_PX
+                - palette.panel_spacing
+                - palette.row_spacing
+                - size.x,
+            rect.top() + palette.panel_spacing,
+        ),
+        size,
+    );
+    let response = ui
+        .put(
+            corner,
+            egui::Button::new(state.leader_time.control_text()).small(),
+        )
+        .on_hover_text(
+            "How far ahead each track's leader reaches, at its present velocity. Click to \
+             step through 10 s, 30 s, 1 min, 2 min and 5 min.",
+        );
+    if response.clicked() {
+        state.leader_time = state.leader_time.next();
+    }
+}
+
 pub fn draw_renderer_toggle(
     ui: &mut egui::Ui,
     palette: &theme::Palette,
     rect: egui::Rect,
     state: &mut ViewportState,
 ) -> bool {
+    // The leader control is beside the toggle and does not depend on it: the projection
+    // alone, when no scene could be attached, still has leaders (DN-37 §5.1).
+    draw_leader_control(ui, palette, rect, state);
     if !state.gl_ready {
         return false;
     }
     let label = if state.use_3d { "3D" } else { "2D" };
-    let size = egui::vec2(36.0, 20.0);
+    let size = egui::vec2(RENDERER_TOGGLE_WIDTH_PX, 20.0);
     let corner = egui::Rect::from_min_size(
         egui::pos2(
             rect.right() - size.x - palette.panel_spacing,
@@ -1054,6 +1105,114 @@ mod tests {
             .collect();
         assert!(!projection.is_empty());
         assert_eq!(described(&over), described(&projection));
+    }
+
+    /// The frames' events for a click at `at`: the pointer arrives, presses, releases.
+    fn click_at(at: egui::Pos2) -> [Vec<egui::Event>; 3] {
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        [
+            vec![egui::Event::PointerMoved(at)],
+            vec![button(true)],
+            vec![button(false)],
+        ]
+    }
+    /// DN-37 §6.1 row f, D-171, through both renderers: the control reads "leaders 1 min" to
+    /// begin with, a click steps it, and the leader of a track grows with it by the same
+    /// factor whichever renderer is in front (the factor of two from a minute to two).
+    #[test]
+    fn the_leader_control_is_in_both_renderers_and_sets_what_both_draw() {
+        let palette = theme::Palette::day();
+        let tracks = [track(41, 0.0, Classification::Hostile)];
+        let leader_color = theme::track_color(&palette, TrackStatus::Confirmed, false);
+        let mut lengths = Vec::new();
+        for three_d in [false, true] {
+            let ctx = egui::Context::default();
+            let mut state = ViewportState::new();
+            let frame = |state: &mut ViewportState, events: Vec<egui::Event>| {
+                let mut input = screen();
+                input.events = events;
+                let output = ctx.run_ui(input, |ui| {
+                    if three_d {
+                        let prepared = prepare_3d(
+                            ui,
+                            &palette,
+                            state,
+                            &tracks,
+                            &[],
+                            &no_plan(),
+                            no_layers(),
+                            None,
+                        )
+                        .expect("an 800 by 600 screen has room for the scene");
+                        draw_renderer_toggle(ui, &palette, prepared.rect, state);
+                    } else {
+                        render(ui, &palette, state, &tracks, &[], &no_plan(), no_layers());
+                    }
+                });
+                output
+                    .shapes
+                    .into_iter()
+                    .map(|c| c.shape)
+                    .collect::<Vec<_>>()
+            };
+            let leader_px = |shapes: &[egui::Shape]| -> f32 {
+                shapes
+                    .iter()
+                    .filter_map(|s| match s {
+                        egui::Shape::LineSegment { points, stroke }
+                            if stroke.color == leader_color =>
+                        {
+                            Some(points[0].distance(points[1]))
+                        }
+                        _ => None,
+                    })
+                    .fold(0.0, f32::max)
+            };
+            let control = |shapes: &[egui::Shape], words: &str| {
+                shapes.iter().find_map(|s| match s {
+                    egui::Shape::Text(t) if t.galley.text() == words => {
+                        Some(t.visual_bounding_rect())
+                    }
+                    _ => None,
+                })
+            };
+
+            frame(&mut state, Vec::new());
+            let before = frame(&mut state, Vec::new());
+            let at = control(&before, "leaders 1 min")
+                .unwrap_or_else(|| {
+                    panic!("no leader control; drawn {:?}", texts(&before));
+                })
+                .center();
+            let one_minute = leader_px(&before);
+            assert!(one_minute > 0.0, "a moving track has a leader");
+
+            for events in click_at(at) {
+                frame(&mut state, events);
+            }
+            assert_eq!(state.leader_time, tracks::LeaderTime::Minutes2);
+            let after = frame(&mut state, Vec::new());
+            assert!(
+                control(&after, "leaders 2 min").is_some(),
+                "the control says the new time; drawn {:?}",
+                texts(&after)
+            );
+            let two_minutes = leader_px(&after);
+            assert!(
+                (two_minutes / one_minute - 2.0).abs() < 1e-3,
+                "{three_d}: a minute drew {one_minute} px, two drew {two_minutes}"
+            );
+            lengths.push((one_minute, two_minutes));
+        }
+        assert_eq!(
+            lengths[0], lengths[1],
+            "the two renderers draw the same leaders"
+        );
     }
 
     /// GAP-252, DN-35 §8.1 row d: the scene draws its own ground only when the GL pass
