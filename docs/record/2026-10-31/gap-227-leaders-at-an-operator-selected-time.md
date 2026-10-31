@@ -49,7 +49,7 @@ gungnir-app --rehearsal testdata/usability/round-1-seed.json
    whichever renderer is in front.
 4. Zooming in or out does not change what a leader means: its length in the metre grid stays
    the same, and only its length on screen follows the zoom.
-5. At a narrow window the `leaders` control does not overlap the status line or the`n   `2D`/`3D` control.
+5. At a narrow window the `leaders` control does not overlap the status line or the `2D`/`3D` control.
 
 Nothing here is a GL change: the leader is drawn by egui over the scene's discs, as the
 heading vector was. Until the owner has looked, it is unseen on a display.
