@@ -805,10 +805,28 @@ impl std::str::FromStr for Nad83Realisation {
 /// (GAP-023, D-41). See [`Frame`]. A `GeoTIFF`'s own tags are read regardless of what
 /// `frame` declares; a mismatch between the two, or a file whose tags contradict a
 /// `"local-enu"` declaration, is refused at load, by name.
+///
+/// The ground is one file, `path`, or a staged store of tiles, `store` with the
+/// `manifest_sha256` that pins it (GAP-227,
+/// `docs/design/DN-36-staged-terrain-and-map-tiles.md` §4.2); never both. `frame`,
+/// `vertical` and `nad83_realisation` apply to every tile of a store as to the one file.
+/// The three are skipped when absent, so a baseline signed before the store existed
+/// serializes, and so verifies, exactly as it did ([`ConfigBaseline::signing_bytes`]).
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TerrainConfig {
     /// An ESRI ASCII grid (`.asc`) or a `GeoTIFF` (`.tif`, `.tiff`).
-    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// A staged terrain store's directory: `manifest.json` and its pyramid of `GeoTIFF`
+    /// tiles (`gungnir_data::terrain_store`). Read and verified, never written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store: Option<String>,
+    /// The SHA-256 of `store`'s `manifest.json`, 64 hexadecimal digits: required with
+    /// `store` and refused without it. A manifest whose digest differs is refused by name,
+    /// and the manifest pins each tile's, so a verified baseline carries the chain to every
+    /// tile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest_sha256: Option<String>,
     #[serde(default = "default_terrain_frame")]
     pub frame: String,
     /// What the DEM's heights are measured from, for a file that does not say
@@ -3325,15 +3343,67 @@ fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
     let Some(t) = &baseline.terrain else {
         return Ok(());
     };
-    let extension = std::path::Path::new(&t.path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(str::to_ascii_lowercase);
-    if !matches!(extension.as_deref(), Some("asc" | "tif" | "tiff")) {
-        return Err(ConfigError::Invalid(format!(
-            "terrain.path {:?} is not an ESRI ASCII grid (.asc) or a GeoTIFF (.tif, .tiff)",
-            t.path
-        )));
+    match (&t.path, &t.store) {
+        (Some(_), Some(_)) => {
+            return Err(ConfigError::Invalid(
+                "terrain names both a path and a store; the ground is one DEM file or one \
+                 staged store, so name one of them"
+                    .to_string(),
+            ))
+        }
+        (None, None) => {
+            return Err(ConfigError::Invalid(
+                "terrain names neither a path (one DEM file) nor a store (a staged store of \
+                 tiles); name one, or leave terrain out for flat line of sight"
+                    .to_string(),
+            ))
+        }
+        (Some(path), None) => {
+            let extension = std::path::Path::new(path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(str::to_ascii_lowercase);
+            if !matches!(extension.as_deref(), Some("asc" | "tif" | "tiff")) {
+                return Err(ConfigError::Invalid(format!(
+                    "terrain.path {path:?} is not an ESRI ASCII grid (.asc) or a GeoTIFF \
+                     (.tif, .tiff)"
+                )));
+            }
+            if t.manifest_sha256.is_some() {
+                return Err(ConfigError::Invalid(
+                    "terrain.manifest_sha256 pins a staged store's manifest, and terrain names \
+                     a path, not a store"
+                        .to_string(),
+                ));
+            }
+        }
+        (None, Some(store)) => {
+            if store.trim().is_empty() {
+                return Err(ConfigError::Invalid(
+                    "terrain.store is empty; name the directory holding the store's \
+                     manifest.json"
+                        .to_string(),
+                ));
+            }
+            match t.manifest_sha256.as_deref() {
+                None => {
+                    return Err(ConfigError::Invalid(
+                        "terrain.store names a staged store and terrain.manifest_sha256 does \
+                         not pin its manifest; give the digest `terrain stage` printed"
+                            .to_string(),
+                    ))
+                }
+                Some(digest)
+                    if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_hexdigit()) =>
+                {
+                    return Err(ConfigError::Invalid(format!(
+                        "terrain.manifest_sha256 {digest:?} is not a SHA-256: 64 hexadecimal \
+                         digits"
+                    )))
+                }
+                Some(_) => {}
+            }
+        }
     }
     if let Err(reason) = t.frame.parse::<Frame>() {
         return Err(ConfigError::Invalid(format!("terrain.frame {reason}")));
@@ -6400,7 +6470,9 @@ MFkw
     fn a_terrain_entry_needs_a_known_format_and_a_parseable_frame() {
         let mut b = ConfigBaseline {
             terrain: Some(TerrainConfig {
-                path: "dem/site.asc".into(),
+                path: Some("dem/site.asc".into()),
+                store: None,
+                manifest_sha256: None,
                 frame: "local-enu".into(),
                 vertical: None,
                 nad83_realisation: None,
@@ -6410,7 +6482,9 @@ MFkw
         };
         validate(&b).expect("an ASCII grid in the local frame is valid");
         b.terrain = Some(TerrainConfig {
-            path: "dem/site.png".into(),
+            path: Some("dem/site.png".into()),
+            store: None,
+            manifest_sha256: None,
             frame: "local-enu".into(),
             vertical: None,
             nad83_realisation: None,
@@ -6421,7 +6495,9 @@ MFkw
         // both the codebase's own uppercase-EPSG casing and lowercase both parse -- and
         // does not need a projection library to validate, only to load and convert.
         b.terrain = Some(TerrainConfig {
-            path: "dem/site.tif".into(),
+            path: Some("dem/site.tif".into()),
+            store: None,
+            manifest_sha256: None,
             frame: "EPSG:32633".into(),
             vertical: None,
             nad83_realisation: None,
@@ -6429,7 +6505,9 @@ MFkw
         });
         validate(&b).expect("a declared real-world CRS by EPSG code is valid");
         b.terrain = Some(TerrainConfig {
-            path: "dem/site.tif".into(),
+            path: Some("dem/site.tif".into()),
+            store: None,
+            manifest_sha256: None,
             frame: "epsg:4326".into(),
             vertical: None,
             nad83_realisation: None,
@@ -6438,7 +6516,9 @@ MFkw
         validate(&b).expect("lowercase epsg: is accepted the same way");
         // Neither "local-enu" nor "epsg:<code>" is still refused, whatever the reason.
         b.terrain = Some(TerrainConfig {
-            path: "dem/site.tif".into(),
+            path: Some("dem/site.tif".into()),
+            store: None,
+            manifest_sha256: None,
             frame: "wgs84".into(),
             vertical: None,
             nad83_realisation: None,
@@ -6446,13 +6526,78 @@ MFkw
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
         b.terrain = Some(TerrainConfig {
-            path: "dem/site.tif".into(),
+            path: Some("dem/site.tif".into()),
+            store: None,
+            manifest_sha256: None,
             frame: "epsg:not-a-number".into(),
             vertical: None,
             nad83_realisation: None,
             vertical_sigma_m: None,
         });
         assert!(matches!(validate(&b), Err(ConfigError::Invalid(_))));
+    }
+
+    /// GAP-227 (DN-36 §4.2): a staged store is named with its manifest's digest, never
+    /// beside a path, and a terrain entry names one of the two.
+    #[test]
+    fn a_terrain_store_is_pinned_and_exclusive_with_a_path() {
+        let store = |path: Option<&str>, store: Option<&str>, digest: Option<&str>| {
+            let b = ConfigBaseline {
+                terrain: Some(TerrainConfig {
+                    path: path.map(Into::into),
+                    store: store.map(Into::into),
+                    manifest_sha256: digest.map(Into::into),
+                    frame: "epsg:4269".into(),
+                    vertical: Some("epsg:5703".into()),
+                    nad83_realisation: Some("epsg:6318".into()),
+                    vertical_sigma_m: None,
+                }),
+                ..ConfigBaseline::default()
+            };
+            match validate(&b) {
+                Ok(()) => String::new(),
+                Err(ConfigError::Invalid(reason)) => reason,
+                Err(other) => panic!("{other:?}"),
+            }
+        };
+        let digest = "0123456789abcdef".repeat(4);
+        assert_eq!(store(None, Some("terrain/oregon"), Some(&digest)), "");
+        assert_eq!(
+            store(
+                None,
+                Some("terrain/oregon"),
+                Some(&digest.to_ascii_uppercase())
+            ),
+            ""
+        );
+        assert!(
+            store(Some("dem/site.tif"), Some("terrain/oregon"), Some(&digest))
+                .contains("both a path and a store")
+        );
+        assert!(store(None, None, None).contains("neither a path"));
+        assert!(store(None, Some("terrain/oregon"), None).contains("does not pin"));
+        assert!(store(None, Some("terrain/oregon"), Some("abc")).contains("is not a SHA-256"));
+        assert!(store(None, Some(" "), Some(&digest)).contains("terrain.store is empty"));
+        assert!(store(Some("dem/site.tif"), None, Some(&digest)).contains("names a path"));
+    }
+
+    /// The store's fields are skipped when absent, so a baseline signed before them
+    /// serializes, and so verifies, as it did: `path` first, then `frame`.
+    #[test]
+    fn a_single_dem_baseline_serializes_as_before_the_store() {
+        let terrain = TerrainConfig {
+            path: Some("dem/site.tif".into()),
+            store: None,
+            manifest_sha256: None,
+            frame: "local-enu".into(),
+            vertical: None,
+            nad83_realisation: None,
+            vertical_sigma_m: None,
+        };
+        assert_eq!(
+            serde_json::to_string(&terrain).expect("encoded"),
+            r#"{"path":"dem/site.tif","frame":"local-enu","vertical":null,"nad83_realisation":null,"vertical_sigma_m":null}"#
+        );
     }
 
     #[test]
@@ -6490,7 +6635,9 @@ MFkw
 
         let mut b = ConfigBaseline {
             terrain: Some(TerrainConfig {
-                path: "dem/site.tif".into(),
+                path: Some("dem/site.tif".into()),
+                store: None,
+                manifest_sha256: None,
                 frame: "epsg:32633".into(),
                 vertical: Some("epsg:3855".into()),
                 nad83_realisation: None,
@@ -6535,7 +6682,9 @@ MFkw
         }
         let mut b = ConfigBaseline {
             terrain: Some(TerrainConfig {
-                path: "dem/site.tif".into(),
+                path: Some("dem/site.tif".into()),
+                store: None,
+                manifest_sha256: None,
                 frame: "epsg:26910".into(),
                 vertical: Some("epsg:5703".into()),
                 nad83_realisation: Some("epsg:6318".into()),
@@ -6559,7 +6708,9 @@ MFkw
     fn a_dem_vertical_error_is_a_positive_number_of_metres() {
         let terrain = |sigma| ConfigBaseline {
             terrain: Some(TerrainConfig {
-                path: "dem/site.asc".into(),
+                path: Some("dem/site.asc".into()),
+                store: None,
+                manifest_sha256: None,
                 frame: "local-enu".into(),
                 vertical: None,
                 nad83_realisation: None,

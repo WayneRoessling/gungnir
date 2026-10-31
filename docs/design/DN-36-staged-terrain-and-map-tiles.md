@@ -2,7 +2,8 @@
 
 Part of GAP-227: its action's last item, "basemap tiles as the first consumer of the
 streaming stubs", widened to the ground under the picture as well as the imagery over it.
-Status: design, 2026-10-30; **nothing is built**. Four choices were raised for the owner as
+Status: design, 2026-10-30, built in increments: GAP-227's history says which have landed,
+and amendment 3 what the first changed. Four choices were raised for the owner as
 D-160 to D-163 (§10), each with a recommended default; the owner took all four the same day,
 D-160 and D-162 past the default, and amendment 1 says what they change and raises D-164,
 which the owner took to its default (amendment 2). What the owner has signed of this
@@ -301,6 +302,38 @@ context, marked as amendment 1 item 1 says, and nothing more.
   tile from the cache into the store at run time.
 - **§8.1 gains row k:** with fill tiles resident over part of the coverage extent, the height
   field and the dead-spot field are identical to those with no fill source at all.
+
+## Amendment 3, 2026-10-30: the store reader, as built
+
+The first increment, §9's `gungnir-config` and `gungnir-data` lines and the placement of
+a tile, made four things exact that the note left open, and moved one forward.
+
+1. **The geometry (§4.1).** Tiles are counted from the extent's north-west corner, column
+   east and row south, and a level's last column and row of tiles hold what is left. Level
+   `k` has the level-0 count halved `k` times and rounded up, so a coarse cell at the east or
+   south edge averages what is left and reaches past the extent by less than one of its
+   cells. The manifest still lists each tile's shape and bounds (§4.2); the reader derives
+   both from these rules and refuses a manifest whose entries disagree, so a choice of
+   tiles by view (§5.1) works from geometry that holds.
+2. **No predictor (D-161).** `tiff` 0.11 writes neither the floating-point predictor nor
+   the horizontal one for floats. A staged tile is Float32 and DEFLATE without one: larger
+   than GDAL's `PREDICTOR=3` would make it, read identically. D-161 is otherwise unchanged.
+3. **An empty tile is not staged.** A tile whose own cells hold no height is not written and
+   the manifest does not list it; its area is missing ground, as past the store's edge (§5.3).
+4. **The manifest and the baseline (§4.2).** The manifest records the frame, the vertical
+   system and the NAD83 realisation it was staged with. The baseline's frame must be the
+   manifest's. A vertical system or a realisation only one of the two states is that one's,
+   pinned by the same digest; one both state must be the same. Anything else is refused by
+   name before a tile is read.
+5. **The cutting and averaging land first.** `terrain stage`'s command line and its fetch are
+   a later increment, but the code that cuts a grid into the pyramid and writes the tiles and
+   the manifest (amendment 1 item 2) is built now, in `gungnir-data`, because the tests stage
+   their stores with it. §8.1 row b is its test, a draft as before. Each level carries the sum
+   and the count of the level-0 cells under it, so a level-`k` cell is the mean of those
+   cells, as §4.1 says, and never a mean of means.
+
+Until §5's increments land, a verified store is neither drawn nor read by line of sight, and
+the terrain line on PN-09 says so.
 
 ## Traceability
 

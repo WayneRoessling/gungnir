@@ -1092,7 +1092,9 @@ fn hills_desktop(dir: &Path) -> AppState {
         origin: Some(origin),
         sensors,
         terrain: Some(gungnir_config::TerrainConfig {
-            path: dem.to_string_lossy().into_owned(),
+            path: Some(dem.to_string_lossy().into_owned()),
+            store: None,
+            manifest_sha256: None,
             frame: "local-enu".into(),
             vertical: None,
             nad83_realisation: None,

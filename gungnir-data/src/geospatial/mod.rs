@@ -657,6 +657,103 @@ pub mod geotiff {
         read(&mut decoder).map_err(|e| DataError::Parse(format!("{}: {e}", path.display())))
     }
 
+    /// Parse a GeoTIFF already in memory, as [`load`] reads one from a file: for a caller
+    /// that hashed the bytes first and must decode exactly the bytes it hashed (a staged
+    /// terrain tile, `crate::terrain_store`).
+    ///
+    /// # Errors
+    ///
+    /// `DataError::Parse`, as [`load`].
+    pub fn parse(bytes: &[u8]) -> Result<HeightGrid, DataError> {
+        let mut decoder = Decoder::new(std::io::Cursor::new(bytes))
+            .map_err(|e| DataError::Parse(e.to_string()))?;
+        read(&mut decoder).map_err(DataError::Parse)
+    }
+
+    /// Write `grid` as a GeoTIFF this module reads back unchanged: one band of 32-bit
+    /// floats, DEFLATE, `ModelPixelScale`, one `ModelTiepoint` at the north-west corner
+    /// (PixelIsArea), a `GeoKeyDirectory` stating `grid.crs` and `grid.vertical`, and
+    /// `GDAL_NODATA` when `grid.nodata` is set (GAP-227, DN-36 §4.1: a staged terrain
+    /// tile is one of these).
+    ///
+    /// No predictor: `tiff` 0.11 writes neither the horizontal predictor for floats nor
+    /// the floating-point one, so the tile is larger than GDAL's `PREDICTOR=3` would make
+    /// it and reads identically.
+    ///
+    /// # Errors
+    ///
+    /// `DataError::Parse` when the grid's heights do not fill its shape, its geometry is
+    /// not finite, or a code does not fit a GeoKey's 16 bits; `DataError::Io` when the
+    /// writer fails.
+    pub fn write<W: std::io::Write + std::io::Seek>(
+        writer: W,
+        grid: &HeightGrid,
+    ) -> Result<(), DataError> {
+        let expected = grid.columns as usize * grid.rows as usize;
+        if grid.columns == 0 || grid.rows == 0 || grid.heights.len() != expected {
+            return Err(DataError::Parse(format!(
+                "a {} by {} grid holding {} heights",
+                grid.columns,
+                grid.rows,
+                grid.heights.len()
+            )));
+        }
+        let [x, y] = grid.origin;
+        let [dx, dy] = grid.cell_size;
+        if ![x, y, dx, dy].iter().all(|v| v.is_finite()) || dx <= 0.0 || dy <= 0.0 {
+            return Err(DataError::Parse(format!(
+                "origin ({x}, {y}) and cells {dx} by {dy} are not finite and positive"
+            )));
+        }
+        let top = y + f64::from(grid.rows) * dy;
+        let mut keys: Vec<[u16; 4]> = vec![[GT_RASTER_TYPE, 0, 1, 1]];
+        match grid.crs {
+            GridCrs::Projected { epsg } => {
+                keys.push([GT_MODEL_TYPE, 0, 1, MODEL_TYPE_PROJECTED]);
+                if let Some(code) = epsg {
+                    keys.push([PROJECTED_CS_TYPE, 0, 1, code]);
+                }
+            }
+            GridCrs::Geographic { epsg } => {
+                keys.push([GT_MODEL_TYPE, 0, 1, MODEL_TYPE_GEOGRAPHIC]);
+                if let Some(code) = epsg {
+                    keys.push([GEOGRAPHIC_TYPE, 0, 1, code]);
+                }
+            }
+            GridCrs::Unstated => {}
+        }
+        if let Some(code) = grid.vertical {
+            keys.push([VERTICAL_TYPE, 0, 1, code]);
+        }
+        // OGC 19-008r4 §7.1.4: the keys sorted by id.
+        keys.sort_unstable_by_key(|k| k[0]);
+        let count = u16::try_from(keys.len())
+            .map_err(|_| DataError::Parse("too many GeoKeys".to_string()))?;
+        let mut directory = vec![1, 1, 0, count];
+        directory.extend(keys.iter().flatten());
+        let io = |e: tiff::TiffError| DataError::Io(e.to_string());
+        let mut encoder = tiff::encoder::TiffEncoder::new(writer)
+            .map_err(io)?
+            .with_compression(tiff::encoder::Compression::Deflate(
+                tiff::encoder::DeflateLevel::Balanced,
+            ));
+        let mut image = encoder
+            .new_image::<tiff::encoder::colortype::Gray32Float>(grid.columns, grid.rows)
+            .map_err(io)?;
+        let tags = image.encoder();
+        tags.write_tag(Tag::ModelPixelScaleTag, &[dx, dy, 0.0][..])
+            .map_err(io)?;
+        tags.write_tag(Tag::ModelTiepointTag, &[0.0, 0.0, 0.0, x, top, 0.0][..])
+            .map_err(io)?;
+        tags.write_tag(Tag::GeoKeyDirectoryTag, directory.as_slice())
+            .map_err(io)?;
+        if let Some(nodata) = grid.nodata {
+            tags.write_tag(Tag::GdalNodata, nodata.to_string().as_str())
+                .map_err(io)?;
+        }
+        image.write_data(&grid.heights).map_err(io)
+    }
+
     /// The georeferencing a GeoTIFF states, before the raster is read.
     struct Georeference {
         scale: [f64; 2],

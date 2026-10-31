@@ -128,6 +128,7 @@ one exception.
 | `security.key_provider` | DN-22 | Required when encryption is enabled |
 | `radar_feeds: Vec<RadarFeedConfig>` (GAP-001, 2026-09-06) | handoff §4 step 1 | Empty; a feed with an unknown sensor, a duplicate SAC/SIC, or an unparseable address is rejected |
 | `terrain: Option<TerrainConfig>` (GAP-023, 2026-09-06) | -- | Absent, flat line of sight; only `frame: "local-enu"` is accepted |
+| `terrain.store`, `terrain.manifest_sha256` (GAP-227, 2026-10-30) | DN-36 §4.2 | Absent, the one DEM `terrain.path` names. A terrain entry names `path` or `store`, never both and never neither; a store needs its manifest's SHA-256, 64 hexadecimal digits, and a path refuses one. All three are skipped when absent, so a baseline signed before them still verifies |
 | `security.tls.trust_roots_pem` (GAP-060, 2026-09-06) | DN-22 | Empty, the platform's store; a private key is refused |
 | `security.escrow: Option<EscrowConfig>` (GAP-084, 2026-09-06) | DN-22 §11 | Absent, no escrow; the public half only, a holder that names somebody |
 | `peers: Vec<PeerConfig>` (GAP-009, 2026-09-06) | DN-16 | Empty; source ids that are no sensor's, quality in 0..=1, positive age |

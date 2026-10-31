@@ -12881,6 +12881,15 @@
       D-164 taken by the owner the same day, to the default: a fetched fill tile is drawn
       and marked, and enters line of sight only once staged into the pinned store (DN-36
       amendment 2). Every DN-36 decision is taken; nothing is built.
+  - date: 2026-10-30
+    status: In progress
+    note: >-
+      DN-36's store reader built. A baseline's terrain names one DEM `path` or a staged
+      `store` pinned by `manifest_sha256`; `gungnir_data::terrain_store` verifies the manifest
+      and each tile by digest, refusing by name, and stages a pyramid by averaging; the
+      desktop opens a pinned store off the render thread and places tiles through the single
+      DEM's path. A verified store is not yet drawn or read by line of sight, and PN-09 says
+      so. DN-36 amendment 3 records what the build made exact.
 
 - id: GAP-228
   name: No operator-initiated escalation

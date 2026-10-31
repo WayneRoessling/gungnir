@@ -93,7 +93,9 @@ fn desktop_vertical(
         data_dir: dir.to_string_lossy().into_owned(),
         origin: Some(origin),
         terrain: Some(TerrainConfig {
-            path,
+            path: Some(path),
+            store: None,
+            manifest_sha256: None,
             frame: frame.into(),
             vertical: vertical.map(str::to_string),
             nad83_realisation: None,
@@ -569,7 +571,9 @@ fn the_pinned_grids_are_verified_at_start_and_place_a_dem() {
             data_dir: dir.to_string_lossy().into_owned(),
             origin: Some([54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 30.0]),
             terrain: Some(TerrainConfig {
-                path,
+                path: Some(path),
+                store: None,
+                manifest_sha256: None,
                 frame: "epsg:32633".into(),
                 vertical,
                 nad83_realisation: None,
@@ -673,8 +677,11 @@ fn oregon_desktop(name: &str) -> (AppState, PathBuf) {
         .terrain
         .as_mut()
         .expect("the variant names a terrain");
-    assert_eq!(terrain.path, "testdata/dem/usgs_1_n44w124_clip.tif");
-    terrain.path = fixture("usgs_1_n44w124_clip.tif");
+    assert_eq!(
+        terrain.path.as_deref(),
+        Some("testdata/dem/usgs_1_n44w124_clip.tif")
+    );
+    terrain.path = Some(fixture("usgs_1_n44w124_clip.tif"));
     gungnir_config::validate(&config).expect("the Oregon variant is valid");
     (AppState::with_config(config).expect("starts"), dir)
 }

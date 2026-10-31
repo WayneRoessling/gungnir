@@ -185,6 +185,7 @@ pub(crate) fn context(
         (TerrainStatus::Loaded { path, .. }, None) => {
             return Err(format!("{path} is loaded but its surface is not resampled"))
         }
+        (status @ TerrainStatus::StoreVerified { .. }, _) => return Err(status.line()),
     };
     let Some(frame) = crate::sustainment::local_frame(state) else {
         return Err("this deployment has declared no local frame origin (origin)".to_owned());

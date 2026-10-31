@@ -53,6 +53,15 @@ pub enum TerrainStatus {
         /// load (GAP-252, DN-35 §6). Unique within the process: [`next_revision`].
         revision: u64,
     },
+    /// A staged store (GAP-227, `docs/design/DN-36-staged-terrain-and-map-tiles.md`)
+    /// whose manifest matched the baseline's digest and agrees with its frame. Choosing
+    /// its tiles by view and building line of sight over it are DN-36 §5's next
+    /// increments, so nothing is drawn and line of sight stays flat, and the line says so.
+    StoreVerified {
+        store: String,
+        tiles: usize,
+        levels: u8,
+    },
     /// The file could not be read or placed; the reason is on screen, and line of
     /// sight stays flat rather than masked against something that is not there.
     Failed {
@@ -78,6 +87,15 @@ impl TerrainStatus {
             } => {
                 format!("{path}: {vertices} vertices, {triangles} triangles; masking line of sight")
             }
+            TerrainStatus::StoreVerified {
+                store,
+                tiles,
+                levels,
+            } => format!(
+                "staged store {store}: manifest verified, {tiles} tiles over {levels} levels; \
+                 drawing it and line of sight over it are not built yet (GAP-227, DN-36 §5), \
+                 so nothing is drawn and line of sight is flat (optimistic)"
+            ),
             TerrainStatus::Failed { path, reason } => {
                 format!("{path} not loaded: {reason}; line of sight is flat (optimistic)")
             }
@@ -135,19 +153,34 @@ pub fn start(state: &mut AppState) {
     let Some(terrain) = state.config.terrain.clone() else {
         return;
     };
-    let (requests, results) = gungnir_data::spawn_loader();
-    match requests.send(LoadRequest::Terrain(std::path::PathBuf::from(
-        &terrain.path,
-    ))) {
-        Ok(()) => {
-            state.terrain = TerrainStatus::Loading {
-                path: terrain.path.clone(),
+    // Validation makes it exactly one of the two, and a store always pinned; a baseline
+    // that skipped validation is refused here rather than guessed at.
+    let (path, request) = match (&terrain.path, &terrain.store, &terrain.manifest_sha256) {
+        (Some(path), None, _) => (
+            path.clone(),
+            LoadRequest::Terrain(std::path::PathBuf::from(path)),
+        ),
+        (None, Some(store), Some(digest)) => (
+            store.clone(),
+            LoadRequest::TerrainStore(std::path::PathBuf::from(store), digest.clone()),
+        ),
+        _ => {
+            state.terrain = TerrainStatus::Failed {
+                path: "terrain".to_string(),
+                reason: "it names neither one DEM file nor one pinned store".to_string(),
             };
+            return;
+        }
+    };
+    let (requests, results) = gungnir_data::spawn_loader();
+    match requests.send(request) {
+        Ok(()) => {
+            state.terrain = TerrainStatus::Loading { path };
             state.loader = Some((requests, results));
         }
         Err(err) => {
             state.terrain = TerrainStatus::Failed {
-                path: terrain.path.clone(),
+                path,
                 reason: format!("the loader thread is gone: {err}"),
             };
         }
@@ -168,8 +201,14 @@ pub fn poll(state: &mut AppState) {
         TerrainStatus::Loading { path } => path.clone(),
         _ => return,
     };
-    let LoadResult::Terrain(loaded) = result else {
-        return;
+    let loaded = match result {
+        LoadResult::Terrain(loaded) => loaded,
+        LoadResult::TerrainStore(opened) => {
+            store_opened(state, path, opened);
+            state.loader = None;
+            return;
+        }
+        _ => return,
     };
     match loaded {
         Ok(mesh) => {
@@ -230,6 +269,144 @@ pub fn poll(state: &mut AppState) {
         }
     }
     state.loader = None;
+}
+
+/// A staged store came back from the loader thread: verified against the baseline's
+/// digest, or refused by name. Its manifest's frame has to be the baseline's, and its
+/// vertical system and NAD83 realisation may not contradict the baseline's
+/// ([`store_declaration`]).
+fn store_opened(
+    state: &mut AppState,
+    path: String,
+    opened: Result<
+        Box<gungnir_data::terrain_store::TerrainStore>,
+        gungnir_data::terrain_store::StoreError,
+    >,
+) {
+    let checked = opened.map_err(|e| e.to_string()).and_then(|store| {
+        let terrain = state
+            .config
+            .terrain
+            .as_ref()
+            .ok_or_else(|| "the baseline no longer names terrain".to_string())?;
+        store_declaration(terrain, store.index().manifest())?;
+        Ok(store)
+    });
+    state.height_field = None;
+    match checked {
+        Ok(store) => {
+            state.terrain = TerrainStatus::StoreVerified {
+                store: path,
+                tiles: store.index().len(),
+                levels: store.index().levels(),
+            };
+            state.terrain_store = Some(std::sync::Arc::from(store));
+        }
+        Err(reason) => {
+            state.terrain_store = None;
+            state
+                .alerts
+                .push(format!("terrain store {path} not opened: {reason}"));
+            state.terrain = TerrainStatus::Failed { path, reason };
+        }
+    }
+}
+
+/// The frame, vertical system and NAD83 realisation every tile of a store is placed
+/// with (DN-36 §4.2): the baseline's, which the manifest has to agree with. The frame
+/// must be the same frame; a vertical system or a realisation the baseline leaves out is
+/// the manifest's, pinned by the same digest, and one stated in both must be the same.
+///
+/// # Errors
+///
+/// A frame that differs, or a vertical system or realisation the two state differently,
+/// by name.
+pub fn store_declaration(
+    terrain: &gungnir_config::TerrainConfig,
+    manifest: &gungnir_data::terrain_store::Manifest,
+) -> Result<StoreDeclaration, String> {
+    let parse_frame = |field: &str, text: &str| {
+        text.parse::<Frame>()
+            .map_err(|reason| format!("{field} {reason}"))
+    };
+    let baseline = parse_frame("terrain.frame", &terrain.frame)?;
+    let staged = parse_frame("the store manifest's frame", &manifest.frame)?;
+    if baseline != staged {
+        return Err(format!(
+            "terrain.frame declares {baseline} and the store was staged in {staged}"
+        ));
+    }
+    let agree = |field: &str,
+                 ours: Option<&String>,
+                 theirs: Option<&String>,
+                 same: &dyn Fn(&str, &str) -> bool|
+     -> Result<Option<String>, String> {
+        match (ours, theirs) {
+            (Some(a), Some(b)) if !same(a, b) => Err(format!(
+                "terrain.{field} declares {a:?} and the store manifest states {b:?}"
+            )),
+            (Some(a), _) => Ok(Some(a.clone())),
+            (None, b) => Ok(b.cloned()),
+        }
+    };
+    let vertical = agree(
+        "vertical",
+        terrain.vertical.as_ref(),
+        manifest.vertical.as_ref(),
+        &|a, b| {
+            a.parse::<gungnir_config::VerticalFrame>().ok()
+                == b.parse::<gungnir_config::VerticalFrame>().ok()
+        },
+    )?;
+    let nad83_realisation = agree(
+        "nad83_realisation",
+        terrain.nad83_realisation.as_ref(),
+        manifest.nad83_realisation.as_ref(),
+        &|a, b| {
+            a.parse::<gungnir_config::Nad83Realisation>().ok()
+                == b.parse::<gungnir_config::Nad83Realisation>().ok()
+        },
+    )?;
+    Ok(StoreDeclaration {
+        frame: terrain.frame.clone(),
+        vertical,
+        nad83_realisation,
+    })
+}
+
+/// What every tile of a store is placed with, once the baseline and the manifest agree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoreDeclaration {
+    pub frame: String,
+    pub vertical: Option<String>,
+    pub nad83_realisation: Option<String>,
+}
+
+/// Place one store tile, as read and meshed by the loader thread, through the path the
+/// single DEM takes ([`place`]): the tile's own tags reconciled with the declaration, its
+/// heights made WGS 84 ellipsoidal through the verified geoid grids, then local ENU.
+///
+/// # Errors
+///
+/// As the single DEM's placement, by name.
+pub fn place_tile(
+    mesh: TerrainMesh,
+    declaration: &StoreDeclaration,
+    origin: Option<[f64; 3]>,
+    epoch: f64,
+    geoid: &crate::geoid::GeoidGrids,
+) -> Result<TerrainMesh, String> {
+    place(
+        mesh,
+        Declared {
+            frame: &declaration.frame,
+            vertical: declaration.vertical.as_deref(),
+            nad83_realisation: declaration.nad83_realisation.as_deref(),
+        },
+        origin,
+        epoch,
+        geoid,
+    )
 }
 
 /// The placed surface resampled once for line of sight (GAP-247,
