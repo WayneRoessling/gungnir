@@ -6,7 +6,7 @@
 //! `docs/design/DN-36-staged-terrain-and-map-tiles.md` amendments 1, 2 and 5): ground past a
 //! pinned store's edge fetched as one-degree tiles from `terrain.fill_source`, staged into
 //! the data directory, drawn outlined, counted apart on PN-09, and never read by line of
-//! sight. §8.1 rows h to k are drafts, not gates; these tests are theirs.
+//! sight. §8.1 rows h to k are gates (agreed 2026-10-31); these tests are theirs.
 //!
 //! The pinned store and the fill tiles are WGS 84 degrees with ellipsoidal heights, which
 //! place with no libproj, served by a mirror on the loopback interface, so nothing here

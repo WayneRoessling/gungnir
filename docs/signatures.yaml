@@ -3742,3 +3742,29 @@
   commit: 155ca8213320d63fd2ede4205e5bf1560644658a
   pre_repository: false
   record: "D-65; PR #272; PR #276"
+- date: 2026-10-31
+  signer: Owner
+  subject: >-
+    DN-36's eleven verification rows agreed as criteria and made gates, as section 8.1 and
+    amendments 1 and 2 draft them and amendment 7 restates four: a staged store is verified
+    (the baseline's validation included), levels average, tiles by view, one ramp and no
+    seam, a single DEM is unchanged, line of sight ignores the view, missing ground is said,
+    no fill without a source or a connection, the pinned store is never written, a fill tile
+    is marked, and a fill tile stays out of line of sight. Rows h to k run with
+    terrain-fetch, in their own ci.yml step. The rows have no external oracle, which the
+    table says. The owner read the four restated rows (c, e, f and g) and said they read
+    right; the other seven were agreed without a line-by-line reading.
+  kind: criterion
+  paths:
+  - docs/design/DN-36-staged-terrain-and-map-tiles.md
+  - docs/verification-capability-table.md
+  - gungnir-data/tests/terrain_store.rs
+  - gungnir-app/tests/terrain_store.rs
+  - gungnir-app/tests/terrain_tiles.rs
+  - gungnir-app/tests/terrain_fill.rs
+  - gungnir-viewport3d/src/streaming/terrain.rs
+  - gungnir-analytics/src/terrain.rs
+  - gungnir-config/src/lib.rs
+  commit: fd81f0b72fe0ff6518f7650f2400f8dd56cccc4d
+  pre_repository: false
+  record: "GAP-227; DN-36 section 8.1 and amendment 7; docs/record/2026-10-31/gap-227-dn-36-s-verification-rows-agreed.md"

@@ -4,7 +4,7 @@
 
 //! The staged terrain store (GAP-227, `docs/design/DN-36-staged-terrain-and-map-tiles.md`
 //! §4): a store staged from a grid reads back verified, a level-1 cell is the mean of the
-//! level-0 cells under it (§8.1 row b, a draft and not a gate), and a manifest or a tile
+//! level-0 cells under it (§8.1 row b, a gate), and a manifest or a tile
 //! whose digest differs is refused by name while the rest of the store loads (row a's
 //! `gungnir-data` half).
 

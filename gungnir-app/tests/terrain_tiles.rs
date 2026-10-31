@@ -6,7 +6,7 @@
 //! `docs/design/DN-36-staged-terrain-and-map-tiles.md` §5.1 and §5.3): the viewport asks
 //! for the tiles its view wants, the desktop places them off the render thread, the
 //! picture draws them as one surface under the frame's budget, and where ground is missing
-//! the map and PN-09 say so (§8.1 row g, a draft and not a gate).
+//! the map and PN-09 say so (§8.1 row g, a gate).
 
 use std::path::PathBuf;
 
@@ -299,7 +299,7 @@ fn a_utm_store_is_placed_and_drawn() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// §8.1 row f (a draft, not a gate): line of sight reads the pinned store over the coverage
+/// §8.1 row f (a gate): line of sight reads the pinned store over the coverage
 /// extent, and panning across the store changes nothing it reads. The dead spots are
 /// computed from this field and nothing else (DN-34 §6.1), so an unchanged field is
 /// unchanged dead spots.
