@@ -85,6 +85,9 @@ gungnir-observability = { path = "../gungnir-observability", version = "0.1.0" }
 gungnir-data = { path = "../gungnir-data", version = "0.1.0" }
 
 [features]
+# GAP-227 (D-173): `terrain stage --source <URL>` fetches through `gungnir-data`'s one
+# HTTP client. Off by default: a build that must never reach a network holds no client.
+terrain-fetch = ["gungnir-data/terrain-fetch"]
 # GAP-198 (D-129): read the pinned EGM2008 geoid grid and lend it to the radar feeds.
 # Links libproj and libtiff through `gungnir-data`'s own `crs` feature; the node image is
 # built with it, and a binary without it carries every UAS height above mean sea level

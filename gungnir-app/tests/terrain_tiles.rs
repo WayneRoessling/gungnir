@@ -111,6 +111,7 @@ fn desktop_in(
             path: None,
             store: Some(store.to_string_lossy().into_owned()),
             manifest_sha256: Some(digest),
+            fill_source: None,
             frame: declared.into(),
             vertical: None,
             nad83_realisation: None,

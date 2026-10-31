@@ -4049,3 +4049,43 @@
     hostile's label never collapsed: two hostile labels with no free place are both drawn,
     overlapping. Rejected: move then hide; hide by priority only. See
     `../../design/DN-37-symbology-cursor-readout-and-declutter.md` §8.
+
+- id: D-173
+  decision: The HTTP client a staging run and the fill cache fetch terrain with
+  question: >-
+    DN-36 amendment 1 (D-160, D-162) puts a fetch in the binaries, which needs an HTTP
+    client with TLS. Recommended: `reqwest` 0.13, already in §2.9 and already linked in both
+    binaries, with its `blocking` feature, behind a new `gungnir-data` feature
+    `terrain-fetch`, off by default. The alternative: `ureq`, a new synchronous crate with a
+    §2.9 row of its own.
+  raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` amendment 5"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-31
+  outcome: >-
+    **Taken by the owner, 2026-10-31, to the recommended default:** `reqwest` with
+    `blocking`, behind `gungnir-data`'s `terrain-fetch`, off by default, and §2.9's
+    `reqwest` row widened to say so. A fetch from a public source verifies against the
+    operating system's trust store, not the event stream's roots. Rejected: `ureq`.
+
+- id: D-174
+  decision: What form a terrain fill source takes
+  question: >-
+    Recommended: a URL template for one-degree geographic source tiles named by their
+    north-west corner, `{ns}{lat}{ew}{lon}` as USGS 3DEP names them, each fetched tile staged
+    into its own sub-store under the data directory with `terrain stage`'s code. The
+    alternatives: the URL of a larger staged store in DN-36's layout, a mirror; or an OGC
+    Web Coverage Service.
+  raised_in: "`../../design/DN-36-staged-terrain-and-map-tiles.md` amendment 5"
+  decider: Owner
+  unblocks: GAP-227
+  resolved: 2026-10-31
+  outcome: >-
+    **Taken by the owner, 2026-10-31, to the recommended default:** `terrain.fill_source`
+    is a URL template for one-degree geographic source tiles named by their north-west
+    corner, `{ns}{lat}{ew}{lon}` as USGS 3DEP names them; each fetched tile is staged with
+    `terrain stage`'s code into its own sub-store under the data directory, its digest
+    recorded at fetch time; only a geographic store is filled; fill is drawn only where the
+    pinned store has no tile, marked, counted apart, and never in line of sight. Rejected:
+    a mirror store's URL; an OGC Web Coverage Service. See
+    `../../design/DN-36-staged-terrain-and-map-tiles.md` amendments 5 and 6.

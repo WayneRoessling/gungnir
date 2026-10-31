@@ -314,3 +314,88 @@ fn terrain_stage_stages_a_checked_source_and_prints_the_digest_to_pin() {
     assert!(local.contains("EPSG:32633"), "{local}");
     let _ = std::fs::remove_dir_all(out.parent().expect("scratch"));
 }
+
+/// `terrain stage --source <URL>` with `terrain-fetch` (D-173): a mirror on the loopback
+/// interface serves the committed `small.tif`; the fetched file is checked against its
+/// published digest, staged, and removed, and the manifest records the URL. A URL that
+/// answers 404 stages nothing.
+#[cfg(feature = "terrain-fetch")]
+#[test]
+fn terrain_stage_fetches_a_source_from_a_loopback_mirror() {
+    use std::io::{Read, Write};
+    let bytes = std::fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/dem/small.tif"),
+    )
+    .expect("the fixture");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
+    let port = listener.local_addr().expect("bound").port();
+    std::thread::spawn(move || {
+        for stream in listener.incoming().take(2) {
+            let Ok(mut stream) = stream else { continue };
+            let mut request = Vec::new();
+            let mut byte = [0_u8; 1];
+            while !request.ends_with(b"\r\n\r\n") && stream.read(&mut byte).unwrap_or(0) == 1 {
+                request.push(byte[0]);
+            }
+            let found = String::from_utf8_lossy(&request).starts_with("GET /small.tif ");
+            let (status, body): (&str, &[u8]) = if found {
+                ("200 OK", &bytes)
+            } else {
+                ("404 Not Found", b"")
+            };
+            let _ = write!(
+                stream,
+                "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(body);
+        }
+    });
+    let dir = scratch("fetch");
+    let stage = |url: String, out: &std::path::Path| {
+        gungnir_data::terrain_store::cli::run(
+            "gungnir-node",
+            &[
+                "stage",
+                "--source",
+                &url,
+                "--source-sha256",
+                "f506703b66389040ad084f640d5b7736f976a49cb7837b91c172eb91d2fcb4e7",
+                "--out",
+                &out.to_string_lossy(),
+                "--frame",
+                "epsg:32633",
+                "--licence",
+                "none: generated for the DEM loader tests",
+                "--retrieved",
+                "2026-10-31",
+                "--tile-cells",
+                "2",
+            ]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect::<Vec<_>>(),
+        )
+    };
+    let missing = stage(
+        format!("http://127.0.0.1:{port}/absent.tif"),
+        &dir.join("none"),
+    )
+    .expect_err("a 404");
+    assert!(missing.contains("404"), "{missing}");
+    assert!(!dir.join("none").exists());
+    let url = format!("http://127.0.0.1:{port}/small.tif");
+    let out = dir.join("store");
+    let said = stage(url.clone(), &out).expect("fetched and staged");
+    let digest = said
+        .lines()
+        .find_map(|l| l.strip_prefix("manifest SHA-256 "))
+        .expect("the digest is printed");
+    let store = TerrainStore::open(&out, digest).expect("opens");
+    assert_eq!(store.index().manifest().source.url, url);
+    assert!(
+        !dir.join("store.source.tif").exists(),
+        "the fetched source is removed once staged"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
