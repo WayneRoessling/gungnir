@@ -3257,13 +3257,14 @@ Counts: 240 gaps, 6 mission, 234 technical; 1 already covered by a plan in `../.
   - 2026-10-30, Open: Widened at the owner's request after the GAP-252 build: zoomed out, the ground stops at the edge of the one DEM. DN-36 designs the action's basemap tiles as a staged store, terrain first and imagery on it after, and raises D-160 to D-163. Nothing is built; effort stays L.
   - 2026-10-30, Open: D-160 to D-163 taken by the owner the same day, D-160 and D-162 past the default: staged first and fetched to fill gaps when connected, and a `terrain stage` subcommand in the binaries. GeoTIFF tiles and terrain first stand. DN-36 amendment 1 says what they change and raises D-164, whether a fetched tile enters line of sight.
   - 2026-10-30, Open: D-164 taken by the owner the same day, to the default: a fetched fill tile is drawn and marked, and enters line of sight only once staged into the pinned store (DN-36 amendment 2). Every DN-36 decision is taken; nothing is built.
+  - 2026-10-30, Open: The other three parts designed in DN-37: D-139's MIL-STD-2525D symbols, a cursor readout in MGRS and degrees-minutes-seconds, and declutter. The owner walked D-165 to D-172 the same day and took each to its default. The symbols are built for four identities until GAP-216 widens the type; nothing is built.
 - Evidence: `gungnir-viewport3d/src/interaction.rs:94-123`; `gungnir-viewport3d/src/tracks.rs:170-230`; no `2525` in any source; `gungnir-viewport3d/src/streaming/`.
 - Severity: 3. Reach: 10 threads. Effort: L. Priority: 30.
 - Impact: The picture is a top-down local projection on a metric grid with no tiles or imagery, no latitude, longitude or MGRS readout, custom frame-by-affiliation glyphs rather than a standard set, fixed-offset labels that overprint on a dense picture, and 3D Tiles streaming that is three `NotImplemented` stubs. The ground under the picture is one DEM file, and stops at its edge: zoomed out, there is no terrain beyond it and nothing says why.
 - Closing action: Per D-139 on symbology; a cursor latitude, longitude and MGRS readout; speed-scaled leaders; label collision avoidance; basemap tiles as the first consumer of the streaming stubs, widened by DN-36 to staged terrain tiles first and imagery on the same store after, under D-160 to D-163.
 - Target: I4. Owner: UI engineer. Status: Open.
-- Reference: GAP-022; `../../review/2026-10-26-comprehensive-review.md` §8 finding 6; `../../design/DN-36-staged-terrain-and-map-tiles.md`.
-- Depends on: D-139, D-160, D-161, D-162, D-163, D-164.
+- Reference: GAP-022; `../../review/2026-10-26-comprehensive-review.md` §8 finding 6; `../../design/DN-36-staged-terrain-and-map-tiles.md`; `../../design/DN-37-symbology-cursor-readout-and-declutter.md`.
+- Depends on: D-139, D-160, D-161, D-162, D-163, D-164, D-165, D-166, D-167, D-168, D-169, D-170, D-171, D-172.
 
 **GAP-228 No operator-initiated escalation**
 
