@@ -14,17 +14,25 @@ use gungnir_app::picture::{render_projection, PictureCache, Sources};
 use gungnir_app::state::AppState;
 use gungnir_app::terrain::TerrainStatus;
 use gungnir_app::{terrain_tiles, update};
-use gungnir_config::{ConfigBaseline, TerrainConfig};
+use gungnir_config::{ConfigBaseline, SensorConfig, TerrainConfig};
 use gungnir_data::geospatial::{GridCrs, HeightGrid};
 use gungnir_data::terrain_store::{stage, ManifestSource, StageOptions, TileKey};
 use gungnir_ui::harness::{DrawnFrame, RenderProbe};
 use gungnir_viewport3d::interaction::TopDownView;
 use gungnir_viewport3d::layers::TERRAIN_VERTEX_BUDGET;
 
+/// The local frame's origin: the UTM fixture's own south-west corner, 54.148 104 104 N 15 E
+/// (`tests/terrain.rs`), so a UTM store's south-west corner lands on it.
+const ORIGIN: [f64; 3] = [
+    54.148_104_104 * std::f64::consts::PI / 180.0,
+    15.0 * std::f64::consts::PI / 180.0,
+    0.0,
+];
+
 /// A 64 by 64 store of 10 m cells in the local frame, 16-cell tiles: level 0 is four by
 /// four tiles over 640 m by 640 m.
 fn desktop(name: &str, tamper: Option<TileKey>) -> (AppState, PathBuf) {
-    desktop_in(name, tamper, Frame::Local)
+    desktop_in(name, tamper, Frame::Local, false)
 }
 
 /// The frame the test store is staged in.
@@ -36,7 +44,12 @@ enum Frame {
     Utm,
 }
 
-fn desktop_in(name: &str, tamper: Option<TileKey>, frame: Frame) -> (AppState, PathBuf) {
+fn desktop_in(
+    name: &str,
+    tamper: Option<TileKey>,
+    frame: Frame,
+    radar: bool,
+) -> (AppState, PathBuf) {
     let dir = std::env::temp_dir().join(format!("gungnir-app-tiles-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let mut heights = Vec::new();
@@ -93,8 +106,7 @@ fn desktop_in(name: &str, tamper: Option<TileKey>, frame: Frame) -> (AppState, P
     }
     let config = ConfigBaseline {
         data_dir: dir.join("data").to_string_lossy().into_owned(),
-        // The fixture's own south-west corner, 54.148 104 104 N 15 E (`tests/terrain.rs`).
-        origin: Some([54.148_104_104_f64.to_radians(), 15.0_f64.to_radians(), 0.0]),
+        origin: Some(ORIGIN),
         terrain: Some(TerrainConfig {
             path: None,
             store: Some(store.to_string_lossy().into_owned()),
@@ -105,6 +117,23 @@ fn desktop_in(name: &str, tamper: Option<TileKey>, frame: Frame) -> (AppState, P
             vertical_sigma_m: None,
         }),
         geoid_grid_dir: Some(dir.join("no-grid-here").to_string_lossy().into_owned()),
+        // One radar at the origin reaching 200 m: the coverage extent line of sight reads
+        // is 400 m about it, past the store's south and west edges (DN-36 §5.2).
+        sensors: if radar {
+            vec![SensorConfig {
+                id: 1,
+                modality: "radar".into(),
+                position: [ORIGIN[0], ORIGIN[1], 10.0],
+                max_range_m: 200.0,
+                control_endpoint: None,
+                maintenance: Vec::new(),
+                detection_model: None,
+                azimuth_sector: None,
+                elevation_band: None,
+            }]
+        } else {
+            Vec::new()
+        },
         ..ConfigBaseline::default()
     };
     gungnir_config::validate(&config).expect("valid");
@@ -190,7 +219,7 @@ fn a_store_is_drawn_by_view_under_the_budget() {
     assert!(state.terrain.line().contains("drawn by view"));
     assert!(
         state.height_field.is_none(),
-        "line of sight is the next increment"
+        "no sensor is declared, so there is no extent to build line of sight over"
     );
 
     // Zoomed out past the store's edge: a coarser level, and the map says what is missing.
@@ -252,7 +281,7 @@ fn a_refused_tile_is_said_and_the_rest_is_drawn() {
 #[cfg(feature = "crs")]
 #[test]
 fn a_utm_store_is_placed_and_drawn() {
-    let (mut state, dir) = desktop_in("utm", None, Frame::Utm);
+    let (mut state, dir) = desktop_in("utm", None, Frame::Utm, false);
     let mut picture = PictureCache::default();
     state.viewport.view = TopDownView {
         center_e: 320.0,
@@ -267,4 +296,86 @@ fn a_utm_store_is_placed_and_drawn() {
     // Level 0 around the view's centre: within the 640 m store, east of the origin.
     assert!(low > -20.0 && high < 660.0, "{low} to {high}");
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// §8.1 row f (a draft, not a gate): line of sight reads the pinned store over the coverage
+/// extent, and panning across the store changes nothing it reads. The dead spots are
+/// computed from this field and nothing else (DN-34 §6.1), so an unchanged field is
+/// unchanged dead spots.
+#[test]
+fn line_of_sight_reads_the_coverage_extent_and_ignores_the_view() {
+    let (mut state, dir) = desktop_in("sight", None, Frame::Local, true);
+    let mut picture = PictureCache::default();
+    state.viewport.view = TopDownView {
+        center_e: 320.0,
+        center_n: 320.0,
+        meters_per_px: 0.5,
+    };
+    until(&mut state, &mut picture, "line of sight built", |s| {
+        settled(s) && s.terrain.is_masking()
+    });
+    let field = std::sync::Arc::clone(state.height_field.as_ref().expect("a field"));
+    // Level 0's own 10 m cells over the 800 m extent about the radar.
+    assert!((field.cell_m - 10.0).abs() < 1e-6, "{}", field.cell_m);
+    assert!(field.origin_enu[0] < -399.0 && field.origin_enu[1] < -399.0);
+    // Inside the store: ground. South-west of it, inside the extent: no data, flat.
+    assert!(field.up_at(100.0, 100.0).is_some());
+    assert!(field.up_at(-200.0, -200.0).is_none());
+    let line = state.terrain.line();
+    assert!(
+        line.contains("never the view") && line.contains("past the store's edge"),
+        "{line}"
+    );
+    assert!(gungnir_app::terrain::height_field_line(state.height_field.as_deref()).is_some());
+
+    // Pan across the store and zoom out: other tiles stream in, and line of sight does not
+    // move.
+    for (e, n, mpp) in [
+        (600.0, 100.0, 0.5),
+        (100.0, 600.0, 1.0),
+        (320.0, 320.0, 4.0),
+    ] {
+        state.viewport.view = TopDownView {
+            center_e: e,
+            center_n: n,
+            meters_per_px: mpp,
+        };
+        until(&mut state, &mut picture, "the panned tiles drawn", settled);
+        let now = state.height_field.as_ref().expect("still a field");
+        // The same field, not an equal one: nothing was painted again.
+        assert!(std::sync::Arc::ptr_eq(now, &field), "rebuilt at {e}, {n}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_coverage_extent_is_the_sensors_and_approaches_with_a_range_to_spare() {
+    let mut config = ConfigBaseline::default();
+    assert!(terrain_tiles::coverage_extent(&config)
+        .expect_err("no origin")
+        .contains("origin"));
+    config.origin = Some(ORIGIN);
+    assert!(terrain_tiles::coverage_extent(&config)
+        .expect_err("nothing to cover")
+        .contains("no sensor"));
+    config.sensors = vec![SensorConfig {
+        id: 1,
+        modality: "radar".into(),
+        position: [ORIGIN[0], ORIGIN[1], 10.0],
+        max_range_m: 1_000.0,
+        control_endpoint: None,
+        maintenance: Vec::new(),
+        detection_model: None,
+        azimuth_sector: None,
+        elevation_band: None,
+    }];
+    let [lo, hi] = terrain_tiles::coverage_extent(&config).expect("an extent");
+    for (got, want) in [
+        (lo[0], -2_000.0),
+        (lo[1], -2_000.0),
+        (hi[0], 2_000.0),
+        (hi[1], 2_000.0),
+    ] {
+        assert!((got - want).abs() < 1e-6, "{got} against {want}");
+    }
 }

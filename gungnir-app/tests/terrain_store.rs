@@ -9,15 +9,15 @@
 //! baseline's by name, and places each tile through the single DEM's path. §8.1 row a is
 //! a draft criterion, not a gate; these tests are its desktop half.
 //!
-//! Line of sight over the store is DN-36 §5.2's increment. Until then the desktop says so
-//! in the terrain line, and line of sight stays flat; drawing the store by view is
+//! With no sensor declared there is no coverage extent to build line of sight over, and the
+//! terrain line says so. Drawing the store by view, and line of sight over it, are
 //! `tests/terrain_tiles.rs`.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use gungnir_app::state::AppState;
-use gungnir_app::terrain::{self, StoreDeclaration, TerrainStatus};
+use gungnir_app::terrain::{self, SightState, StoreDeclaration, TerrainStatus};
 use gungnir_app::update;
 use gungnir_config::{ConfigBaseline, TerrainConfig};
 use gungnir_data::geospatial::{GridCrs, HeightGrid, TerrainMesh};
@@ -122,6 +122,20 @@ fn a_pinned_store_is_verified_and_says_line_of_sight_is_flat() {
     let (dir, store, digest) = local_store("verified");
     let mut state = desktop(&dir, &store, &digest, "local-enu");
     settle(&mut state);
+    // Line of sight is decided once the tile worker has placed the store's footprint.
+    for _ in 0..6_000 {
+        if !matches!(
+            state.terrain,
+            TerrainStatus::StoreVerified {
+                sight: SightState::Building,
+                ..
+            }
+        ) {
+            break;
+        }
+        update::tick(&mut state);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
     match &state.terrain {
         TerrainStatus::StoreVerified { tiles, levels, .. } => {
             assert_eq!((*tiles, *levels), (12 + 4 + 1, 3));
@@ -133,7 +147,9 @@ fn a_pinned_store_is_verified_and_says_line_of_sight_is_flat() {
     assert!(state.height_field.is_none(), "line of sight stays flat");
     let line = state.terrain.line();
     assert!(
-        line.contains("manifest verified") && line.contains("not built yet"),
+        line.contains("manifest verified")
+            && line.contains("not built: no sensor")
+            && line.contains("flat (optimistic)"),
         "{line}"
     );
     let _ = std::fs::remove_dir_all(dir);

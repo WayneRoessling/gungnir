@@ -313,6 +313,58 @@ impl HeightField {
         let count = |span: f64| (((span / cell_m) - 1e-9).ceil().max(0.0) as usize + 1).max(2);
         let columns = count(last[0] - first[0]);
         let rows = count(last[1] - first[1]);
+        let mut field = Self::empty(lo, rows, columns, cell_m)?;
+        field.paint(mesh)?;
+        Ok(field)
+    }
+
+    /// A raster over `extent`, `[[min_e, min_n], [max_e, max_n]]`, at `cell_m`, with no
+    /// height anywhere: what a staged store's tiles are painted into one by one
+    /// ([`Self::paint`]; GAP-227, `docs/design/DN-36-staged-terrain-and-map-tiles.md`
+    /// §5.2). Its south-west corner is the extent's, and it reaches at least to the
+    /// extent's north-east corner.
+    ///
+    /// # Errors
+    ///
+    /// When the cell size is not finite and positive, the extent is not finite with its
+    /// maximum past its minimum, or the raster would be over [`HEIGHT_FIELD_CELL_BUDGET`].
+    // Cell counts are checked against the budget before they are used.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    pub fn blank(extent: [[f64; 2]; 2], cell_m: f64) -> Result<Self, HeightFieldError> {
+        if !(cell_m.is_finite() && cell_m > 0.0) {
+            return Err(HeightFieldError::BadCell(cell_m));
+        }
+        let [lo, hi] = extent;
+        if ![lo[0], lo[1], hi[0], hi[1]].iter().all(|v| v.is_finite())
+            || hi[0] <= lo[0]
+            || hi[1] <= lo[1]
+        {
+            return Err(HeightFieldError::NoExtent);
+        }
+        let count = |span: f64| {
+            let cells = (span / cell_m).ceil();
+            if cells > HEIGHT_FIELD_CELL_BUDGET as f64 {
+                HEIGHT_FIELD_CELL_BUDGET + 1
+            } else {
+                (cells as usize).max(2)
+            }
+        };
+        Self::empty(lo, count(hi[1] - lo[1]), count(hi[0] - lo[0]), cell_m)
+    }
+
+    /// A raster of `rows` by `columns` cells of `cell_m` from `lo`, all no data.
+    // Rows and columns are within the budget, so they fit a `u32`.
+    #[allow(clippy::cast_possible_truncation)]
+    fn empty(
+        lo: [f64; 2],
+        rows: usize,
+        columns: usize,
+        cell_m: f64,
+    ) -> Result<Self, HeightFieldError> {
         let cells = rows.saturating_mul(columns);
         if cells > HEIGHT_FIELD_CELL_BUDGET {
             return Err(HeightFieldError::OverBudget {
@@ -320,7 +372,38 @@ impl HeightField {
                 budget: HEIGHT_FIELD_CELL_BUDGET,
             });
         }
-        let mut up_m = vec![f32::NAN; cells];
+        Ok(Self {
+            origin_enu: lo,
+            cell_m,
+            rows: rows as u32,
+            columns: columns as u32,
+            up_m: vec![f32::NAN; cells],
+        })
+    }
+
+    /// Write `mesh`'s surface into the cells whose centres its triangles cover, by the
+    /// same triangle interpolation [`MeshSurface::up_at`] does. A finite up wins over a
+    /// hole on a shared edge, so a cell is no data only when every triangle over it touches
+    /// a hole; a cell no triangle covers keeps what it held. [`Self::resample`] is one
+    /// paint into an empty raster over the mesh's own extent.
+    ///
+    /// # Errors
+    ///
+    /// When the mesh is not a grid.
+    // Cell indices are bounded by the budget, far inside every integer type here.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    pub fn paint(&mut self, mesh: &TerrainMesh) -> Result<(), HeightFieldError> {
+        let (rows_in, columns_in) = (mesh.rows as usize, mesh.columns as usize);
+        if rows_in < 2 || columns_in < 2 || mesh.positions.len() != rows_in * columns_in {
+            return Err(HeightFieldError::NotAGrid);
+        }
+        let (lo, cell_m) = (self.origin_enu, self.cell_m);
+        let (rows, columns) = (self.rows as usize, self.columns as usize);
+        let up_m = &mut self.up_m;
         let at = |r: usize, c: usize| vertex_of(&mesh.positions, mesh.origin, columns_in, r, c);
         // Field column and south-first row index whose centre lies at or after `x` along
         // an axis starting at `start`, and the last at or before `y`.
@@ -368,13 +451,7 @@ impl HeightField {
                 }
             }
         }
-        Ok(Self {
-            origin_enu: lo,
-            cell_m,
-            rows: rows as u32,
-            columns: columns as u32,
-            up_m,
-        })
+        Ok(())
     }
 
     /// The up of cell `(row, column)`, north row first; `None` off the raster or no data.
@@ -647,6 +724,47 @@ mod tests {
             let f = field.up_at(e, n).expect("inside");
             assert!((f - plane(e, n)).abs() < 1e-2, "field {e},{n}: {f}");
         }
+    }
+
+    /// GAP-227 (DN-36 §5.2): a surface painted in two overlapping pieces, as a store's
+    /// tiles are with their shared apron row, is the surface resampled whole, cell for
+    /// cell; and a blank raster reaches past its extent's north-east corner and holds no
+    /// height until something is painted.
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn painting_in_pieces_is_resampling_whole() {
+        let ridge = |e: f64, n: f64| Some(50.0 + (e / 90.0).sin() * 30.0 + n * 0.1);
+        let whole = grid(20, 25, 30.0, ridge);
+        let field = HeightField::resample(&whole, 30.0).expect("resampled");
+        let piece = |first_row: u32, rows: u32| {
+            let mut mesh = grid(rows, 25, 30.0, |e, n| {
+                ridge(e, n + 30.0 * f64::from(20 - rows - first_row))
+            });
+            for p in &mut mesh.positions {
+                p[1] += 30.0 * (20 - rows - first_row) as f32;
+            }
+            mesh
+        };
+        let mut painted = HeightField {
+            up_m: vec![f32::NAN; field.up_m.len()],
+            ..field.clone()
+        };
+        painted.paint(&piece(0, 11)).expect("north half");
+        painted.paint(&piece(10, 10)).expect("south half");
+        assert_eq!(painted.up_m.len(), field.up_m.len());
+        for (i, (a, b)) in painted.up_m.iter().zip(&field.up_m).enumerate() {
+            assert!(
+                a.to_bits() == b.to_bits() || (a - b).abs() < 1e-4,
+                "cell {i}: {a} painted, {b} resampled"
+            );
+        }
+        let blank = HeightField::blank([[0.0, 0.0], [95.0, 31.0]], 30.0).expect("blank");
+        assert_eq!((blank.columns, blank.rows), (4, 2));
+        assert!(blank.up_m.iter().all(|h| h.is_nan()));
+        assert!(matches!(
+            HeightField::blank([[0.0, 0.0], [0.0, 10.0]], 30.0),
+            Err(HeightFieldError::NoExtent)
+        ));
     }
 
     /// The DEM's own spacing is read back from the placed vertices, and a cell that would

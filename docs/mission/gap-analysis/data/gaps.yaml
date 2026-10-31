@@ -12907,6 +12907,15 @@
       renderers draw, coloured over the store's range and shaded continuously across tile
       edges; missing, loading and refused ground is said on the map and counted on PN-09.
       Line of sight over the store is next. DN-36 amendment 4 records what changed.
+  - date: 2026-10-31
+    status: In progress
+    note: >-
+      Line of sight reads the pinned store (DN-36 §5.2, D-164): a field painted on the tile
+      worker over the coverage extent, the sensors' ranges and the approaches with one
+      maximum range to spare, at the finest level within the field's budget, and painted
+      again only when that extent moves, never the view. Refused tiles and ground past the
+      store's edge stay flat and are said. The UAS ground model and the node do not read a
+      store yet; the fill cache and `terrain stage` are next.
 
 - id: GAP-228
   name: No operator-initiated escalation
