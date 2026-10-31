@@ -1096,6 +1096,7 @@ fn hills_desktop(dir: &Path) -> AppState {
             path: Some(dem.to_string_lossy().into_owned()),
             store: None,
             manifest_sha256: None,
+            fill_source: None,
             frame: "local-enu".into(),
             vertical: None,
             nad83_realisation: None,

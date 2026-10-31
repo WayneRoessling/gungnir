@@ -649,6 +649,20 @@ gungnir-node terrain stage \
 Tiles are 512 cells on a side with one cell of apron (`--tile-cells` changes the side),
 each level the mean of the level below, and Float32 DEFLATE GeoTIFFs any GIS reads.
 
+**Fetching the source in the command, and filling past the edge when connected.** A binary
+built with `--features terrain-fetch` takes an `https://` URL as `--source` (D-173). A
+baseline may also name a fill source for ground the store lacks (D-174):
+
+```json
+"fill_source": "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1/TIFF/current/{ns}{lat}{ew}{lon}/USGS_1_{ns}{lat}{ew}{lon}.tif"
+```
+
+When the view passes the store's edge, the desktop fetches the one-degree tiles it touches
+into `<data_dir>/terrain-fill/`, records each digest, and draws the fill outlined. Fill is
+never read by line of sight. To make fetched ground count for coverage, stage it like any
+source and pin the new manifest. A build without `terrain-fetch`, or a machine with no
+connection, draws the pinned store alone and says so on PN-09.
+
 ## Cloud
 
 The same image runs unchanged in a cloud container platform. Differences from

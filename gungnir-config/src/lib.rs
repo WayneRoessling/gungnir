@@ -827,6 +827,15 @@ pub struct TerrainConfig {
     /// tile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub manifest_sha256: Option<String>,
+    /// Where ground the pinned store lacks is fetched from when connected (D-160, D-174;
+    /// DN-36 amendments 1 and 5): a URL template naming one-degree geographic source tiles
+    /// by their north-west corner, `{ns}{lat}{ew}{lon}` as USGS 3DEP names them
+    /// (`n44w124`). Only with `store`, only for a store in a geographic frame, and only in
+    /// a build with the `terrain-fetch` feature. A fetched tile is staged into its own
+    /// sub-store under the data directory, drawn marked where the pinned store has no tile,
+    /// and never read by line of sight (D-164). Absent by default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill_source: Option<String>,
     #[serde(default = "default_terrain_frame")]
     pub frame: String,
     /// What the DEM's heights are measured from, for a file that does not say
@@ -3405,6 +3414,7 @@ fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             }
         }
     }
+    validate_fill_source(t)?;
     if let Err(reason) = t.frame.parse::<Frame>() {
         return Err(ConfigError::Invalid(format!("terrain.frame {reason}")));
     }
@@ -3427,6 +3437,39 @@ fn validate_terrain(baseline: &ConfigBaseline) -> Result<(), ConfigError> {
             return Err(ConfigError::Invalid(format!(
                 "terrain.vertical_sigma_m is {sigma}; a DEM's vertical error is a positive \
                  number of metres"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// GAP-227 (D-174): a fill source fills a staged store's gaps, names a one-degree tile by its
+/// four parts, and is fetched over https or from this machine only.
+fn validate_fill_source(t: &TerrainConfig) -> Result<(), ConfigError> {
+    if let Some(template) = &t.fill_source {
+        if t.store.is_none() {
+            return Err(ConfigError::Invalid(
+                "terrain.fill_source fills a staged store's gaps, and terrain names no store"
+                    .to_string(),
+            ));
+        }
+        if let Some(missing) = ["{ns}", "{lat}", "{ew}", "{lon}"]
+            .iter()
+            .find(|p| !template.contains(**p))
+        {
+            return Err(ConfigError::Invalid(format!(
+                "terrain.fill_source {template:?} lacks {missing}: it names a one-degree tile \
+             by its north-west corner with {{ns}}{{lat}}{{ew}}{{lon}}, as n44w124"
+            )));
+        }
+        let lower = template.to_ascii_lowercase();
+        let loopback = ["http://127.0.0.1", "http://localhost", "http://[::1]"]
+            .iter()
+            .any(|p| lower.starts_with(p));
+        if !(lower.starts_with("https://") || loopback) {
+            return Err(ConfigError::Invalid(format!(
+                "terrain.fill_source {template:?} is not https://, or http:// to this machine; \
+             nothing is fetched unauthenticated across a network"
             )));
         }
     }
@@ -6473,6 +6516,7 @@ MFkw
                 path: Some("dem/site.asc".into()),
                 store: None,
                 manifest_sha256: None,
+                fill_source: None,
                 frame: "local-enu".into(),
                 vertical: None,
                 nad83_realisation: None,
@@ -6485,6 +6529,7 @@ MFkw
             path: Some("dem/site.png".into()),
             store: None,
             manifest_sha256: None,
+            fill_source: None,
             frame: "local-enu".into(),
             vertical: None,
             nad83_realisation: None,
@@ -6498,6 +6543,7 @@ MFkw
             path: Some("dem/site.tif".into()),
             store: None,
             manifest_sha256: None,
+            fill_source: None,
             frame: "EPSG:32633".into(),
             vertical: None,
             nad83_realisation: None,
@@ -6508,6 +6554,7 @@ MFkw
             path: Some("dem/site.tif".into()),
             store: None,
             manifest_sha256: None,
+            fill_source: None,
             frame: "epsg:4326".into(),
             vertical: None,
             nad83_realisation: None,
@@ -6519,6 +6566,7 @@ MFkw
             path: Some("dem/site.tif".into()),
             store: None,
             manifest_sha256: None,
+            fill_source: None,
             frame: "wgs84".into(),
             vertical: None,
             nad83_realisation: None,
@@ -6529,6 +6577,7 @@ MFkw
             path: Some("dem/site.tif".into()),
             store: None,
             manifest_sha256: None,
+            fill_source: None,
             frame: "epsg:not-a-number".into(),
             vertical: None,
             nad83_realisation: None,
@@ -6547,6 +6596,7 @@ MFkw
                     path: path.map(Into::into),
                     store: store.map(Into::into),
                     manifest_sha256: digest.map(Into::into),
+                    fill_source: None,
                     frame: "epsg:4269".into(),
                     vertical: Some("epsg:5703".into()),
                     nad83_realisation: Some("epsg:6318".into()),
@@ -6581,6 +6631,42 @@ MFkw
         assert!(store(Some("dem/site.tif"), None, Some(&digest)).contains("names a path"));
     }
 
+    /// GAP-227 (D-174): a fill source names a one-degree tile by its four parts, over
+    /// https or to this machine, and only beside a store.
+    #[test]
+    fn a_fill_source_is_a_tile_template_beside_a_store() {
+        let with = |store: bool, fill: &str| {
+            let b = ConfigBaseline {
+                terrain: Some(TerrainConfig {
+                    path: (!store).then(|| "dem/site.tif".into()),
+                    store: store.then(|| "terrain/oregon".into()),
+                    manifest_sha256: store.then(|| "ab".repeat(32)),
+                    fill_source: Some(fill.into()),
+                    frame: "epsg:4269".into(),
+                    vertical: Some("epsg:5703".into()),
+                    nad83_realisation: Some("epsg:6318".into()),
+                    vertical_sigma_m: None,
+                }),
+                ..ConfigBaseline::default()
+            };
+            match validate(&b) {
+                Ok(()) => String::new(),
+                Err(ConfigError::Invalid(reason)) => reason,
+                Err(other) => panic!("{other:?}"),
+            }
+        };
+        let usgs = "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1/TIFF/current/\
+                    {ns}{lat}{ew}{lon}/USGS_1_{ns}{lat}{ew}{lon}.tif";
+        assert_eq!(with(true, usgs), "");
+        assert_eq!(
+            with(true, "http://127.0.0.1:8080/{ns}{lat}{ew}{lon}.tif"),
+            ""
+        );
+        assert!(with(false, usgs).contains("names no store"));
+        assert!(with(true, "https://x/{ns}{lat}{lon}.tif").contains("lacks {ew}"));
+        assert!(with(true, "http://example.com/{ns}{lat}{ew}{lon}.tif").contains("https://"));
+    }
+
     /// The store's fields are skipped when absent, so a baseline signed before them
     /// serializes, and so verifies, as it did: `path` first, then `frame`.
     #[test]
@@ -6589,6 +6675,7 @@ MFkw
             path: Some("dem/site.tif".into()),
             store: None,
             manifest_sha256: None,
+            fill_source: None,
             frame: "local-enu".into(),
             vertical: None,
             nad83_realisation: None,
@@ -6638,6 +6725,7 @@ MFkw
                 path: Some("dem/site.tif".into()),
                 store: None,
                 manifest_sha256: None,
+                fill_source: None,
                 frame: "epsg:32633".into(),
                 vertical: Some("epsg:3855".into()),
                 nad83_realisation: None,
@@ -6685,6 +6773,7 @@ MFkw
                 path: Some("dem/site.tif".into()),
                 store: None,
                 manifest_sha256: None,
+                fill_source: None,
                 frame: "epsg:26910".into(),
                 vertical: Some("epsg:5703".into()),
                 nad83_realisation: Some("epsg:6318".into()),
@@ -6711,6 +6800,7 @@ MFkw
                 path: Some("dem/site.asc".into()),
                 store: None,
                 manifest_sha256: None,
+                fill_source: None,
                 frame: "local-enu".into(),
                 vertical: None,
                 nad83_realisation: None,

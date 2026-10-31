@@ -88,6 +88,9 @@ pub struct StoreFootprint {
     boxes: Vec<Vec<[[f64; 2]; 2]>>,
     /// The whole store's ENU box.
     extent: [[f64; 2]; 2],
+    /// The store's frame from local ENU, as the affine map through three of the placed
+    /// extent's corners: `[x, y] = m * [e, n, 1]`.
+    to_frame: [[f64; 3]; 2],
     revision: u64,
 }
 
@@ -172,12 +175,32 @@ impl StoreFootprint {
             boxes.push(level_boxes);
         }
         let extent = border(0, last_i, 0, last_j);
+        let to_frame = affine_from(
+            [
+                lattice[0],
+                lattice[last_i as usize],
+                lattice[(last_j * columns) as usize],
+            ],
+            [at(0, 0), at(last_i, 0), at(0, last_j)],
+        )
+        .ok_or_else(|| "the store's placed corners do not span an area".to_string())?;
         Ok(Self {
             index,
             boxes,
             extent,
+            to_frame,
             revision,
         })
+    }
+
+    /// A local ENU position in the store's own frame, by the affine map through three of
+    /// the placed extent's corners. Exact in the local frame; across a few degrees of a
+    /// geographic store it is good to the curvature the map leaves out, which is enough to
+    /// say which one-degree tiles a view touches (D-174) and nothing finer.
+    #[must_use]
+    pub fn frame_of(&self, e: f64, n: f64) -> [f64; 2] {
+        let [a, b] = self.to_frame;
+        [a[0] * e + a[1] * n + a[2], b[0] * e + b[1] * n + b[2]]
     }
 
     #[must_use]
@@ -207,6 +230,28 @@ impl StoreFootprint {
         let i = key.row as usize * across as usize + key.column as usize;
         self.boxes.get(usize::from(key.level))?.get(i).copied()
     }
+}
+
+/// The affine map taking each of `enu` to the matching `frame` point, or `None` when the
+/// three ENU points are collinear.
+fn affine_from(frame: [[f64; 2]; 3], enu: [[f64; 2]; 3]) -> Option<[[f64; 3]; 2]> {
+    let [p0, p1, p2] = enu;
+    let (u, v) = (
+        [p1[0] - p0[0], p1[1] - p0[1]],
+        [p2[0] - p0[0], p2[1] - p0[1]],
+    );
+    let det = u[0] * v[1] - u[1] * v[0];
+    if det.abs() < f64::EPSILON || !det.is_finite() {
+        return None;
+    }
+    let row = |k: usize| {
+        let (d1, d2) = (frame[1][k] - frame[0][k], frame[2][k] - frame[0][k]);
+        // Solve [d1, d2] = [a, b] . [u, v] for the linear part, then the offset.
+        let a = (d1 * v[1] - d2 * u[1]) / det;
+        let b = (d2 * u[0] - d1 * v[0]) / det;
+        [a, b, frame[0][k] - a * p0[0] - b * p0[1]]
+    };
+    Some([row(0), row(1)])
 }
 
 /// The grid indices a tile is drawn at, along one axis of `cells` own cells with `apron`
@@ -257,6 +302,18 @@ pub fn tiles_in_view(
     footprint: &StoreFootprint,
     view: &TopDownView,
     rect: egui::Rect,
+) -> ViewTiles {
+    tiles_in_view_within(footprint, view, rect, TERRAIN_VERTEX_BUDGET)
+}
+
+/// As [`tiles_in_view`], within `budget` vertices: what a fill store's tiles have left once
+/// the pinned store's are chosen (D-174).
+#[must_use]
+pub fn tiles_in_view_within(
+    footprint: &StoreFootprint,
+    view: &TopDownView,
+    rect: egui::Rect,
+    budget: usize,
 ) -> ViewTiles {
     let a = view.unproject(rect.left_top(), rect);
     let b = view.unproject(rect.right_bottom(), rect);
@@ -310,7 +367,7 @@ pub fn tiles_in_view(
                     tile_vertices(c, r, stride, apron)
                 })
                 .sum();
-            if vertices <= TERRAIN_VERTEX_BUDGET {
+            if vertices <= budget {
                 break true;
             }
             if stride >= index.tile_cells() {
@@ -473,19 +530,24 @@ pub fn tile_surface(
     })
 }
 
-/// Tile surfaces by tile and stride, kept across frames and dropped least recently drawn
-/// first beyond [`SURFACE_CACHE_TILES`]. A tile that could not be built is kept as such, so
-/// it is refused once and not once a frame.
+/// A tile's surface, or that it could not be built, and when it was last drawn.
+type Cached = (Option<Arc<TerrainSurface>>, u64);
+
+/// Tile surfaces by store and tile and stride, kept across frames and dropped least
+/// recently drawn first beyond [`SURFACE_CACHE_TILES`]. A tile that could not be built is
+/// kept as such, so it is refused once and not once a frame.
 #[derive(Debug, Default)]
 pub struct SurfaceCache {
-    surfaces: BTreeMap<WantedTile, (Option<Arc<TerrainSurface>>, u64)>,
+    surfaces: BTreeMap<(u64, WantedTile), Cached>,
     clock: u64,
 }
 
 impl SurfaceCache {
-    /// The surface for `wanted`, built from `tile` if it is not held.
+    /// The surface for `wanted` of the store whose footprint revision is `store`, built if
+    /// it is not held.
     fn get(
         &mut self,
+        store: u64,
         wanted: WantedTile,
         build: impl FnOnce() -> Option<Arc<TerrainSurface>>,
     ) -> Option<Arc<TerrainSurface>> {
@@ -493,7 +555,7 @@ impl SurfaceCache {
         let clock = self.clock;
         let entry = self
             .surfaces
-            .entry(wanted)
+            .entry((store, wanted))
             .or_insert_with(|| (build(), clock));
         entry.1 = clock;
         let surface = entry.0.clone();
@@ -544,6 +606,40 @@ pub fn compose(surfaces: &[Arc<TerrainSurface>], revision: u64) -> TerrainSurfac
     joined
 }
 
+/// `surface` with every triangle whose centroid lies inside one of `cover` left out: a fill
+/// tile drawn only where the pinned store has no tile (D-174). `None` when none is left.
+fn outside(surface: TerrainSurface, cover: &[[[f64; 2]; 2]]) -> Option<TerrainSurface> {
+    let inside = |i: &[u32; 3]| {
+        let (e, n) = i.iter().fold((0.0, 0.0), |(e, n), &v| {
+            let p = surface.positions[v as usize];
+            (e + f64::from(p[0]) / 3.0, n + f64::from(p[1]) / 3.0)
+        });
+        cover
+            .iter()
+            .any(|b| e >= b[0][0] && e <= b[1][0] && n >= b[0][1] && n <= b[1][1])
+    };
+    let indices: Vec<u32> = surface
+        .indices
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .filter(|t| !inside(t))
+        .flatten()
+        .copied()
+        .collect();
+    (!indices.is_empty()).then_some(TerrainSurface { indices, ..surface })
+}
+
+/// A fill store, fetched for ground the pinned store lacks (D-160, D-174), as a frame
+/// draws it: only where the pinned store has no tile, outlined, never read by line of
+/// sight (D-164).
+#[derive(Debug, Clone, Copy)]
+pub struct FillLayer<'a> {
+    pub footprint: &'a StoreFootprint,
+    /// Its tiles placed so far.
+    pub resident: &'a BTreeMap<TileKey, Arc<PlacedTile>>,
+}
+
 /// A staged store as a frame draws it, borrowed from the caller (GAP-227).
 #[derive(Debug, Clone, Copy)]
 pub struct TerrainStoreLayer<'a> {
@@ -552,7 +648,11 @@ pub struct TerrainStoreLayer<'a> {
     pub resident: &'a BTreeMap<TileKey, Arc<PlacedTile>>,
     /// The tiles refused, with why.
     pub refused: &'a BTreeMap<TileKey, String>,
-    /// Changes whenever `resident` or `refused` does.
+    /// The fill stores fetched so far, empty without a fill source.
+    pub fills: &'a [FillLayer<'a>],
+    /// What the fill cache is doing or why it cannot, for the map; empty to say nothing.
+    pub fill_status: &'a str,
+    /// Changes whenever `resident`, `refused`, `fills` or `fill_status` does.
     pub generation: u64,
 }
 
@@ -571,20 +671,35 @@ pub struct TileReport {
     pub refused: Vec<(TileKey, String)>,
     /// Part of the view has no staged ground.
     pub unstaged: bool,
+    /// Fetched fill tiles drawn (D-174), counted apart from the pinned ones.
+    pub fill_drawn: usize,
+    /// What the fill cache said, as the caller wrote it.
+    pub fill_status: String,
 }
 
 impl TileReport {
-    /// Whether anything is missing.
+    /// Whether anything is missing or fetched.
     #[must_use]
     pub fn says_anything(&self) -> bool {
-        self.unstaged || self.loading > 0 || !self.refused.is_empty()
+        self.unstaged
+            || self.loading > 0
+            || !self.refused.is_empty()
+            || self.fill_drawn > 0
+            || !self.fill_status.is_empty()
     }
 
-    /// The sentence the map draws (§5.3): empty when nothing is missing.
+    /// The sentence the map draws (§5.3, amendment 1 item 1): empty when nothing is
+    /// missing or fetched.
     pub fn write(&self, text: &mut String) {
         use std::fmt::Write as _;
         let mut parts: Vec<String> = Vec::new();
-        if self.unstaged {
+        if self.unstaged && self.fill_drawn > 0 {
+            parts.push(format!(
+                "past the store's edge, {} fetched tile{} drawn outlined, outside line of sight",
+                self.fill_drawn,
+                if self.fill_drawn == 1 { "" } else { "s" }
+            ));
+        } else if self.unstaged {
             parts.push("no staged terrain past the store's edge".to_string());
         }
         if let Some((key, reason)) = self.refused.first() {
@@ -607,19 +722,34 @@ impl TileReport {
                 if self.loading == 1 { "" } else { "s" }
             ));
         }
+        if !self.fill_status.is_empty() {
+            parts.push(self.fill_status.clone());
+        }
         let _ = write!(text, "{}", parts.join("; "));
     }
 }
 
+/// The view a choice of tiles was made for: the view, the rect, and every store's
+/// footprint revision, pinned first.
+type ViewKey = (TopDownView, egui::Rect, Vec<u64>);
+
 /// The viewport's staged-terrain state across frames.
 #[derive(Debug, Default)]
 pub struct TerrainTiles {
-    view_key: Option<(TopDownView, egui::Rect, u64)>,
+    view_key: Option<ViewKey>,
     view_tiles: ViewTiles,
+    /// The fill tiles the view wants, by fill store's footprint revision.
+    fill_wanted: Vec<(u64, WantedTile)>,
     cache: SurfaceCache,
     footprint_revision: Option<u64>,
+    /// The pinned store's level-0 tile boxes it holds, which fill is never drawn under.
+    pinned_cover: Vec<[[f64; 2]; 2]>,
     generation: Option<u64>,
     drawn: Vec<WantedTile>,
+    fill_drawn: Vec<(u64, WantedTile)>,
+    fill_outlines: Vec<[[f64; 2]; 2]>,
+    /// The visible box in local ENU, `[[min_e, min_n], [max_e, max_n]]`.
+    visible: Option<[[f64; 2]; 2]>,
     composed: u64,
     report: TileReport,
 }
@@ -631,10 +761,34 @@ impl TerrainTiles {
         &self.view_tiles.wanted
     }
 
-    /// What the last frame drew.
+    /// The fill tiles the last frame wanted, by fill store's footprint revision.
+    #[must_use]
+    pub fn fill_wanted(&self) -> &[(u64, WantedTile)] {
+        &self.fill_wanted
+    }
+
+    /// What the last frame drew of the pinned store.
     #[must_use]
     pub fn drawn(&self) -> &[WantedTile] {
         &self.drawn
+    }
+
+    /// What the last frame drew of the fill stores.
+    #[must_use]
+    pub fn fill_drawn(&self) -> &[(u64, WantedTile)] {
+        &self.fill_drawn
+    }
+
+    /// The boxes the map outlines: each fill tile drawn (amendment 1 item 1).
+    #[must_use]
+    pub fn fill_outlines(&self) -> &[[[f64; 2]; 2]] {
+        &self.fill_outlines
+    }
+
+    /// The last frame's visible box in local ENU, once a frame has been drawn.
+    #[must_use]
+    pub fn visible(&self) -> Option<[[f64; 2]; 2]> {
+        self.visible
     }
 
     #[must_use]
@@ -664,42 +818,92 @@ impl TerrainTiles {
         if self.footprint_revision != Some(footprint.revision()) {
             *self = Self {
                 footprint_revision: Some(footprint.revision()),
+                pinned_cover: held_level_0(footprint),
                 composed: self.composed,
                 ..Self::default()
             };
         }
-        let key = (*view, rect, footprint.revision());
-        let moved = self.view_key != Some(key);
+        let mut revisions = vec![footprint.revision()];
+        revisions.extend(layer.fills.iter().map(|f| f.footprint.revision()));
+        let key = (*view, rect, revisions);
+        let moved = self.view_key.as_ref() != Some(&key);
         if moved {
             self.view_tiles = tiles_in_view(footprint, view, rect);
+            self.fill_wanted = fill_in_view(&self.view_tiles, layer, view, rect);
+            let a = view.unproject(rect.left_top(), rect);
+            let b = view.unproject(rect.right_bottom(), rect);
+            self.visible = Some([
+                [a[0].min(b[0]), a[1].min(b[1])],
+                [a[0].max(b[0]), a[1].max(b[1])],
+            ]);
             self.view_key = Some(key);
         }
         if !moved && self.generation == Some(layer.generation) {
             return false;
         }
         self.generation = Some(layer.generation);
-        let (drawn, report) = choose_drawn(&self.view_tiles, layer);
+        let (drawn, mut report) = choose_drawn(&self.view_tiles, layer);
+        let fill_of = |revision: u64| {
+            layer
+                .fills
+                .iter()
+                .find(|f| f.footprint.revision() == revision)
+        };
+        let fill_drawn: Vec<(u64, WantedTile)> = self
+            .fill_wanted
+            .iter()
+            .filter(|(r, w)| fill_of(*r).is_some_and(|f| f.resident.contains_key(&w.key)))
+            .copied()
+            .collect();
+        report.fill_drawn = fill_drawn.len();
+        report.fill_status = layer.fill_status.to_string();
         self.report = report;
         let holds_this = slot.as_ref().is_some_and(|s| {
             s.revision & COMPOSED != 0 && s.revision == (COMPOSED | self.composed)
         });
-        if drawn == self.drawn && (holds_this || drawn.is_empty() && slot.is_none()) {
+        let nothing = drawn.is_empty() && fill_drawn.is_empty();
+        if drawn == self.drawn
+            && fill_drawn == self.fill_drawn
+            && (holds_this || nothing && slot.is_none())
+        {
             return false;
         }
         let range = footprint.index().height_range_m();
         let apron = footprint.index().apron_cells();
-        let surfaces: Vec<Arc<TerrainSurface>> = drawn
+        let mut surfaces: Vec<Arc<TerrainSurface>> = drawn
             .iter()
             .filter_map(|&w| {
                 let tile = layer.resident.get(&w.key)?;
-                self.cache.get(w, || {
+                self.cache.get(footprint.revision(), w, || {
                     tile_surface(palette, tile, w.stride, apron, range)
                         .ok()
                         .map(Arc::new)
                 })
             })
             .collect();
+        self.fill_outlines.clear();
+        let cover = &self.pinned_cover;
+        for &(revision, w) in &fill_drawn {
+            let Some(fill) = fill_of(revision) else {
+                continue;
+            };
+            let Some(tile) = fill.resident.get(&w.key) else {
+                continue;
+            };
+            // One ramp for every tile, fill or pinned: the pinned store's range (§6 item 1).
+            let fill_apron = fill.footprint.index().apron_cells();
+            if let Some(surface) = self.cache.get(revision, w, || {
+                tile_surface(palette, tile, w.stride, fill_apron, range)
+                    .ok()
+                    .and_then(|s| outside(s, cover))
+                    .map(Arc::new)
+            }) {
+                surfaces.push(surface);
+                self.fill_outlines.extend(fill.footprint.tile_box(w.key));
+            }
+        }
         self.drawn = drawn;
+        self.fill_drawn = fill_drawn;
         if surfaces.is_empty() {
             *slot = None;
             return true;
@@ -714,6 +918,54 @@ impl TerrainTiles {
     }
 }
 
+/// The boxes of the level-0 tiles `footprint`'s store holds.
+fn held_level_0(footprint: &StoreFootprint) -> Vec<[[f64; 2]; 2]> {
+    footprint
+        .index()
+        .tiles()
+        .filter(|t| t.level == 0)
+        .filter_map(|t| footprint.tile_box(t.key()))
+        .collect()
+}
+
+/// The fill tiles a view wants (D-174): none while the pinned store covers the view, and
+/// otherwise each fill store's, within what the pinned store's tiles leave of the budget.
+fn fill_in_view(
+    pinned: &ViewTiles,
+    layer: TerrainStoreLayer<'_>,
+    view: &TopDownView,
+    rect: egui::Rect,
+) -> Vec<(u64, WantedTile)> {
+    if !pinned.unstaged || layer.fills.is_empty() {
+        return Vec::new();
+    }
+    let vertices = |footprint: &StoreFootprint, wanted: &[WantedTile]| -> usize {
+        let apron = footprint.index().apron_cells();
+        wanted
+            .iter()
+            .filter_map(|w| {
+                let t = footprint.index().tile(w.key)?;
+                Some(tile_vertices(t.columns, t.rows, w.stride, apron))
+            })
+            .sum()
+    };
+    let mut left = TERRAIN_VERTEX_BUDGET.saturating_sub(vertices(layer.footprint, &pinned.wanted));
+    let mut wanted = Vec::new();
+    for fill in layer.fills {
+        if left == 0 {
+            break;
+        }
+        let chosen = tiles_in_view_within(fill.footprint, view, rect, left);
+        left = left.saturating_sub(vertices(fill.footprint, &chosen.wanted));
+        wanted.extend(
+            chosen
+                .wanted
+                .into_iter()
+                .map(|w| (fill.footprint.revision(), w)),
+        );
+    }
+    wanted
+}
 /// The tiles to draw from what the view wants and what is resident: each wanted tile that
 /// is resident, or its nearest resident ancestor in place of it and of every wanted tile
 /// under that ancestor, so nothing is drawn twice (§5.3).
@@ -1045,6 +1297,8 @@ mod tests {
             footprint: &footprint,
             resident: &resident,
             refused: &refused,
+            fills: &[],
+            fill_status: "",
             generation: 1,
         };
         assert!(tiles.sync(&palette, layer, &view, rect(), &mut slot));
@@ -1075,6 +1329,8 @@ mod tests {
             footprint: &footprint,
             resident: &resident,
             refused: &refused,
+            fills: &[],
+            fill_status: "",
             generation: 2,
         };
         assert!(tiles.sync(&palette, layer, &view, rect(), &mut slot));
@@ -1087,6 +1343,8 @@ mod tests {
             footprint: &footprint,
             resident: &resident,
             refused: &refused,
+            fills: &[],
+            fill_status: "",
             generation: 3,
         };
         tiles.sync(&palette, layer, &view, rect(), &mut slot);

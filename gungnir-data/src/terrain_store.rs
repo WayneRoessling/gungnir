@@ -28,6 +28,7 @@
 //! system, which `gungnir-app` places through the same path as a single DEM.
 
 pub mod cli;
+pub mod fill;
 
 use std::collections::BTreeMap;
 use std::io::Read;

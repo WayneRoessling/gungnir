@@ -283,6 +283,15 @@ jobs:
       - name: doctests
         if: matrix.shard == 1
         run: cargo test --workspace --doc --locked
+      # GAP-227 (D-173, D-174): the HTTP client sits behind `terrain-fetch`, off by default,
+      # so the workspace run above never compiles it. Its tests fetch from a mirror on the
+      # loopback only, so they need no network.
+      - name: terrain-fetch tests
+        if: matrix.shard == 1
+        run: >-
+          cargo test --locked -p gungnir-data -p gungnir-app
+          --features gungnir-data/terrain-fetch,gungnir-app/terrain-fetch
+          --test terrain_store --test terrain_fill
       - name: disk at the end
         if: always()
         run: df -h /
