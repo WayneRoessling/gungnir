@@ -13,6 +13,9 @@ description = "eframe desktop binary: bootstrap + AppState + update loop. The on
 workspace = true
 
 [features]
+# GAP-227 (D-173): `terrain stage --source <URL>` fetches through `gungnir-data`'s one
+# HTTP client. Off by default: a build that must never reach a network holds no client.
+terrain-fetch = ["gungnir-data/terrain-fetch"]
 # Real-world CRS support for the configured DEM and point-cloud pair (GAP-023, GAP-102,
 # D-41): forwards `gungnir-data`'s own `crs` feature, which is what links `libproj`. Off
 # by default for the reasons that feature's own comment gives -- chiefly that `proj-sys`

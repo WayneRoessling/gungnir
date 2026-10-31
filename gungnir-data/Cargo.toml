@@ -50,6 +50,12 @@ workspace = true
 # adds libtiff to the native build (`libtiff-dev` in CI) and nothing else: `network`,
 # the feature that lets libproj fetch grids at run time, stays refused.
 crs = ["dep:proj", "dep:proj-sys"]
+# `terrain stage --source <URL>` (GAP-227, D-173): the one HTTP client a staging run fetches
+# a source DEM with, and later the fill cache's. Off by default, so a build that must never
+# reach a network holds no client, as a build without `crs` holds no libproj. `reqwest` is
+# §2.9's row already; this adds its `blocking` feature, whose futures-channel and
+# futures-util are in the graph already through the API stack.
+terrain-fetch = ["dep:reqwest"]
 
 [dependencies]
 # Optional: see the `crs` feature above for why this is not a plain dependency.
@@ -63,6 +69,8 @@ sha2.workspace = true
 # A staged terrain store's manifest is JSON (GAP-227, DN-36 §4.2); §2.9's serde rows.
 serde.workspace = true
 serde_json.workspace = true
+# Optional: see the `terrain-fetch` feature above.
+reqwest = { workspace = true, optional = true, features = ["blocking"] }
 thiserror.workspace = true
 tracing.workspace = true
 crossbeam-channel.workspace = true

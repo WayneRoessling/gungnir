@@ -378,9 +378,44 @@ The desktop places tiles on a worker thread of its own, keeps at most 24 placed 
 megabytes each at 512 cells), and asks for at most 8 at once. The sentence for missing ground
 is drawn on the map, and PN-09's terrain line counts the tiles placed, loading and refused.
 
+## Amendment 5, 2026-10-31: the fetch (D-173), and the fill source's form (D-174)
+
+**D-173, taken by the owner the same day to the recommended default.** The one HTTP client
+a fetch uses is `reqwest`, already §2.9's row and already linked in both binaries, with its
+`blocking` feature. It sits behind `gungnir-data`'s `terrain-fetch` feature, off by default,
+with `terrain-fetch` features in `gungnir-app` and `gungnir-node` that turn it on. §2.9's row
+is widened to say so. Three things follow:
+
+1. **Which roots.** The API client trusts the deployment's own roots through the event
+   stream's `rustls::ClientConfig`. A public source such as the USGS is signed by a public
+   authority, so the fetch verifies against the operating system's trust store, which is
+   what `reqwest`'s `rustls` feature selects (`rustls-platform-verifier`). Only `https://`
+   is fetched, or `http://` to the loopback, a mirror on the same machine. Nothing crosses a
+   network unauthenticated.
+2. **`terrain stage --source <URL>`** fetches the file beside `--out`, checks it against
+   `--source-sha256` when one is given, stages from it, removes it, and prints the file's
+   own SHA-256 with the manifest's. A build without the feature refuses a URL by name.
+3. **The fill cache uses the same client**, so it needs no further crate decision.
+
+**D-174, raised: what a fill source is.** Amendment 1 says a fill tile is "the source's own
+tiles, cut and averaged into the same pyramid form by the code `terrain stage` uses", but
+names no form for `terrain.fill_source`. The build cannot choose one without the owner.
+
+| | Form of `terrain.fill_source` | What a fetch does |
+|---|---|---|
+| **Recommended** | A URL template for one-degree geographic source tiles, with `{ns}{lat}{ew}{lon}` naming a tile by its north-west corner, as the USGS 3DEP 1 arc-second product is named (`n44w124`) | For the area the view or the coverage extent wants and the pinned store lacks, fetch each one-degree tile, stage it with `terrain stage`'s code into its own sub-store under the data directory, and record the digest at fetch time. Only a store in a geographic frame can be filled |
+| Alternative | The URL of a larger staged store in DN-36's own layout, a mirror of `manifest.json` and its tiles | Fetch that manifest, then the tiles the view wants, verified against the mirror's manifest. No cutting at run time, but a mirror somebody has to stage and serve, and a manifest nobody pinned |
+| Alternative | An OGC Web Coverage Service | A request per area. Needs a client for the protocol, and puts the cutting on the server |
+
+Whichever form is taken, the fill is drawn **only where the pinned store has no tile**, with
+a distinct edge, and counted apart on PN-09 ("pinned 42, fetched 6"). It is fetched on the
+tile worker, never the render thread. It is never written into the pinned store, and it
+never enters line of sight (D-164), which the worker's field already guarantees, because the
+field reads the pinned store alone. §8.1 rows h to k test it.
+
 ## Traceability
 
-GAP-227 (action, last item, widened); D-164; D-139; D-160 to D-163; GAP-252 and
+GAP-227 (action, last item, widened); D-164; D-173; D-174; D-139; D-160 to D-163; GAP-252 and
 `DN-35-terrain-in-the-three-d-scene.md`; DN-34 §13.1 row 8 and §13.2 step 6;
 `../rust-3d-data-ecosystem-build-vs-adopt.md` §2.1 and §4; GAP-023, GAP-108, GAP-197, GAP-200;
 GAP-247's height field; `ARCHITECTURE.md` §8; DN-12 §7;
