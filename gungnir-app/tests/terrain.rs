@@ -645,6 +645,7 @@ fn pn_09_says_which_renderer_draws_the_ground() {
                     geofences: &[],
                     predictions: &[],
                     terrain: layer,
+                    terrain_tiles: None,
                     point_clouds: &[],
                     laydown_preview: None,
                     dense_group: None,

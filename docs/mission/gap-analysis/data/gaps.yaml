@@ -12898,6 +12898,15 @@
       desktop opens a pinned store off the render thread and places tiles through the single
       DEM's path. A verified store is not yet drawn or read by line of sight, and PN-09 says
       so. DN-36 amendment 3 records what the build made exact.
+  - date: 2026-10-30
+    status: In progress
+    note: >-
+      The store drawn by view (DN-36 §5.1, §5.3, §6). `tiles_in_view` chooses one level and
+      stride for the frame within the single DEM's vertex budget; the desktop places the
+      tiles it wants on a worker thread; the viewport joins them into the one surface both
+      renderers draw, coloured over the store's range and shaded continuously across tile
+      edges; missing, loading and refused ground is said on the map and counted on PN-09.
+      Line of sight over the store is next. DN-36 amendment 4 records what changed.
 
 - id: GAP-228
   name: No operator-initiated escalation

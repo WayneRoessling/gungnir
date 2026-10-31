@@ -54,9 +54,9 @@ pub enum TerrainStatus {
         revision: u64,
     },
     /// A staged store (GAP-227, `docs/design/DN-36-staged-terrain-and-map-tiles.md`)
-    /// whose manifest matched the baseline's digest and agrees with its frame. Choosing
-    /// its tiles by view and building line of sight over it are DN-36 §5's next
-    /// increments, so nothing is drawn and line of sight stays flat, and the line says so.
+    /// whose manifest matched the baseline's digest and agrees with its frame. Its tiles
+    /// are drawn by view ([`crate::terrain_tiles`]); line of sight over it is DN-36 §5.2's
+    /// increment, so line of sight stays flat until then, and the line says so.
     StoreVerified {
         store: String,
         tiles: usize,
@@ -92,9 +92,9 @@ impl TerrainStatus {
                 tiles,
                 levels,
             } => format!(
-                "staged store {store}: manifest verified, {tiles} tiles over {levels} levels; \
-                 drawing it and line of sight over it are not built yet (GAP-227, DN-36 §5), \
-                 so nothing is drawn and line of sight is flat (optimistic)"
+                "staged store {store}: manifest verified, {tiles} tiles over {levels} levels, \
+                 drawn by view; line of sight over it is not built yet (GAP-227, DN-36 \
+                 §5.2), so line of sight is flat (optimistic)"
             ),
             TerrainStatus::Failed { path, reason } => {
                 format!("{path} not loaded: {reason}; line of sight is flat (optimistic)")
@@ -289,18 +289,20 @@ fn store_opened(
             .terrain
             .as_ref()
             .ok_or_else(|| "the baseline no longer names terrain".to_string())?;
-        store_declaration(terrain, store.index().manifest())?;
-        Ok(store)
+        let declaration = store_declaration(terrain, store.index().manifest())?;
+        Ok((store, declaration))
     });
     state.height_field = None;
     match checked {
-        Ok(store) => {
+        Ok((store, declaration)) => {
             state.terrain = TerrainStatus::StoreVerified {
                 store: path,
                 tiles: store.index().len(),
                 levels: store.index().levels(),
             };
-            state.terrain_store = Some(std::sync::Arc::from(store));
+            let store: std::sync::Arc<_> = std::sync::Arc::from(store);
+            crate::terrain_tiles::start(state, std::sync::Arc::clone(&store), declaration);
+            state.terrain_store = Some(store);
         }
         Err(reason) => {
             state.terrain_store = None;
