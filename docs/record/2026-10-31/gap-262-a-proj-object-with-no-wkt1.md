@@ -53,9 +53,9 @@ human-owned. Reading the datum from PROJJSON instead of WKT1 would accept a 3D s
 but it is a second datum reader beside `HorizontalDatum::of_wkt1`, which a file's WKT is
 read through; that is a change of what is accepted, not a fix, so a 3D frame is refused.
 
-**What shows it.** On the rig:
+**What shows it.** On the rig, after merging `main`:
 
-- `gungnir-data` `--lib` under `crs`: 48 passed, among them
+- `gungnir-data` `--lib` under `crs`: 51 passed, among them
   `nad83::tests::a_source_with_no_wkt1_form_is_refused_by_name_rather_than_panicking`
   (the refusals above, and the datum still read for `EPSG:6318`, `EPSG:4269`,
   `EPSG:4978` and a `+type=crs` UTM string) and
@@ -63,6 +63,9 @@ read through; that is a change of what is accepted, not a fix, so a 3D frame is 
   operation GAP-261's test first panicked on, which PROJ reports as a
   `ConcatenatedOperation`, returns an error for WKT1, describes itself in WKT2 and still
   converts; and the same for `EPSG:4979`).
-- `gungnir-app --test terrain` under `crs`: 16 passed, among them
+- `gungnir-app --test terrain` under `crs`: 15 passed and one ignored, among them
   `a_geographic_3d_terrain_frame_is_refused_by_name_rather_than_panicking`, which
-  panicked before the change.
+  panicked before the change. `gungnir-app --test pointcloud_crs` (12) and
+  `gungnir-data --test geoid` (18) and `--test pointcloud_crs` (13) pass as before.
+- The two caught assertions still print through the panic hook in the `--lib` run; the
+  tests pass because each is returned as an error.
