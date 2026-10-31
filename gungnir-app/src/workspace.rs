@@ -771,6 +771,33 @@ fn handoff_lines(state: &AppState) -> Vec<gungnir_ui::panels::intercept_panel::H
         .collect()
 }
 
+/// PN-09's terrain line: what is loaded, a staged store's tiles (GAP-227), who drew the
+/// ground, the surface line of sight reads, and the dead spots.
+fn terrain_health_line(state: &AppState) -> String {
+    let mut line = state.terrain.line();
+    // GAP-227 (DN-36 §5.3): a store's tiles placed, loading and refused, and what of the
+    // view has no ground.
+    if let Some(tiles) = crate::terrain_tiles::line(state) {
+        line.push_str("; ");
+        line.push_str(&tiles);
+    }
+    // GAP-252 (DN-35 §7 item 3): which renderer drew the ground, the one place the
+    // hand-over from the overlay to the scene can be read.
+    if state.terrain.is_masking() || state.terrain_tiles.has_footprint() {
+        if let Some(ground) = state.viewport.ground_line() {
+            line.push_str("; ");
+            line.push_str(&ground);
+        }
+    }
+    if let Some(field) = crate::terrain::height_field_line(state.height_field.as_deref()) {
+        line.push_str("; ");
+        line.push_str(&field);
+    }
+    line.push_str("; ");
+    line.push_str(&crate::dead_spots::health_line(state));
+    line
+}
+
 /// PN-03. Age and asset are computed here; the threat score is not available.
 /// PN-09 (GAP-001, GAP-008, GAP-009, GAP-010, GAP-021, GAP-023).
 fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
@@ -793,21 +820,8 @@ fn render_sensor_health(ui: &mut egui::Ui, state: &AppState) {
             .collect();
     // GAP-247, GAP-246 (DN-34 §10): the resampled surface every line of sight reads, and
     // the dead-spot worker's state, on the terrain's own line.
-    let mut terrain_line = state.terrain.line();
-    // GAP-252 (DN-35 §7 item 3): which renderer drew the ground, the one place the
-    // hand-over from the overlay to the scene can be read.
-    if state.terrain.is_masking() {
-        if let Some(ground) = state.viewport.ground_line() {
-            terrain_line.push_str("; ");
-            terrain_line.push_str(&ground);
-        }
-    }
-    if let Some(field) = crate::terrain::height_field_line(state.height_field.as_deref()) {
-        terrain_line.push_str("; ");
-        terrain_line.push_str(&field);
-    }
-    terrain_line.push_str("; ");
-    terrain_line.push_str(&crate::dead_spots::health_line(state));
+    let terrain_line = terrain_health_line(state);
+
     let geoid_owned = state.geoid.lines();
     let geoid_lines: Vec<gungnir_ui::panels::sensor_health::GeoidLine<'_>> = geoid_owned
         .iter()

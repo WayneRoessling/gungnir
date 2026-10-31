@@ -9,6 +9,7 @@
 
 pub mod content;
 pub mod sse;
+pub mod terrain;
 pub mod tile_cache;
 pub mod tileset;
 

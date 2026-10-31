@@ -179,6 +179,9 @@ pub struct ViewportState {
     pub terrain_mesh_2d: Option<layers::TerrainMesh2d>,
     /// Who drew the ground on the last frame, for PN-09's terrain line (DN-35 §7 item 3).
     pub ground: Ground,
+    /// A staged terrain store's tiles: which the view wants, their surfaces, and the one
+    /// surface joined from them into `terrain_surface` (GAP-227, DN-36 §5.1).
+    pub terrain_tiles: streaming::terrain::TerrainTiles,
 }
 
 /// Who draws the terrain this frame (GAP-252, DN-35 §5.2 and §7). Decided once a frame,
@@ -232,6 +235,7 @@ impl ViewportState {
             terrain_surface: None,
             terrain_mesh_2d: None,
             ground: Ground::Overlay,
+            terrain_tiles: streaming::terrain::TerrainTiles::default(),
         }
     }
 
@@ -364,6 +368,34 @@ impl ViewportState {
         layers::sync_terrain_mesh_2d(&mut self.terrain_mesh_2d, surface, &self.view, rect);
     }
 
+    /// Bring the ground's surface up to date for a frame into `rect`: from a staged
+    /// store's tiles when the frame has a store (GAP-227), from the one DEM otherwise, and
+    /// with it the sentence saying what of the store's ground is missing (DN-36 §5.3).
+    fn sync_ground(
+        &mut self,
+        palette: &theme::Palette,
+        layers: &layers::LayerInputs<'_>,
+        rect: egui::Rect,
+    ) {
+        let Some(store) = layers.terrain_tiles else {
+            layers::sync_terrain_surface(palette, &mut self.terrain_surface, layers.terrain);
+            if self.texts.terrain_tiles.is_written() {
+                self.texts.terrain_tiles = CachedText::default();
+            }
+            return;
+        };
+        self.terrain_tiles
+            .sync(palette, store, &self.view, rect, &mut self.terrain_surface);
+        self.texts.terrain_tiles.sync(
+            self.terrain_tiles.report(),
+            |k, p| k == p,
+            |p, text| {
+                p.write(text);
+                p.clone()
+            },
+        );
+    }
+
     /// The terrain surface, when one is placed and could be built.
     #[must_use]
     pub fn terrain_surface(&self) -> Option<&std::sync::Arc<layers::TerrainSurface>> {
@@ -470,6 +502,9 @@ pub struct Texts {
     pub dense_group: CachedText<layers::DenseGroupLabelKey>,
     /// The laydown preview's label, keyed on the option's intent.
     pub preview: CachedText<Option<String>>,
+    /// What of a staged store's ground the view is missing, and why; empty when nothing is
+    /// (GAP-227, DN-36 §5.3).
+    pub terrain_tiles: CachedText<streaming::terrain::TileReport>,
 }
 
 /// The control that switches between the three-d scene and the 2D projection.
@@ -505,6 +540,22 @@ fn draw_layers(
             &state.view,
             state.terrain_surface().map(AsRef::as_ref),
             state.terrain_mesh_2d.as_ref(),
+        );
+    }
+    // Where a staged store's ground is missing, the map says so rather than leaving an
+    // empty area that looks like a hidden layer (DN-36 §5.3, DN-12 §7).
+    let missing = state.texts.terrain_tiles.text();
+    if !missing.is_empty() {
+        painter.text(
+            rect.left_bottom()
+                + egui::vec2(
+                    palette.panel_spacing,
+                    -palette.panel_spacing - 3.2 * palette.small_font_size,
+                ),
+            egui::Align2::LEFT_BOTTOM,
+            missing,
+            egui::FontId::proportional(palette.small_font_size),
+            palette.warning_color,
         );
     }
     // Point clouds have no toggle either, the same reason predictions and the laydown
@@ -714,7 +765,7 @@ pub fn prepare_3d(
         &mut state.dead_spot_texture,
         layers.dead_spots,
     );
-    layers::sync_terrain_surface(palette, &mut state.terrain_surface, layers.terrain);
+    state.sync_ground(palette, &layers, rect);
     // Decided once, before anything is drawn: the ground is drawn by exactly one renderer
     // this frame (DN-35 §7 item 2).
     let ground = ground_source(state.terrain_surface().map(|s| s.revision), ground_resident);
@@ -782,7 +833,7 @@ pub fn render(
         &mut state.dead_spot_texture,
         layers.dead_spots,
     );
-    layers::sync_terrain_surface(palette, &mut state.terrain_surface, layers.terrain);
+    state.sync_ground(palette, &layers, rect);
     // The projection always draws its own ground (DN-35 §7 item 1).
     state.ground = Ground::Overlay;
     state.sync_terrain_mesh_2d(Ground::Overlay, rect);
@@ -864,6 +915,7 @@ mod tests {
             geofences: &[],
             predictions: &[],
             terrain: None,
+            terrain_tiles: None,
             point_clouds: &[],
             laydown_preview: None,
             dense_group: None,
@@ -1413,6 +1465,7 @@ mod tests {
                     &no_plan(),
                     layers::LayerInputs {
                         terrain: Some(layer),
+                        terrain_tiles: None,
                         ..no_layers()
                     },
                 );

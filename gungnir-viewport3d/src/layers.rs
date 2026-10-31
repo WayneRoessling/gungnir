@@ -314,6 +314,9 @@ pub struct LayerInputs<'a> {
     /// The terrain surface, when a DEM is placed (GAP-023). `None` draws no ground and
     /// claims none.
     pub terrain: Option<TerrainLayer<'a>>,
+    /// A staged terrain store, once its tiles' footprint is placed (GAP-227, DN-36 §5.1):
+    /// drawn by view in place of `terrain`, which a baseline naming a store never has.
+    pub terrain_tiles: Option<crate::streaming::terrain::TerrainStoreLayer<'a>>,
     /// The configured point-cloud pair, once both files have loaded (GAP-098). Empty
     /// until then -- a lone cloud is not the pair registration needs, so drawing one
     /// while the other is still loading or failed would show a claim nothing backs.
@@ -866,6 +869,13 @@ fn gradient(grid: &[Option<[f32; 3]>], width: usize, i: usize, j: usize) -> (f64
         i.checked_sub(1).and_then(|i| at(i, j)),
         (i + 1 < height).then(|| at(i + 1, j)).flatten(),
     );
+    rise(across, down)
+}
+
+/// The ground's rise per metre east and north from a difference vector along each of the
+/// grid's two axes, either of which may be missing (GAP-252; shared with the staged tiles,
+/// GAP-227, which choose their neighbours differently at a tile's edge).
+pub(crate) fn rise(across: Option<[f64; 3]>, down: Option<[f64; 3]>) -> (f64, f64) {
     // Along one axis only: the rise is along that axis's horizontal direction.
     let along = |v: [f64; 3]| {
         let run = v[0] * v[0] + v[1] * v[1];
@@ -897,7 +907,7 @@ fn gradient(grid: &[Option<[f32; 3]>], width: usize, i: usize, j: usize) -> (f64
 /// The ramp's colour lit by `shade`: each component multiplied, the alpha unchanged. A
 /// factor of exactly one gives exactly [`terrain_color`]'s colour.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn shaded(palette: &theme::Palette, t: f32, shade: f64) -> egui::Color32 {
+pub(crate) fn shaded(palette: &theme::Palette, t: f32, shade: f64) -> egui::Color32 {
     let [r, g, b] = terrain_rgb(t).map(|c| (f64::from(c) * shade).round().clamp(0.0, 255.0) as u8);
     egui::Color32::from_rgba_unmultiplied(r, g, b, palette.terrain_alpha)
 }
