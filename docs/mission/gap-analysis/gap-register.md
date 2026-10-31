@@ -253,8 +253,9 @@ history, and an entry is never edited once it has merged.
 | GAP-256 | Showing the replay picker decodes every envelope in the journal | Technical | CAP-5.1, CAP-5.2 | 3 | 10 | S | 30 | I4 | Storage engineer | Closed |
 | GAP-257 | The picture's layers were reassembled, and the 2D path allocated, on every frame | Technical | CAP-5.10, CAP-2.10 | 2 | 8 | M | 16 | I4 | UI engineer | Closed |
 | GAP-258 | The point clouds are up to forty thousand egui circles a frame | Technical | CAP-5.10 | 2 | 8 | S | 16 | I4 | UI engineer | Open |
+| GAP-259 | A fault in a GL pass took the window down or left a blank region, and said nothing | Technical | CAP-5.10, CAP-5.5 | 3 | 8 | S | 24 | I4 | UI engineer | Closed |
 
-Counts: 240 gaps, 6 mission, 234 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 241 gaps, 6 mission, 235 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3703,4 +3704,19 @@ Counts: 240 gaps, 6 mission, 234 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: UI engineer. Status: Open.
 - Reference: GAP-257; GAP-255; GAP-098.
 - Depends on: GAP-257.
+
+**GAP-259 A fault in a GL pass took the window down or left a blank region, and said nothing**
+
+- Type: Technical.
+- Capability: CAP-5.10 Performance budgets; CAP-5.5 Health and alert lifecycle.
+- History:
+  - 2026-10-30, Open: Filed from the review's finding 21, the last of its §4.3 findings without an id.
+  - 2026-10-30, Closed: `gl::guard` wraps both passes; `GlFault` names the pass and the panic or the GL error; `ViewportState::note_gl_fault` turns the flags off and keeps the sentence the projection draws under its status line; `App::note_gl_fault` is the read, the log line and the alert. Tested without GL: the guard against a panic and an error, and the projection's sentences and missing control after a fault (`../../record/2026-10-30/gap-259-a-fault-in-a-gl-pass.md`).
+- Evidence: `docs/review/2026-10-30-ui-review.md` §4.3 finding 21. `gungnir-viewport3d/src/gl.rs` `paint_ground` and `paint_glyphs` returned nothing and checked no error; `gungnir-app/src/main.rs` `scene_callback` and `ground_callback` handled a poisoned lock only; the viewport crate had no `tracing` call..
+- Severity: 3. Reach: 8 threads. Effort: S. Priority: 24.
+- Impact: A panic inside the scene's ground or glyph pass unwound through `egui_glow`'s paint callback and ended the process, so the binary's "skip the draw on a poisoned lock" recovery could never run: nothing survived to observe the poison. A GL error after a pass was never read, so a failing draw left a blank region under a status line that still counted the tracks. `rust-ui-architecture-coding-standards.md` §4 asks that a per-frame error be logged and degrade to a banner, never crash.
+- Closing action: Each pass runs under a guard that catches a panic and reads OpenGL's error state after the draw; the first fault is kept on the renderer and ends the scene for the session; the binary reads it under the lock before the next frame, logs it, puts it on the alert list, and turns the viewport to the projection, which says the scene stopped and why.
+- Target: I4. Owner: UI engineer. Status: Closed.
+- Reference: `../../review/2026-10-30-ui-review.md` §4.3; GAP-255; GAP-257.
+- Depends on: GAP-022, GAP-252.
 

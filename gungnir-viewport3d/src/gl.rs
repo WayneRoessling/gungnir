@@ -46,6 +46,17 @@
 //! viewport that says nothing is an operator concluding the sector is clear; and the
 //! operator can switch to the projection at runtime, without editing a baseline and
 //! restarting during whatever is happening at the time.
+//!
+//! A third thing since GAP-259: **a fault inside either pass is caught and said.** Each
+//! pass runs under [`guard`], which catches a panic and reads OpenGL's error state after
+//! the draw. The first fault is kept as [`SceneRenderer::fault`], the scene draws nothing
+//! more that session, and the binary reads the fault before the next frame, logs it,
+//! turns the viewport to the projection and has the projection say why
+//! (`ViewportState::note_gl_fault`). Before this a panic in a pass unwound through
+//! `egui_glow` and took the window down, and a GL error left a blank region with no
+//! sentence: the "skip the draw on a poisoned lock" recovery could never run, because
+//! nothing survived to observe the poison (`rust-ui-architecture-coding-standards.md` §4;
+//! `docs/review/2026-10-30-ui-review.md` §4.3 finding 21).
 
 /// The OpenGL context type three-d accepts.
 ///
@@ -84,6 +95,92 @@ pub enum AttachError {
     Rejected(String),
 }
 
+/// Which of the scene's two GL passes a fault happened in (GAP-259).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlPass {
+    /// The terrain's ground pass (GAP-252).
+    Ground,
+    /// The glyph pass (GAP-022).
+    Glyphs,
+}
+
+impl std::fmt::Display for GlPass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            GlPass::Ground => "the ground pass",
+            GlPass::Glyphs => "the glyph pass",
+        })
+    }
+}
+
+/// Why the three-d scene stopped drawing (GAP-259).
+///
+/// The first fault ends the scene for the session: a renderer that has panicked halfway
+/// through an upload, or left OpenGL in an error state, is not one to draw from again,
+/// and a scene that came back on the next frame would hide that anything happened. The
+/// projection draws instead and says which of these it was.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum GlFault {
+    /// A pass panicked. The panic was caught inside the paint callback, so the window
+    /// stayed up and the renderer's lock was not poisoned.
+    #[error("{pass} panicked: {what}")]
+    Panicked {
+        /// Which pass.
+        pass: GlPass,
+        /// The panic's message, or that it had none.
+        what: String,
+    },
+    /// OpenGL reported an error after a pass, read by three-d's `error_check`.
+    #[error("{pass} left OpenGL in error: {error}")]
+    Gl {
+        /// Which pass.
+        pass: GlPass,
+        /// OpenGL's word for it, as three-d spells it.
+        error: String,
+    },
+    /// The renderer's lock is poisoned: a panic escaped a callback. [`guard`] exists so
+    /// that cannot happen from a pass; this names the case anyway rather than reading a
+    /// poisoned lock as "nothing to draw".
+    #[error("the scene's lock is poisoned by an earlier panic")]
+    Poisoned,
+}
+
+/// Run one GL pass so that nothing it does can take the window down or go unsaid.
+///
+/// A panic inside `body` is caught and becomes [`GlFault::Panicked`]; an error `body`
+/// returns, which is OpenGL's error state read after the draw, becomes [`GlFault::Gl`].
+/// Pure apart from the catch, so a test can hand it a closure that panics.
+///
+/// `AssertUnwindSafe` is honest here: `body` borrows the renderer, and after a panic the
+/// renderer may hold a half-finished upload. That is why a fault is kept and the renderer
+/// never draws again, rather than why the catch is unsafe to make.
+///
+/// # Errors
+///
+/// The fault, when `body` panicked or returned one.
+pub fn guard<T>(pass: GlPass, body: impl FnOnce() -> Result<T, String>) -> Result<T, GlFault> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)) {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(error)) => Err(GlFault::Gl { pass, error }),
+        Err(payload) => Err(GlFault::Panicked {
+            pass,
+            what: panic_message(payload.as_ref()),
+        }),
+    }
+}
+
+/// The message a panic carried: a `&str` or `String` payload, which is what `panic!`
+/// and `expect` produce, or a sentence saying there was none.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_owned()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "a panic with no message".to_owned()
+    }
+}
+
 /// The three-d side of the viewport, once attached.
 ///
 /// Holds the context and the one instanced mesh every glyph is drawn from. The context
@@ -110,6 +207,9 @@ pub struct SceneRenderer {
     /// here because the OpenGL draw path has no `egui::Ui` to read it from the way the
     /// 2D projection's functions do. Set once, in `attach`, and never reassigned.
     palette: theme::Palette,
+    /// The first fault either pass met (GAP-259). Once set, both passes return without
+    /// drawing, and the binary reads it under the lock before the next frame.
+    fault: Option<GlFault>,
 }
 
 impl SceneRenderer {
@@ -141,6 +241,7 @@ impl SceneRenderer {
             uploaded: None,
             ground: None,
             palette,
+            fault: None,
         })
     }
 
@@ -151,15 +252,50 @@ impl SceneRenderer {
         self.ground.as_ref().map(|(revision, _)| *revision)
     }
 
-    /// The ground pass (GAP-252, DN-35 §5.1): bring the uploaded mesh up to date with
-    /// `surface`, then draw it if `ground` says the scene draws it this frame and the mesh
-    /// held is this surface's. On the frame a surface first arrives the frame was decided
-    /// for egui, so this uploads and draws nothing; the next frame draws it.
+    /// The first fault either pass met, if one has (GAP-259). The binary reads it under
+    /// the lock before the frame, the same read as [`ground_revision`](Self::ground_revision).
+    #[must_use]
+    pub fn fault(&self) -> Option<&GlFault> {
+        self.fault.as_ref()
+    }
+
+    /// The ground pass (GAP-252, DN-35 §5.1), under the fault guard (GAP-259): nothing
+    /// once a fault is held; otherwise [`ground_pass`](Self::ground_pass) and then
+    /// OpenGL's error state, either of which failing is kept as the fault.
+    ///
+    /// `error_check` is one `glGetError` per pass per frame. three-d's own note is not to
+    /// call it too often; two a frame is what makes a GL error a sentence on screen rather
+    /// than a blank region, and is the cost accepted here.
+    pub fn paint_ground(
+        &mut self,
+        surface: Option<&TerrainSurface>,
+        ground: Ground,
+        view: &TopDownView,
+        viewport: three_d::Viewport,
+        clip: three_d::Viewport,
+        pixels_per_point: f32,
+    ) {
+        if self.fault.is_some() {
+            return;
+        }
+        let outcome = guard(GlPass::Ground, || {
+            self.ground_pass(surface, ground, view, viewport, clip, pixels_per_point);
+            self.context.error_check().map_err(|e| e.to_string())
+        });
+        if let Err(fault) = outcome {
+            self.fault = Some(fault);
+        }
+    }
+
+    /// Bring the uploaded mesh up to date with `surface`, then draw it if `ground` says
+    /// the scene draws it this frame and the mesh held is this surface's. On the frame a
+    /// surface first arrives the frame was decided for egui, so this uploads and draws
+    /// nothing; the next frame draws it.
     ///
     /// The terrain is translucent, as in the projection, so the background and the metre
     /// grid egui painted before this show through. A straight-down grid never overlaps
     /// itself, so nothing needs sorting, and no depth buffer is asked for (DN-35 §4).
-    pub fn paint_ground(
+    fn ground_pass(
         &mut self,
         surface: Option<&TerrainSurface>,
         ground: Ground,
@@ -213,7 +349,31 @@ impl SceneRenderer {
     /// the top left, so the caller converts. Getting that wrong draws the picture in the
     /// wrong half of the window, which is why the conversion is [`viewport_from`] and
     /// tested. `pixels_per_point` is egui's, because the 2D view's scale is in points.
+    ///
+    /// Under the fault guard (GAP-259), as [`paint_ground`](Self::paint_ground) is.
     pub fn paint_glyphs(
+        &mut self,
+        glyphs: &[TrackGlyph],
+        glyph_revision: u64,
+        view: &TopDownView,
+        viewport: three_d::Viewport,
+        clip: three_d::Viewport,
+        pixels_per_point: f32,
+    ) {
+        if self.fault.is_some() {
+            return;
+        }
+        let outcome = guard(GlPass::Glyphs, || {
+            self.glyph_pass(glyphs, glyph_revision, view, viewport, clip, pixels_per_point);
+            self.context.error_check().map_err(|e| e.to_string())
+        });
+        if let Err(fault) = outcome {
+            self.fault = Some(fault);
+        }
+    }
+
+    /// The glyph pass itself: upload the instances when the key moved, then draw.
+    fn glyph_pass(
         &mut self,
         glyphs: &[TrackGlyph],
         glyph_revision: u64,
@@ -881,5 +1041,55 @@ mod tests {
         assert!(camera.position().z.is_finite());
         assert!(camera.projection().x.x.is_finite());
         assert!(camera.z_far() > camera.z_near());
+    }
+
+    /// GAP-259: a pass that draws and leaves OpenGL clean is passed through unchanged.
+    #[test]
+    fn the_guard_passes_a_clean_pass_through() {
+        let drawn = guard(GlPass::Glyphs, || Ok::<u32, String>(7));
+        assert_eq!(drawn, Ok(7));
+    }
+
+    /// GAP-259: OpenGL's error state after a pass is the fault, naming the pass, with
+    /// three-d's own words for the error.
+    #[test]
+    fn the_guard_keeps_a_gl_error_as_the_fault() {
+        let fault = guard(GlPass::Ground, || Err::<(), String>("Out of memory".to_owned()));
+        assert_eq!(
+            fault,
+            Err(GlFault::Gl {
+                pass: GlPass::Ground,
+                error: "Out of memory".to_owned(),
+            })
+        );
+        assert_eq!(
+            fault.unwrap_err().to_string(),
+            "the ground pass left OpenGL in error: Out of memory"
+        );
+    }
+
+    /// GAP-259: a panic inside a pass is caught rather than unwinding through the paint
+    /// callback, and its message is kept. Before the guard a panic here took the window
+    /// down, and the "poisoned lock" recovery in the binary never ran.
+    #[test]
+    fn the_guard_catches_a_panic_and_names_the_pass() {
+        let fault = guard(GlPass::Glyphs, || -> Result<(), String> {
+            panic!("invalid instances");
+        });
+        assert_eq!(
+            fault,
+            Err(GlFault::Panicked {
+                pass: GlPass::Glyphs,
+                what: "invalid instances".to_owned(),
+            })
+        );
+        let formatted = guard(GlPass::Ground, || -> Result<(), String> {
+            let n = 3;
+            panic!("{n} rows");
+        });
+        assert_eq!(
+            formatted.unwrap_err().to_string(),
+            "the ground pass panicked: 3 rows"
+        );
     }
 }
