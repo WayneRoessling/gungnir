@@ -221,3 +221,96 @@ fn an_empty_tile_is_not_staged() {
     assert!(!Path::new(&dir.join(key(0, 2, 0).relative_path())).exists());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// `terrain stage` (D-162) from a file on this machine: the committed UTM fixture, checked
+/// against the digest `testdata/dem/SOURCE.md` publishes for it, staged, and the store it
+/// writes opens under the digest it prints.
+#[test]
+fn terrain_stage_stages_a_checked_source_and_prints_the_digest_to_pin() {
+    use gungnir_data::terrain_store::cli;
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/dem/small.tif");
+    let out = scratch("cli").join("store");
+    let args = |sha: &str| -> Vec<String> {
+        [
+            "stage",
+            "--source",
+            &source.to_string_lossy(),
+            "--out",
+            &out.to_string_lossy(),
+            "--frame",
+            "epsg:32633",
+            "--vertical",
+            "ellipsoidal",
+            "--licence",
+            "none: generated for the DEM loader tests",
+            "--retrieved",
+            "2026-09-06",
+            "--source-sha256",
+            sha,
+            "--tile-cells",
+            "2",
+        ]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
+    };
+    let wrong = cli::run("gungnir-node", &args(&"0".repeat(64))).expect_err("a wrong digest");
+    assert!(wrong.contains("is not the published source"), "{wrong}");
+    assert!(
+        !out.exists(),
+        "nothing written for a source that did not check"
+    );
+    let said = cli::run(
+        "gungnir-node",
+        &args("f506703b66389040ad084f640d5b7736f976a49cb7837b91c172eb91d2fcb4e7"),
+    )
+    .expect("staged");
+    let digest = said
+        .lines()
+        .find_map(|l| l.strip_prefix("manifest SHA-256 "))
+        .expect("the digest is printed");
+    let store = TerrainStore::open(&out, digest).expect("the printed digest pins the store");
+    let manifest = store.index().manifest();
+    assert_eq!(
+        manifest.staged_by,
+        format!("gungnir-node terrain stage {}", env!("CARGO_PKG_VERSION"))
+    );
+    assert!(manifest.source.url.starts_with("file:"));
+    assert_eq!(manifest.frame, "epsg:32633");
+    // Five by four cells in 2-cell tiles: three by two at level 0, the no-data cell's
+    // tile still holding three heights.
+    assert_eq!(store.index().level_tiles(0), Some([3, 2]));
+    for tile in store.index().tiles() {
+        store
+            .read_tile(tile.key())
+            .expect("every staged tile reads");
+    }
+    let again = cli::run(
+        "gungnir-node",
+        &args("f506703b66389040ad084f640d5b7736f976a49cb7837b91c172eb91d2fcb4e7"),
+    )
+    .expect_err("the store is there");
+    assert!(again.contains("already exists"), "{again}");
+    let local = cli::run(
+        "gungnir-app",
+        &[
+            "stage",
+            "--source",
+            &source.to_string_lossy(),
+            "--out",
+            &out.with_file_name("other").to_string_lossy(),
+            "--frame",
+            "local-enu",
+            "--licence",
+            "x",
+            "--retrieved",
+            "y",
+        ]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect::<Vec<_>>(),
+    )
+    .expect_err("the file states UTM");
+    assert!(local.contains("EPSG:32633"), "{local}");
+    let _ = std::fs::remove_dir_all(out.parent().expect("scratch"));
+}

@@ -31,6 +31,32 @@ const REPAINT_INTERVAL: Duration = Duration::from_millis(33);
 /// requires be *told* to the user, and a notice nobody can read is not one.
 const ABOUT_WINDOW_WIDTH: f32 = 520.0;
 
+/// A command that runs and exits instead of opening the desktop, or `None` for the desktop.
+/// Answered before the state is built: each must open no window, no journal and no
+/// baseline.
+fn subcommand(cli: &[String]) -> Option<Result<String, String>> {
+    let rest = cli.get(1..).unwrap_or_default();
+    let said = match cli.first()?.as_str() {
+        // GAP-204: the accounts this desktop signs in against, the same commands the node
+        // has, so a laptop with no node provisions itself. Reads one file, writes it back.
+        "account" => {
+            gungnir_security::provisioning::run("gungnir-app", rest).map_err(|e| e.to_string())
+        }
+        // GAP-208: the audit-signing key, provisioned the same way and for the same reason.
+        "audit-key" => gungnir_security::provisioning::run_audit_key("gungnir-app", rest)
+            .map_err(|e| e.to_string()),
+        // GAP-210: the baseline-signing key and `baseline sign`.
+        "baseline-key" => gungnir_security::provisioning::run_baseline_key("gungnir-app", rest)
+            .map_err(|e| e.to_string()),
+        "baseline" => gungnir_app::baseline::sign("gungnir-app", rest),
+        // GAP-227 (D-162): `terrain stage` writes a staged terrain store; the same
+        // implementation the node runs.
+        "terrain" => gungnir_data::terrain_store::cli::run("gungnir-app", rest),
+        _ => return None,
+    };
+    Some(said)
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // **`.with_ansi(false)`, not the bare `fmt::init()`** (GAP-110). Found in
     // `gungnir-node`'s copy of this same line: with the default writer, every
@@ -40,62 +66,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // attached, means this binary logs the same way regardless of how it was started.
     tracing_subscriber::fmt().with_ansi(false).init();
 
-    // GAP-204: `gungnir-app account ...` provisions the accounts this desktop signs in
-    // against, the same commands the node has, so a laptop with no node provisions
-    // itself. Answered before the state is built: it must open no window, no journal
-    // and no baseline; it reads one file, writes it back, and exits.
+    // Commands that run and exit before the state is built: they open no window, no
+    // journal and no baseline (`subcommand`).
     let cli: Vec<String> = std::env::args().skip(1).collect();
-    // GAP-208: the audit-signing key, provisioned the same way and for the same reason.
-    if cli.first().map(String::as_str) == Some("audit-key") {
-        match gungnir_security::provisioning::run_audit_key("gungnir-app", &cli[1..]) {
-            Ok(said) => {
-                println!("{said}");
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("{e}");
-                std::process::exit(2);
-            }
+    match subcommand(&cli) {
+        Some(Ok(said)) => {
+            println!("{said}");
+            return Ok(());
         }
-    }
-    if cli.first().map(String::as_str) == Some("account") {
-        match gungnir_security::provisioning::run("gungnir-app", &cli[1..]) {
-            Ok(said) => {
-                println!("{said}");
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("{e}");
-                std::process::exit(2);
-            }
+        Some(Err(e)) => {
+            eprintln!("{e}");
+            std::process::exit(2);
         }
+        None => {}
     }
-    // GAP-210: the baseline-signing key and `baseline sign`, which start no window.
-    if cli.first().map(String::as_str) == Some("baseline-key") {
-        match gungnir_security::provisioning::run_baseline_key("gungnir-app", &cli[1..]) {
-            Ok(said) => {
-                println!("{said}");
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("{e}");
-                std::process::exit(2);
-            }
-        }
-    }
-    if cli.first().map(String::as_str) == Some("baseline") {
-        match gungnir_app::baseline::sign("gungnir-app", &cli[1..]) {
-            Ok(said) => {
-                println!("{said}");
-                return Ok(());
-            }
-            Err(e) => {
-                eprintln!("{e}");
-                std::process::exit(2);
-            }
-        }
-    }
-
     let mut state = AppState::new()?;
     // GAP-089: `--rehearsal <seed.json>` seeds the session and marks the record.
     let args: Vec<String> = std::env::args().collect();

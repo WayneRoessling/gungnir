@@ -76,18 +76,20 @@ gungnir-observability = { path = "../gungnir-observability", version = "0.1.0" }
 # Edge (ab), GAP-198, D-129 (`docs/design/dependency-edges.md` §20): the node corrects a
 # UAS's height above mean sea level through the verified EGM2008 grid, read through
 # libproj in `gungnir-data` behind its `crs` feature, exactly as the desktop lends it to
-# its feeds (D-123). Optional, and pulled in only by this crate's own `crs` feature below:
-# libproj cannot be built on Windows MSVC, where `cargo check --workspace` compiles this
-# crate too, so a default build of the node keeps no edge and says why (D-124's path).
-# `deploy/node/Dockerfile` builds the node image with the feature.
-gungnir-data = { path = "../gungnir-data", version = "0.1.0", optional = true }
+# its feeds (D-123). The geoid reading needs libproj, which this crate's own `crs` feature
+# below turns on: libproj cannot be built on Windows MSVC, where `cargo check --workspace`
+# compiles this crate too, so a default build of the node reads no grid and says why
+# (D-124's path). `deploy/node/Dockerfile` builds the node image with the feature.
+# Unconditional since GAP-227 (D-162): `gungnir-node terrain stage` writes a staged
+# terrain store through `gungnir_data::terrain_store::cli`, which needs no libproj.
+gungnir-data = { path = "../gungnir-data", version = "0.1.0" }
 
 [features]
 # GAP-198 (D-129): read the pinned EGM2008 geoid grid and lend it to the radar feeds.
 # Links libproj and libtiff through `gungnir-data`'s own `crs` feature; the node image is
 # built with it, and a binary without it carries every UAS height above mean sea level
 # flagged, as before (D-124).
-crs = ["dep:gungnir-data", "gungnir-data/crs"]
+crs = ["gungnir-data/crs"]
 
 [lib]
 # GAP-132: a library beside the binary so DN-31 §9 rows 3 to 6 can drive the node's own

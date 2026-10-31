@@ -12916,6 +12916,14 @@
       again only when that extent moves, never the view. Refused tiles and ground past the
       store's edge stay flat and are said. The UAS ground model and the node do not read a
       store yet; the fill cache and `terrain stage` are next.
+  - date: 2026-10-31
+    status: In progress
+    note: >-
+      `terrain stage` built in both binaries, one implementation
+      (`gungnir_data::terrain_store::cli`, D-162): from a DEM file checked against its
+      published digest, cropped to a box, cut and averaged into the pyramid, the manifest's
+      digest printed to pin. The procedure is in `deploy/README.md`. Fetching the source,
+      and the fill cache (D-160), wait on the owner's choice of HTTP client.
 
 - id: GAP-228
   name: No operator-initiated escalation
