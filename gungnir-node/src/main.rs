@@ -100,6 +100,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // GAP-227 (D-162): `terrain stage` writes a staged terrain store and exits, as
+    // `account` provisions and exits; one implementation for both binaries.
+    if args.first().map(String::as_str) == Some("terrain") {
+        match gungnir_data::terrain_store::cli::run("gungnir-node", &args[1..]) {
+            Ok(said) => {
+                println!("{said}");
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        }
+    }
     // GAP-210: `baseline-key provision` makes the deployment's baseline-signing key, and
     // `baseline sign` signs a file with it. Like `account`, neither starts the node.
     if args.first().map(String::as_str) == Some("baseline-key") {

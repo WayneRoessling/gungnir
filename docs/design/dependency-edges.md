@@ -483,6 +483,15 @@ and its health line says it was built without the grid, rather than claiming not
 point cloud (`ARCHITECTURE.md` §8.3), so the edge brings PROJ for one written-out
 `vgridshift` pipeline over one verified file, and none of PROJ's operation search.
 
+**2026-10-31, GAP-227 (D-162): the edge is unconditional; PROJ stays behind `crs`.** The
+owner put `terrain stage` in both binaries, one implementation, as `account` is. That
+implementation is `gungnir_data::terrain_store::cli`, which reads a DEM and writes a staged
+store with `tiff` alone and needs no libproj. So the node depends on `gungnir-data` in every
+build, and its `crs` feature now turns on only `gungnir-data/crs`, which is still the one
+part that cannot build on Windows MSVC. A default node build still reads no geoid grid and
+says so, as above. The edge is the same edge, (ab); no letter is added. The node gains no
+terrain reading at run time: the command writes a store and exits before the node starts.
+
 **Refused**: a geoid reader without PROJ (a second implementation of what D-121 put
 through PROJ alone), and keeping D-124's flag on the node (a known, fixable 35 m in every
 picture a node serves), both by D-129.
