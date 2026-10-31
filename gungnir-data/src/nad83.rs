@@ -315,7 +315,10 @@ impl HorizontalDatum {
 /// # Errors
 ///
 /// `DataError::Parse` when PROJ cannot read `source` as a coordinate reference system or
-/// describe it.
+/// describe it. Two cases are refused by name before PROJ is asked for WKT1, which it has
+/// no form of (GAP-262): a source PROJ reads as something other than a CRS -- a
+/// coordinate operation, or a `+proj=` string without `+type=crs`, which PROJ reads as a
+/// conversion -- and a geographic or projected 3D CRS such as `EPSG:4979`.
 #[cfg(feature = "crs")]
 pub fn horizontal_datum(source: &str) -> Result<HorizontalDatum, DataError> {
     let crs = LockedProj::new(source).map_err(|e| {
@@ -323,6 +326,23 @@ pub fn horizontal_datum(source: &str) -> Result<HorizontalDatum, DataError> {
             "{source:?} is not a coordinate reference system PROJ recognises: {e}"
         ))
     })?;
+    let kind = crs
+        .kind()
+        .map_err(|e| DataError::Parse(format!("PROJ cannot say what {source:?} is: {e}")))?;
+    if !kind.is_crs() {
+        return Err(DataError::Parse(format!(
+            "{source:?} is a {}, not a coordinate reference system, so it has no datum to \
+             read",
+            kind.kind
+        )));
+    }
+    if kind.is_3d_geographic_or_projected() {
+        return Err(DataError::Parse(format!(
+            "{source:?} is a 3D {}, which PROJ cannot describe as WKT1, so its datum is not \
+             read; declare the two-dimensional system and the heights' datum apart",
+            kind.kind
+        )));
+    }
     let wkt = crs
         .as_wkt(proj::wkt::WktVersion::Wkt1_Gdal)
         .map_err(|e| DataError::Parse(format!("PROJ cannot describe {source:?} as WKT1: {e}")))?;
@@ -877,6 +897,55 @@ mod tests {
         assert_eq!(
             HorizontalDatum::of_wkt1(no_authority),
             HorizontalDatum::NotNad83
+        );
+    }
+
+    /// GAP-262: every source PROJ reads but has no WKT1 form of is refused by name, where
+    /// each of these once panicked inside `proj`, and a CRS still has its datum read.
+    #[cfg(feature = "crs")]
+    #[test]
+    fn a_source_with_no_wkt1_form_is_refused_by_name_rather_than_panicking() {
+        let refused = |source: &str, named: &str| match horizontal_datum(source) {
+            Err(DataError::Parse(reason)) => {
+                assert!(reason.contains(source), "{reason}");
+                assert!(reason.contains(named), "{reason}");
+            }
+            other => panic!("{source}: {other:?}"),
+        };
+        // A transformation: what `EPSG:1671` names, though PROJ reads `EPSG:` as a CRS.
+        refused(
+            "urn:ogc:def:coordinateOperation:EPSG::1671",
+            "a Transformation, not a coordinate reference system",
+        );
+        // A bare PROJ string is a conversion to PROJ.
+        refused(
+            "+proj=merc",
+            "a Conversion, not a coordinate reference system",
+        );
+        refused(
+            "+proj=utm +zone=10 +datum=WGS84",
+            "a Conversion, not a coordinate reference system",
+        );
+        // WGS 84 and ITRF2014, geographic 3D.
+        refused("EPSG:4979", "3D GeographicCRS");
+        refused("EPSG:7912", "3D GeographicCRS");
+
+        assert_eq!(
+            horizontal_datum("EPSG:6318").expect("NAD83(2011)"),
+            HorizontalDatum::Nad83(Realisation::Nad83_2011)
+        );
+        assert_eq!(
+            horizontal_datum("EPSG:4269").expect("NAD83"),
+            HorizontalDatum::Nad83Unqualified
+        );
+        // Three axes, but geocentric: PROJ writes it as a WKT1 `GEOCCS`.
+        assert_eq!(
+            horizontal_datum("EPSG:4978").expect("WGS 84 geocentric"),
+            HorizontalDatum::NotNad83
+        );
+        assert_eq!(
+            horizontal_datum("+proj=utm +zone=10 +datum=NAD83 +type=crs").expect("a CRS"),
+            HorizontalDatum::Nad83Unqualified
         );
     }
 

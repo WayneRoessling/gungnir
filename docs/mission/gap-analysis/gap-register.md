@@ -256,8 +256,9 @@ history, and an entry is never edited once it has merged.
 | GAP-259 | A fault in a GL pass took the window down or left a blank region, and said nothing | Technical | CAP-5.10, CAP-5.5 | 3 | 8 | S | 24 | I4 | UI engineer | Closed |
 | GAP-260 | A crs test binary aborted at exit while the geoid lookup thread tore PROJ down | Technical | CAP-1.7 | 2 | 6 | S | 12 | I4 | Services engineer | Closed |
 | GAP-261 | Dropping a PROJ object runs proj_cleanup under every other thread using PROJ | Technical | CAP-1.7, CAP-2.10 | 3 | 8 | M | 24 | I4 | Services engineer | Closed |
+| GAP-262 | Reading the datum of a source with no WKT1 form panicked inside proj | Technical | CAP-1.7, CAP-2.10 | 3 | 8 | S | 24 | I4 | Services engineer | Closed |
 
-Counts: 243 gaps, 6 mission, 237 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
+Counts: 244 gaps, 6 mission, 238 technical; 1 already covered by a plan in `../../plans/`. Reach is the number of mission threads the capability serves (from
 `../capabilities/capability-to-thread-matrix.md`); priority is severity times reach.
 
 ## Entries
@@ -3758,4 +3759,19 @@ Counts: 243 gaps, 6 mission, 237 technical; 1 already covered by a plan in `../.
 - Target: I4. Owner: Services engineer. Status: Closed.
 - Reference: `../../record/2026-10-31/gap-260-the-geoid-lookup-thread-ends-before.md`; `../../record/2026-10-31/gap-261-every-proj-call-in-gungnir-data.md`; GAP-260.
 - Depends on: GAP-102, GAP-108, GAP-196.
+
+**GAP-262 Reading the datum of a source with no WKT1 form panicked inside proj**
+
+- Type: Technical.
+- Capability: CAP-1.7 Cooperative identity; CAP-2.10 Terrain and map context.
+- History:
+  - 2026-10-31, Open: Recorded as found and not fixed by GAP-261, whose test first asked a UTM operation for WKT1 and panicked; confirmed reachable from a baseline with `epsg:4979`.
+  - 2026-10-31, Closed: `horizontal_datum` refuses an operation or a 3D geographic or projected CRS by name from `LockedProj::kind`, and `LockedProj::as_wkt` returns an error where `proj` asserted. The terrain test that panicked passes, with the `crs` suites in `gungnir-data` and `gungnir-app --test terrain` (`../../record/2026-10-31/gap-262-a-proj-object-with-no-wkt1.md`).
+- Evidence: On the WSL Ubuntu rig with libproj 9.7.1, `EPSG:4979`, `EPSG:7912`, a transformation by URN and a bare `+proj=` string each panicked at `proj-0.31.0/src/proj.rs:183`; `"EPSG:1671"` did not, as PROJ reads `EPSG:` codes only as CRSs. `gungnir-app --test terrain` with `terrain.frame: "epsg:4979"` panicked inside `update::tick`..
+- Severity: 3. Reach: 8 threads. Effort: S. Priority: 24.
+- Impact: `gungnir_data::nad83::horizontal_datum` asks PROJ for a source's WKT1 to read its datum, and `proj` 0.31's `as_wkt` asserts that PROJ returned a string. PROJ returns none for a geographic 3D CRS or any coordinate operation, so a baseline declaring `terrain.frame` or `point_cloud.frame` as `"epsg:4979"` panicked inside the desktop's frame tick, where terrain and point clouds are placed, instead of being refused.
+- Closing action: Read what the object is from its PROJJSON, which `proj` checks for null, and refuse a non-CRS or a geographic or projected 3D CRS by name before the WKT call; catch the assertion in `LockedProj::as_wkt` for anything else PROJ declines. No `unsafe`.
+- Target: I4. Owner: Services engineer. Status: Closed.
+- Reference: `../../record/2026-10-31/gap-262-a-proj-object-with-no-wkt1.md`; GAP-261.
+- Depends on: GAP-200, GAP-261.
 

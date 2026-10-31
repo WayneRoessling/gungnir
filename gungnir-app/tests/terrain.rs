@@ -839,3 +839,25 @@ fn a_missing_file_fails_loudly() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// GAP-262: a geographic 3D system declared as `terrain.frame` is refused by name. PROJ
+/// has no WKT1 form of one, and `proj` 0.31 asserts that PROJ returned a string, so
+/// reading the file's datum (`gungnir_data::nad83::horizontal_datum`) panicked -- on the
+/// frame loop, where the terrain is placed, taking the desktop down with it.
+#[cfg(feature = "crs")]
+#[test]
+fn a_geographic_3d_terrain_frame_is_refused_by_name_rather_than_panicking() {
+    let (mut state, dir) = desktop_vertical(
+        "geographic-3d",
+        fixture("small.asc"),
+        "epsg:4979",
+        Some("ellipsoidal"),
+        fixture_corner_origin(),
+    );
+    settle(&mut state);
+    let reason = refusal(&state);
+    assert!(reason.contains("EPSG:4979"), "{reason}");
+    assert!(reason.contains("3D"), "{reason}");
+    assert!(state.data.terrains.is_empty());
+    let _ = std::fs::remove_dir_all(dir);
+}
