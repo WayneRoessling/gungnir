@@ -910,9 +910,9 @@ impl App {
             return;
         };
         tracing::error!(%fault, "three-d scene stopped after a fault; the projection is drawn instead");
-        self.state
-            .alerts
-            .push(format!("three-d scene stopped: {fault}; the projection is drawn instead"));
+        self.state.alerts.push(format!(
+            "three-d scene stopped: {fault}; the projection is drawn instead"
+        ));
         self.state.viewport.note_gl_fault(&fault);
     }
 

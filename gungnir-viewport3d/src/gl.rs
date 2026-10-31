@@ -364,7 +364,14 @@ impl SceneRenderer {
             return;
         }
         let outcome = guard(GlPass::Glyphs, || {
-            self.glyph_pass(glyphs, glyph_revision, view, viewport, clip, pixels_per_point);
+            self.glyph_pass(
+                glyphs,
+                glyph_revision,
+                view,
+                viewport,
+                clip,
+                pixels_per_point,
+            );
             self.context.error_check().map_err(|e| e.to_string())
         });
         if let Err(fault) = outcome {
@@ -1054,7 +1061,9 @@ mod tests {
     /// three-d's own words for the error.
     #[test]
     fn the_guard_keeps_a_gl_error_as_the_fault() {
-        let fault = guard(GlPass::Ground, || Err::<(), String>("Out of memory".to_owned()));
+        let fault = guard(GlPass::Ground, || {
+            Err::<(), String>("Out of memory".to_owned())
+        });
         assert_eq!(
             fault,
             Err(GlFault::Gl {
