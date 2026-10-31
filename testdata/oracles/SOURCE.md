@@ -13,3 +13,8 @@ is attributable to a specific release rather than to whatever was on the path.
 
 The fixtures are test evidence only. They are read by differential tests in the
 tracking-core crates and are never linked into or shipped with a binary.
+
+## `coord/geoconvert.json`
+
+The output of GeographicLib's `GeoConvert` command-line tool, release 2.5.2 (the conda-forge `geographiclib-cpp` 2.5.2 package), run by `tools/gen_geoconvert_fixtures.py` over inputs this project chose: the zone and band edges, Norway and Svalbard, the poles, and a seeded random sweep. GeographicLib is MIT-licensed; none of its source is in the fixture, only the numbers and strings it printed for those inputs. The fixture stamps the release in `oracle_version`. Test evidence only, read by `gungnir-coord/tests/geoconvert_diff.rs`; never linked into a binary.
+

@@ -13,6 +13,7 @@ these files only record what the oracle answered.
 | Directory | Oracle | Capability-table row | Generator |
 |---|---|---|---|
 | `coord/` | `pymap3d` 3.2.0 | Coordinate frame transforms (ECEF/ENU/NED/geodetic) | `tools/gen_coord_fixtures.py` |
+| `coord/geoconvert.json` | GeographicLib `GeoConvert` 2.5.2 (conda-forge `geographiclib-cpp`) | DN-37 §6.1 row d (draft): UTM, UPS and MGRS, same string and a millimetre | `tools/gen_geoconvert_fixtures.py` |
 | `allocation/` | Custom textbook DP (the generator itself) | Bellman/DP resource-to-track assignment | `tools/gen_allocation_fixtures.py` |
 | `filters/ekf.json`, `ukf.json`, `rts.json` | `filterpy` 1.4.5 | EKF, UKF, RTS smoother | `tools/gen_nonlinear_fixtures.py` |
 | `filters/imm.json` | `filterpy` 1.4.5 `IMMEstimator` -- **not** the Stone Soup IMM §2 named, which does not exist in 1.9.1 | Interacting Multiple Model | `tools/gen_imm_sqrt_fixtures.py` |
