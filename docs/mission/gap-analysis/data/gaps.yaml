@@ -12958,6 +12958,15 @@
       new edge; the node's field equals the desktop's cell for cell. Its coverage answer is
       masked while the field is held, and its health line says what it reads or why
       nothing. D-139's symbols, the readout and declutter (DN-37) remain.
+  - date: 2026-10-31
+    status: In progress
+    note: >-
+      DN-37's first increment: MGRS, UTM and UPS in `gungnir-coord`'s `grid` module (D-170),
+      geodetic to grid, truncated to the precision; `LocalFrame::mgrs` exposes it to the
+      viewport with no new edge. Held to `GeoConvert` 2.5.2 on 2 953 committed cases: the
+      same string and a millimetre. The symbols wait on MIL-STD-2525D's tables, which the
+      repository does not hold; the readout, leaders and labels are next. See
+      `../../record/2026-10-31/gap-227-mgrs-utm-and-ups-in-gungnir.md`.
 
 - id: GAP-228
   name: No operator-initiated escalation

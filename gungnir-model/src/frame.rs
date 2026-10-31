@@ -63,6 +63,20 @@ impl LocalFrame {
         gungnir_coord::ned_to_geodetic(ned, self.origin)
     }
 
+    /// A position in this frame as an MGRS reference to `digits` digits for each axis (5 is
+    /// one metre), for a position an operator reads out (DN-37 §4, D-170).
+    ///
+    /// Through [`Self::to_geodetic`] and `gungnir_coord::mgrs_of`, which is held to
+    /// `GeographicLib`'s `GeoConvert`. Truncated to the precision, never rounded.
+    ///
+    /// # Errors
+    ///
+    /// [`gungnir_coord::GridError`] for a position with no finite geodetic equivalent or a
+    /// precision beyond five digits.
+    pub fn mgrs(&self, enu: [f64; 3], digits: u8) -> Result<String, gungnir_coord::GridError> {
+        gungnir_coord::mgrs_of(self.to_geodetic(enu), digits)
+    }
+
     /// The bearing, in this frame, of true north at `position`: radians clockwise from the
     /// frame's `+n` axis, in `(-π, π]`.
     ///
@@ -398,6 +412,36 @@ mod tests {
             lon_rad: 12.0_f64.to_radians(),
             alt_m: 0.0,
         }
+    }
+
+    /// DN-37 §4: the frame's origin has the MGRS `GeoConvert` gave for the same latitude and
+    /// longitude (`testdata/oracles/coord/geoconvert.json`, case `corvallis`), and a point
+    /// north of it is further north in the same square.
+    #[test]
+    fn a_position_in_the_frame_reads_out_as_mgrs() {
+        let corvallis = Geodetic {
+            lat_rad: 44.5646_f64.to_radians(),
+            lon_rad: (-123.262_f64).to_radians(),
+            alt_m: 0.0,
+        };
+        let frame = LocalFrame::new(corvallis);
+        assert_eq!(frame.mgrs([0.0; 3], 3).as_deref(), Ok("10TDQ791346"));
+        assert_eq!(frame.mgrs([0.0; 3], 0).as_deref(), Ok("10TDQ"));
+        // 2 km north: the northing's hundreds of metres grow by twenty, and the easting
+        // moves a few metres with the convergence of the meridians, here across 479 200 m.
+        let north = frame
+            .mgrs([0.0, 2_000.0, 0.0], 3)
+            .expect("a grid reference");
+        assert!(north.starts_with("10TDQ79"), "{north}");
+        assert!(north.ends_with("366"), "{north}");
+        assert_eq!(
+            frame.mgrs([0.0; 3], 6),
+            Err(gungnir_coord::GridError::PrecisionOutOfRange)
+        );
+        assert_eq!(
+            frame.mgrs([f64::NAN, 0.0, 0.0], 3),
+            Err(gungnir_coord::GridError::NotFinite)
+        );
     }
 
     /// The origin is the origin. A frame that put its own anchor anywhere but zero

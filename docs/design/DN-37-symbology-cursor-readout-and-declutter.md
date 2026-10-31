@@ -3,7 +3,7 @@
 GAP-227's three parts beside the tiles of `DN-36-staged-terrain-and-map-tiles.md`: D-139's
 MIL-STD-2525D symbols, a cursor readout in MGRS and latitude and longitude, and declutter
 (leaders and label placement). D-163 lets them proceed in parallel with the tiles. Status:
-design, 2026-10-30; **nothing is built**. The owner walked eight choices the same day, D-165
+design, 2026-10-30; **MGRS is built (amendment 1), nothing else**. The owner walked eight choices the same day, D-165
 to D-172, and took every one to its recommended default; §8 records them. What the owner has
 signed of this note is in [`../signatures.md`](../signatures.md).
 
@@ -194,6 +194,18 @@ human-owned; these are drafts until the owner agrees them, and are not gates.
 | **D-170** | Where MGRS comes from | **In-house in `gungnir-coord`**, held to `GeoConvert`; the default. Rejected: adopting a crate |
 | **D-171** | How long a leader is | **An operator-selected time**, default 1 min; the default. Rejected: zoom-adaptive |
 | **D-172** | What happens when labels would overlap | **Move, then collapse**, a hostile's never; the default. Rejected: move then hide; hide by priority only |
+
+## Amendment 1, 2026-10-31: MGRS, built first
+
+The build began with §4's conversion rather than §3's symbols, because the conversion needs
+only an oracle that can be run and the symbols need the standard's own tables, which the
+repository does not hold (§3.2, §6.1 row a). `gungnir_coord::grid` writes UTM, UPS and MGRS,
+geodetic to grid and no further: no inverse and no MGRS parser, since the readout only
+writes a reference. `LocalFrame::mgrs` carries it to the viewport, so §7's "no new
+dependency edge" stands. Row d is held by `gungnir-coord/tests/geoconvert_diff.rs` against
+2 953 cases from `GeoConvert` 2.5.2, the same string and a millimetre; the row is still a
+draft, as §6.1 says. `../record/2026-10-31/gap-227-mgrs-utm-and-ups-in-gungnir.md` records
+what the oracle corrected in the first draft of the lettering.
 
 ## Traceability
 

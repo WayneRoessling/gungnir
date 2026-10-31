@@ -26,6 +26,9 @@
 //! and against which pymap3d version.
 
 pub mod bearing;
+pub mod grid;
+
+pub use grid::{mgrs, mgrs_of, utm_ups, GridError, UtmUps};
 
 pub use bearing::{
     cross_bearings, BearingCrossing, BearingRay, CrossingError, CrossingSettings,
