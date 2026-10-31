@@ -12943,6 +12943,15 @@
   - date: 2026-10-31
     status: In progress
     note: >-
+      GAP-199's UAS ground model reads a staged store: it lends line of sight's field,
+      painted from the pinned store over the coverage extent and never from fill (D-164),
+      with `terrain.vertical_sigma_m` unchanged, and names the level that placed the
+      height. Past the extent or the store's edge the height stays unknown and the reason
+      says which. The node still reads no terrain. See
+      `../../record/2026-10-31/gap-227-a-uas-height-above-ground-lands.md`.
+  - date: 2026-10-31
+    status: In progress
+    note: >-
       The node reads the pinned store for its line of sight (DN-36 §9, amendment 7). The
       desktop's placement, footprint and field moved unchanged to `gungnir-data`,
       `gungnir-config` and `gungnir_analytics::placement`, which both binaries call, with no

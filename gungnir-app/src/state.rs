@@ -85,12 +85,17 @@ pub struct AppState {
     /// The geoid model every bound radar feed holds (GAP-196): the verified EGM2008 grid
     /// once [`crate::geoid::lend_to_feeds`] lends it, the reason there is none until then.
     pub geoid_feeds: gungnir_ingest::geoid::GeoidHandle,
-    /// The ground elevation model every bound radar feed holds (GAP-199): the placed DEM
-    /// once [`crate::ground::lend_to_feeds`] lends it, the reason there is none until then.
+    /// The ground elevation model every bound radar feed holds (GAP-199): the placed DEM,
+    /// or a staged store's ground over the coverage extent (GAP-227), once
+    /// [`crate::ground::lend_to_feeds`] lends it, the reason there is none until then.
     pub terrain_feeds: gungnir_ingest::terrain::TerrainHandle,
-    /// The terrain standing last lent to the feeds, so the lookup is built once per load
-    /// rather than once per tick.
-    pub terrain_lent: Option<crate::terrain::TerrainStatus>,
+    /// The terrain standing and the line-of-sight field last lent to the feeds, so the
+    /// lookup is built once per load or field rather than once per tick
+    /// ([`crate::ground::lend_to_feeds`]).
+    pub terrain_lent: Option<(
+        crate::terrain::TerrainStatus,
+        Option<std::sync::Arc<gungnir_analytics::HeightField>>,
+    )>,
     /// The placed terrain resampled once per load, which every line of sight on this
     /// desktop reads (GAP-247, [`crate::terrain::height_field_of`]). `Some` exactly when the
     /// terrain is loaded; shared with the dead-spot worker without a copy.

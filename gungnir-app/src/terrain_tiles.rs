@@ -391,6 +391,13 @@ impl TileStreaming {
     pub fn has_footprint(&self) -> bool {
         self.footprint.is_some()
     }
+
+    /// The pinned store's placed footprint, once it is placed: where its edge lies in the
+    /// frame, for the UAS ground model ([`crate::ground`]).
+    #[must_use]
+    pub fn footprint(&self) -> Option<&StoreFootprint> {
+        self.footprint.as_ref()
+    }
 }
 
 /// Start the worker for a store just verified, and ask it for the footprint.

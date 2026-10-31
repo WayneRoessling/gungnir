@@ -530,9 +530,15 @@ metres, as its producer gives it (GAP-199, D-130):
                "vertical_sigma_m": 4.0 } }
 ```
 
-Without that error, without a loaded DEM, off its edge, and always on the node, which
-loads no terrain, such a height is carried as unknown: held at 0, marked on PN-03, counted
-on PN-09, and weighed as unknown to within 10 km.
+With a staged `store` in place of `path` (GAP-227), the same `vertical_sigma_m` applies,
+and the ground is the one line of sight reads: the pinned store painted over the coverage
+extent, every declared sensor's range with one maximum range to spare, at the level PN-09
+names. It is never a fetched fill tile. A UAS past that extent, or past the store's edge,
+is said to be.
+
+Without that error, without a loaded DEM or a store's ground read, off its edge, and always
+on the node, which loads no terrain, such a height is carried as unknown: held at 0, marked
+on PN-03, counted on PN-09, and weighed as unknown to within 10 km.
 
 ### NAD83 positions and the frame epoch
 
