@@ -12940,6 +12940,15 @@
       from the cache by their recorded digests; drawn outlined only where the pinned store
       has no tile, counted apart on PN-09, never in line of sight. Every DN-36 part is built;
       D-139's symbols, the readout and declutter (DN-37) remain.
+  - date: 2026-10-31
+    status: In progress
+    note: >-
+      GAP-199's UAS ground model reads a staged store: it lends line of sight's field,
+      painted from the pinned store over the coverage extent and never from fill (D-164),
+      with `terrain.vertical_sigma_m` unchanged, and names the level that placed the
+      height. Past the extent or the store's edge the height stays unknown and the reason
+      says which. The node still reads no terrain. See
+      `../../record/2026-10-31/gap-227-a-uas-height-above-ground-lands.md`.
 
 - id: GAP-228
   name: No operator-initiated escalation
