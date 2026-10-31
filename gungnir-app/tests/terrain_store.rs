@@ -7,7 +7,7 @@
 //! baseline pins the manifest's digest, the desktop opens and verifies the store off the
 //! render thread, refuses a manifest whose digest differs or whose frame contradicts the
 //! baseline's by name, and places each tile through the single DEM's path. §8.1 row a is
-//! a draft criterion, not a gate; these tests are its desktop half.
+//! a gate (agreed 2026-10-31); these tests are its desktop half.
 //!
 //! With no sensor declared there is no coverage extent to build line of sight over, and the
 //! terrain line says so. Drawing the store by view, and line of sight over it, are

@@ -191,8 +191,9 @@ designed. It follows the terrain because a drape needs a ground to lie on.
 
 ### 8.1 Headless
 
-Drafted as rows for `../verification-capability-table.md` §2. A pass criterion is human-owned;
-these are drafts until the owner agrees them, and are not gates.
+Written as rows for `../verification-capability-table.md` §2, where the owner agreed them
+as gates on 2026-10-31 (amendment 7; [`../signatures.md`](../signatures.md)). The table's DN-36
+section holds the criteria as they are checked, which is not always as drafted below.
 
 | Row | Test | Criterion |
 |---|---|---|
@@ -485,8 +486,39 @@ are worth stating:
    height in a geoid datum is made ellipsoidal through the pinned grid, found where the
    desktop finds it and verified the first time a tile needs it.
 
-## Traceability
+## Amendment 7, 2026-10-31: §8.1 agreed as criteria
 
+The owner agreed §8.1's rows a to k, with rows h to k from amendments 1 and 2, as pass
+criteria and gates on 2026-10-31. They are in `../verification-capability-table.md` §2 under
+"Rows added by DN-36", each against the tests that check it. Reading the tests against the
+drafts, four rows needed restating, and the table gives the restated text:
+
+- **Row c.** The draft asked for the finest level whose cells are at least `MIN_CELL_POINTS`
+  across. The test checks that the chosen tiles are of one level and stride, cover the
+  visible store, overlap nowhere, keep within the budget, and set "past the edge" exactly
+  when the view leaves the store. It does not check the choice of level by cell size, so the
+  criterion does not claim it.
+- **Row e.** The draft said `terrain_surface` takes a range and the single DEM passes its
+  own. The build did not do that: `terrain_surface` is unchanged, and the store's tiles go
+  through `tile_surface` (amendment 4 item 4). The row now says the existing surface tests
+  pass unchanged in what they assert. No test compares bytes with a surface built before the
+  store, and the row says so.
+- **Row f.** The draft asked that the height field and the dead-spot field are identical
+  before and after the view pans. The test holds the height field, as the same allocation,
+  and does not compute a dead-spot field; the dead spots are computed from that field alone
+  (DN-34 §6.1), so the second follows from the first, and the row says that.
+- **Row g.** The draft covered a refused tile and the view past the store. The row also holds
+  the stand-in for a tile not yet loaded, and the sentence over fetched ground, which are
+  tested.
+
+Rows a, b, d, h, i, j and k are the drafts' criteria made specific to what their tests
+assert. Three limits are stated in the table rather than left implied: the rows have no
+external oracle, and compare the code with the design's arithmetic and a hand-worked
+averaging; a real-CRS store's seams across tile origins are checked only in a local `crs`
+build and are not in CI; and row j checks that the outline is requested and the words are on
+screen, not the pixels. §8.2's display checks are unchanged and remain the owner's.
+
+## Traceability
 GAP-227 (action, last item, widened); D-164; D-173; D-174; D-139; D-160 to D-163; GAP-252 and
 `DN-35-terrain-in-the-three-d-scene.md`; DN-34 §13.1 row 8 and §13.2 step 6;
 `../rust-3d-data-ecosystem-build-vs-adopt.md` §2.1 and §4; GAP-023, GAP-108, GAP-197, GAP-200;

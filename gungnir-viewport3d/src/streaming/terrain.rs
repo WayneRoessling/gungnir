@@ -946,7 +946,7 @@ mod tests {
         assert_eq!(tile_vertices(8, 8, 4, 1), 9);
     }
 
-    /// DN-36 §8.1 row c (a draft, not a gate): across zooms from the store's finest cell
+    /// DN-36 §8.1 row c (a gate): across zooms from the store's finest cell
     /// to past its whole extent, the chosen tiles cover the visible part of the store, no
     /// two overlap, and together they keep within the budget.
     #[test]
@@ -1030,7 +1030,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    /// DN-36 §8.1 row d (a draft): a vertex on the edge two tiles share has the same
+    /// DN-36 §8.1 row d (a gate): a vertex on the edge two tiles share has the same
     /// position, colour and shade in both, at every stride.
     #[test]
     fn a_shared_edge_is_one_edge_in_both_tiles() {

@@ -12967,6 +12967,15 @@
       same string and a millimetre. The symbols wait on MIL-STD-2525D's tables, which the
       repository does not hold; the readout, leaders and labels are next. See
       `../../record/2026-10-31/gap-227-mgrs-utm-and-ups-in-gungnir.md`.
+  - date: 2026-10-31
+    status: In progress
+    note: >-
+      DN-36's eleven verification rows agreed by the owner as criteria and made gates (§8.1 and
+      amendments 1 and 2; amendment 7 restates rows c, e, f and g): each is in the verification
+      table against the tests that check it, rows h to k under `terrain-fetch` in their own
+      `ci.yml` step. They have no external oracle, and the table says so; §8.2's display
+      checks stay the owner's. Every DN-36 part is built and gated; D-139's symbols, the readout
+      and declutter (DN-37) remain.
 
 - id: GAP-228
   name: No operator-initiated escalation
