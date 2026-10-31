@@ -21,8 +21,9 @@ terrain-fetch = ["gungnir-data/terrain-fetch"]
 # by default for the reasons that feature's own comment gives -- chiefly that `proj-sys`
 # 0.27 cannot build libproj on Windows MSVC at all, which is the target `release.yml`
 # ships this binary for. Without it a baseline naming an `epsg:<code>` frame is refused
-# by name at load, never drawn in the wrong place.
-crs = ["gungnir-data/crs"]
+# by name at load, never drawn in the wrong place. Placement itself is gungnir-analytics's,
+# shared with the node since GAP-227 (DN-36 §9), so the feature reaches it too.
+crs = ["gungnir-data/crs", "gungnir-analytics/crs"]
 
 [dev-dependencies]
 criterion.workspace = true

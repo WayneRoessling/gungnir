@@ -22,8 +22,9 @@
 //! desktops (D-131), whose rules its unit tests hold. Since GAP-203, [`control_status`]:
 //! the live weapons-control-status changes the node applies, journals and folds back at
 //! start (DN-09 §10), which `gungnir-node/tests/control_status.rs` drives over the real
-//! transport. Everything
-//! else -- the journal, the transport's start-up, the feeds, the account command -- stays
+//! transport. Since GAP-227, [`terrain`]: the pinned store the node's line of sight reads
+//! (DN-36 §9), which `gungnir-node/tests/terrain_store.rs` drives against staged stores.
+//! Everything else -- the journal, the transport's start-up, the feeds, the account command -- stays
 //! in `main.rs`, because moving code here that nothing outside the binary calls would
 //! make the crate's surface a list of things nobody uses.
 
@@ -39,3 +40,5 @@ pub mod desktop_anchors;
 pub mod effectors;
 pub mod gap_acceptance;
 pub mod picture;
+// GAP-227 (DN-36 §9): the pinned terrain store the node's line of sight reads.
+pub mod terrain;

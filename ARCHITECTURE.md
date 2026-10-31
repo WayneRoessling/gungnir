@@ -713,7 +713,7 @@ its own clock and takes one decision per item through the decision route
 | `gungnir-observability` | Local health panel | Node health endpoint, watchdogs |
 | `gungnir-workflow` | Yes (role layouts, alert lifecycle) | Alert lifecycle state, shared |
 | `gungnir-replay`, `gungnir-reporting` | Against the local journal | Against the node's journal |
-| `gungnir-data`, `gungnir-data-fusion`, `gungnir-geo`, `gungnir-analytics` | Yes | `gungnir-data` for its geoid module only, behind the node's `crs` feature (edge (ab), GAP-198): the node image reads the EGM2008 grid to correct a UAS's height. Point-cloud and terrain conversion and fusion are desktop capabilities; a node needs `gungnir-geo` only if geofence policy is evaluated server-side. |
+| `gungnir-data`, `gungnir-data-fusion`, `gungnir-geo`, `gungnir-analytics` | Yes | `gungnir-data` (edge (ab)) for its geoid module, behind the node's `crs` feature (GAP-198): the node image reads the EGM2008 grid to correct a UAS's height; for `terrain stage` (D-162); and for the pinned terrain store its line of sight reads (GAP-227, DN-36 §9). `gungnir-analytics` (edge (g)) for the coverage answer and the placement of that store's tiles, the desktop's own. Point-cloud conversion, a single DEM, fill tiles and fusion are desktop capabilities; a node needs `gungnir-geo` only if geofence policy is evaluated server-side. |
 | `gungnir-render`, `gungnir-viewport3d`, `gungnir-ui`, `gungnir-app` | Yes | Never |
 
 ### §8.4 — Degraded connectivity

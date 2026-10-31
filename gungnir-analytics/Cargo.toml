@@ -30,6 +30,13 @@ gungnir-geo = { path = "../gungnir-geo", version = "0.1.0" }
 gungnir-model = { path = "../gungnir-model", version = "0.1.0" }
 gungnir-sensor-management = { path = "../gungnir-sensor-management", version = "0.1.0" }
 
+[features]
+# GAP-227 (DN-36 §9): `placement` converts a real-world CRS other than WGS84 geographic, and
+# reads a file's horizontal datum, through libproj in `gungnir-data`'s own `crs` feature. The
+# desktop's and the node's `crs` features turn this on; without it, such a conversion is
+# refused by name.
+crs = ["gungnir-data/crs"]
+
 [dev-dependencies]
 gungnir-config = { path = "../gungnir-config", version = "0.1.0" }
 serde_json.workspace = true

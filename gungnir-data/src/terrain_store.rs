@@ -25,10 +25,14 @@
 //! so a reader that chooses tiles by view ([`StoreIndex`]) works from geometry that holds.
 //!
 //! Placement is not here: a tile is a [`HeightGrid`] in the source's own CRS and vertical
-//! system, which `gungnir-app` places through the same path as a single DEM.
+//! system, which `gungnir-analytics` places through the same path as a single DEM, for the
+//! desktop and the node alike. [`StoreFootprint`] holds the placed tile corners.
 
 pub mod cli;
 pub mod fill;
+mod footprint;
+
+pub use footprint::StoreFootprint;
 
 use std::collections::BTreeMap;
 use std::io::Read;

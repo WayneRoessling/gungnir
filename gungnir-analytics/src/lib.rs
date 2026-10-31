@@ -13,6 +13,7 @@
 
 pub mod anomaly;
 pub mod coverage;
+pub mod placement;
 pub mod shadow;
 pub mod terrain;
 

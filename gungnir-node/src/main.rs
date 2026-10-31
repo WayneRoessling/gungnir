@@ -431,8 +431,9 @@ impl FeedReports {
                         s.uas_heights_msl_uncorrected
                     );
                 }
-                // GAP-199 (D-130): this node loads no terrain, so a Category 129 height
-                // stated only above ground is unknown here, and counted the same way.
+                // GAP-199 (D-130): this node places no Category 129 height on terrain (its
+                // store is read for line of sight alone, GAP-227), so a height stated only
+                // above ground is unknown here, and counted the same way.
                 if s.uas_heights_unknown > 0 {
                     use std::fmt::Write as _;
                     let _ = write!(
@@ -1512,7 +1513,15 @@ fn record_warning_acknowledgements(
 /// plausible and wrong, so the absence is reported. Likewise a deployment that has
 /// declared no approaches has nothing to measure coverage *along*, and an empty gap list
 /// would read as a clean sector.
-fn coverage_answer(config: &ConfigBaseline, sensors: &InMemorySensorRegistry) -> CoverageResponse {
+///
+/// **Line of sight reads `terrain`** when the node holds a field built from its pinned store
+/// over the coverage extent (GAP-227, DN-36 §9; [`gungnir_node::terrain`]), and is flat
+/// otherwise. Either way the parameters say which, rather than assuming it away.
+fn coverage_answer(
+    config: &ConfigBaseline,
+    sensors: &InMemorySensorRegistry,
+    terrain: Option<&gungnir_analytics::HeightField>,
+) -> CoverageResponse {
     let Some([lat_rad, lon_rad, alt_m]) = config.origin else {
         return CoverageResponse::NotComputed {
             reason: "this deployment has declared no local frame origin, so geodetic \
@@ -1556,19 +1565,25 @@ fn coverage_answer(config: &ConfigBaseline, sensors: &InMemorySensorRegistry) ->
         .collect();
     let approaches: Vec<&[[f64; 3]]> = routes.iter().map(Vec::as_slice).collect();
 
-    CoverageResponse::Computed(gungnir_api::v3::ComputedCoverage::unaccepted(
-        gungnir_analytics::combined_coverage(
+    let parameters = gungnir_analytics::CoverageParameters {
+        sample_spacing_m: config.analytics.coverage_sample_spacing_m,
+        terrain_masking_applied: terrain.is_some(),
+    };
+    let report = match terrain {
+        Some(field) => gungnir_analytics::combined_coverage(
             &volumes,
-            // No terrain is loaded (GAP-023), so line of sight is flat. Reported on the
-            // parameters rather than assumed away, which is why the response carries them.
+            &gungnir_analytics::HeightFieldLineOfSight { field },
+            &approaches,
+            parameters,
+        ),
+        None => gungnir_analytics::combined_coverage(
+            &volumes,
             &gungnir_analytics::FlatTerrainLineOfSight,
             &approaches,
-            gungnir_analytics::CoverageParameters {
-                sample_spacing_m: config.analytics.coverage_sample_spacing_m,
-                terrain_masking_applied: false,
-            },
+            parameters,
         ),
-    ))
+    };
+    CoverageResponse::Computed(gungnir_api::v3::ComputedCoverage::unaccepted(report))
 }
 
 /// Start the transport, or say why it is not started.
@@ -1845,6 +1860,10 @@ async fn run(
     // folded from the whole journal; the first tick re-opens any that no longer hold
     // against this baseline, with the reason, rather than silently.
     let mut gap_acceptances = gungnir_node::gap_acceptance::NodeGapAcceptances::recover(&journal);
+    // GAP-227 (DN-36 §9): the pinned terrain store line of sight reads, verified here and its
+    // field built off the loop; or why there is none, said on every health line.
+    let mut terrain = gungnir_node::terrain::NodeTerrain::start(&config);
+    tracing::info!(terrain = %terrain.line(), "terrain");
     if let Some(reason) = gap_acceptances.unreadable() {
         tracing::warn!(%reason, "the gap acceptances were folded from an incomplete journal");
     }
@@ -2351,7 +2370,8 @@ async fn run(
         // sync covers the audit entries, and before the journal append, so the events are
         // on disk in the tick they happened. Computed here rather than in the request
         // handler, so a caller's polling rate cannot decide this node's load.
-        let mut coverage = coverage_answer(&config, &sensors);
+        terrain.poll(&config);
+        let mut coverage = coverage_answer(&config, &sensors, terrain.field());
         gungnir_node::gap_acceptance::tick(
             &mut gap_acceptances,
             api.take_acceptances(),
@@ -2434,6 +2454,8 @@ async fn run(
                 feeds = ?feed_reports.summary(),
                 // GAP-198: whether a UAS's height above mean sea level is corrected here.
                 geoid = %feed_reports.geoid,
+                // GAP-227: what the coverage answer's line of sight reads, or why nothing.
+                terrain = %terrain.line(),
                 retention_purged,
                 audit_purged,
                 // GAP-163: what verification at start found wrong with the audit record,
@@ -2816,7 +2838,7 @@ mod tests {
             sensors
                 .set_mode(SensorId(1), gungnir_model::SensorMode::Search)
                 .expect("search");
-            match coverage_answer(&config, &sensors) {
+            match coverage_answer(&config, &sensors, None) {
                 CoverageResponse::Computed(computed) => computed
                     .report
                     .gap_length_m(gungnir_analytics::GapSeverity::Uncovered),
@@ -2835,6 +2857,126 @@ mod tests {
             ceiling >= 500.0,
             "a 5 degree ceiling leaves the steep near stretch uncovered: {ceiling} m"
         );
+    }
+
+    /// A local-frame store under `dir` with a 100 m ridge 150 m to 200 m east of the origin,
+    /// and its manifest's digest.
+    fn ridge_store(dir: &std::path::Path) -> String {
+        use gungnir_data::geospatial::{GridCrs, HeightGrid};
+        use gungnir_data::terrain_store::{stage, ManifestSource, StageOptions};
+        let _ = std::fs::remove_dir_all(dir);
+        // 10 m cells from 100 m west and south of the origin: 80 columns by 20 rows, the
+        // ridge the columns whose centres lie 150 m to 200 m east.
+        let mut heights = Vec::new();
+        for _ in 0..20 {
+            for c in 0..80_u8 {
+                let east = -95.0 + 10.0 * f32::from(c);
+                heights.push(if (150.0..=200.0).contains(&east) {
+                    100.0
+                } else {
+                    0.0
+                });
+            }
+        }
+        let grid = HeightGrid {
+            columns: 80,
+            rows: 20,
+            origin: [-100.0, -100.0],
+            cell_size: [10.0, 10.0],
+            nodata: None,
+            crs: GridCrs::Unstated,
+            vertical: None,
+            heights,
+        };
+        let (_, digest) = stage(
+            &grid,
+            &dir.join("store"),
+            &StageOptions {
+                source: ManifestSource {
+                    url: "synthetic".into(),
+                    retrieved: "2026-10-31".into(),
+                    licence: "none: generated by this test".into(),
+                },
+                staged_by: "gungnir-node tests".into(),
+                frame: "local-enu".into(),
+                vertical: None,
+                nad83_realisation: None,
+                tile_cells: 16,
+                apron_cells: 1,
+                levels: None,
+            },
+        )
+        .expect("staged");
+        digest
+    }
+
+    /// GAP-227 (DN-36 §9): the coverage answer's line of sight reads the node's pinned
+    /// store. A 100 m ridge 150 m east of a radar 10 m up hides an approach flown at 20 m
+    /// behind it, which flat line of sight covers; the parameters say which was applied.
+    #[test]
+    fn the_coverage_answer_is_masked_by_the_pinned_store() {
+        let dir = std::env::temp_dir().join(format!("gungnir-node-ridge-{}", std::process::id()));
+        let digest = ridge_store(&dir);
+        let east = |m: f64| m / 6_378_137.0;
+        let config: ConfigBaseline = serde_json::from_value(serde_json::json!({
+            "version": ConfigBaseline::default().version,
+            "origin": [0.0, 0.0, 0.0],
+            "sensors": [
+                {"id": 1, "modality": "radar", "position": [0.0, 0.0, 10.0],
+                 "max_range_m": 600.0}
+            ],
+            "approaches": [
+                {"name": "behind the ridge",
+                 "points": [[0.0, east(300.0), 20.0], [0.0, east(500.0), 20.0]]}
+            ],
+            "terrain": {
+                "store": dir.join("store").to_string_lossy(),
+                "manifest_sha256": digest,
+            },
+        }))
+        .expect("the fixture baseline parses");
+        let mut config = config;
+        // Sampled every 10 m, so the 200 m approach is more than its first point.
+        config.analytics.coverage_sample_spacing_m = 10.0;
+        gungnir_config::validate(&config).expect("valid");
+        let mut sensors = build_registry(&config);
+        sensors
+            .set_mode(SensorId(1), gungnir_model::SensorMode::Search)
+            .expect("search");
+        let mut terrain = gungnir_node::terrain::NodeTerrain::start(&config);
+        for _ in 0..3_000 {
+            terrain.poll(&config);
+            if terrain.field().is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(terrain.field().is_some(), "{}", terrain.line());
+        let answer = |field: Option<&gungnir_analytics::HeightField>| match coverage_answer(
+            &config, &sensors, field,
+        ) {
+            CoverageResponse::Computed(computed) => computed.report,
+            CoverageResponse::NotComputed { reason } => panic!("{reason}"),
+        };
+        let flat = answer(None);
+        let masked = answer(terrain.field());
+        assert!(!flat.parameters.terrain_masking_applied);
+        assert!(masked.parameters.terrain_masking_applied);
+        let uncovered = |r: &gungnir_analytics::CoverageReport| {
+            r.gap_length_m(gungnir_analytics::GapSeverity::Uncovered)
+        };
+        assert!(
+            uncovered(&flat).abs() < f64::EPSILON,
+            "{}",
+            uncovered(&flat)
+        );
+        assert!(
+            uncovered(&masked) >= 150.0,
+            "the ridge hides the approach: {} m uncovered",
+            uncovered(&masked)
+        );
+        drop(terrain);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// A registry for `config` whose sensor 7 is reached through a SAPIENT router that

@@ -68,8 +68,9 @@ jobs:
   # only the ledger and spent 39 minutes building everything.
   #
   # `crs` (2026-10-29): whether the change can reach the libproj job, `proj-crs` below.
-  # Its feature-gated code is in `gungnir-data`, `gungnir-app` and `gungnir-node` and
-  # nowhere else (grep `feature = "crs"`), its fixtures under `testdata/dem`, `geoid`,
+  # Its feature-gated code is in `gungnir-data`, `gungnir-analytics` (the placement both
+  # binaries share since GAP-227), `gungnir-app` and `gungnir-node` and nowhere else
+  # (grep `feature = "crs"`), its fixtures under `testdata/dem`, `geoid`,
   # `nadcon5` and `pointcloud`, its pinned grids in `deploy/geoid/`, and its build in the
   # lockfile, the workspace manifest and this file. A change elsewhere compiles
   # `gungnir-app` all the same in `test`, without the feature; what the feature adds is
@@ -121,7 +122,7 @@ jobs:
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
-          crs='^(gungnir-(data|app|node)/|testdata/(dem|geoid|nadcon5|pointcloud)/|deploy/geoid/|Cargo\.(lock|toml)$|\.github/workflows/ci\.yml$)'
+          crs='^(gungnir-(data|analytics|app|node)/|testdata/(dem|geoid|nadcon5|pointcloud)/|deploy/geoid/|Cargo\.(lock|toml)$|\.github/workflows/ci\.yml$)'
           if echo "$changed" | grep -qE "$crs"; then
             echo "crs=true" >> "$GITHUB_OUTPUT"
             echo "the change can reach the libproj job"
@@ -520,6 +521,14 @@ jobs:
           set -o pipefail
           cargo test -p gungnir-data --features crs --lib 2>&1 | tee dem-unit.log
           cargo test -p gungnir-app --features crs --test terrain 2>&1 | tee dem-app.log
+      # GAP-227 (DN-36 §9): a staged store in UTM placed through PROJ by the placement the
+      # two binaries share -- drawn by view on the desktop, read by the node's line of sight,
+      # and the node's field the desktop's cell for cell.
+      - name: staged terrain store -- placed through PROJ on the desktop and the node
+        run: |
+          set -o pipefail
+          cargo test -p gungnir-app --features crs --test terrain_tiles 2>&1 | tee store.log
+          cargo test -p gungnir-node --features crs --test terrain_store 2>&1 | tee -a store.log
       # GAP-108, GAP-197: the EGM2008, EGM96 and GEOID18 grids through PROJ, on the
       # committed clips of the pinned grids, against the independent pyproj values the
       # tests carry. GAP-196: and a UAS's height above mean sea level (ASTERIX Category
@@ -577,7 +586,7 @@ jobs:
       - name: a gate that ran nothing has not passed
         shell: bash
         run: |
-          ran=$(cat pointcloud.log dem-unit.log dem-app.log geoid.log \
+          ran=$(cat pointcloud.log dem-unit.log dem-app.log store.log geoid.log \
             | awk '/^test result:/ { s += $4 } END { print s + 0 }')
           echo "crs tests executed: $ran"
           if [ "$ran" -eq 0 ]; then

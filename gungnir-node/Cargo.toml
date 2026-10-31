@@ -91,8 +91,9 @@ terrain-fetch = ["gungnir-data/terrain-fetch"]
 # GAP-198 (D-129): read the pinned EGM2008 geoid grid and lend it to the radar feeds.
 # Links libproj and libtiff through `gungnir-data`'s own `crs` feature; the node image is
 # built with it, and a binary without it carries every UAS height above mean sea level
-# flagged, as before (D-124).
-crs = ["gungnir-data/crs"]
+# flagged, as before (D-124). GAP-227 (DN-36 §9): it also lets the node place a staged
+# terrain store in a projected frame, through `gungnir-analytics`' placement, the desktop's.
+crs = ["gungnir-data/crs", "gungnir-analytics/crs"]
 
 [lib]
 # GAP-132: a library beside the binary so DN-31 §9 rows 3 to 6 can drive the node's own
