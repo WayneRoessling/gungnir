@@ -54,6 +54,8 @@
 
 use crate::geoid::GeoidGrid;
 #[cfg(feature = "crs")]
+use crate::proj_lock::LockedProj;
+#[cfg(feature = "crs")]
 use crate::DataError;
 
 /// PROJ-data's NADCON5 NAD83(1986) to NAD83(HARN) grid for the conterminous United States.
@@ -316,13 +318,13 @@ impl HorizontalDatum {
 /// describe it.
 #[cfg(feature = "crs")]
 pub fn horizontal_datum(source: &str) -> Result<HorizontalDatum, DataError> {
-    let crs = proj::Proj::new(source).map_err(|e| {
+    let crs = LockedProj::new(source).map_err(|e| {
         DataError::Parse(format!(
             "{source:?} is not a coordinate reference system PROJ recognises: {e}"
         ))
     })?;
     let wkt = crs
-        .as_wkt(Some(proj::wkt::WktVersion::Wkt1_Gdal), None)
+        .as_wkt(proj::wkt::WktVersion::Wkt1_Gdal)
         .map_err(|e| DataError::Parse(format!("PROJ cannot describe {source:?} as WKT1: {e}")))?;
     Ok(HorizontalDatum::of_wkt1(&wkt))
 }
@@ -525,7 +527,7 @@ impl FrameStep {
     /// verified file (horizontal only), geographic to geocentric on GRS80, the Helmert
     /// inverted (NAD83(2011) to ITRF2014), back to geographic, radians to degrees.
     #[cfg(feature = "crs")]
-    fn pipeline(&self) -> Result<proj::Proj, DataError> {
+    fn pipeline(&self) -> Result<LockedProj, DataError> {
         let mut definition =
             String::from("+proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad");
         for (_, grid) in &self.grids {
@@ -540,7 +542,7 @@ impl FrameStep {
              +step +proj=unitconvert +xy_in=rad +xy_out=deg",
             helmert_at(self.epoch)
         ));
-        proj::Proj::new(&definition).map_err(|e| {
+        LockedProj::new(&definition).map_err(|e| {
             DataError::Parse(format!(
                 "PROJ cannot build the {} to WGS 84 pipeline: {e}",
                 self.realisation
@@ -616,7 +618,7 @@ pub fn nad83_2011_height_shift(
          +step +proj=axisswap +order=1,3,2",
         helmert_at(epoch)
     );
-    let pipeline = proj::Proj::new(&definition)
+    let pipeline = LockedProj::new(&definition)
         .map_err(|e| DataError::Parse(format!("PROJ cannot build the Helmert height step: {e}")))?;
     lon_lat_deg
         .iter()
@@ -775,7 +777,7 @@ pub fn positions_to_wgs84(
         || "EPSG:4979".to_string(),
         |n| format!("EPSG:{}", n.unprojected_to()),
     );
-    let transform = proj::Proj::new_known_crs(source, &target, None).map_err(|e| {
+    let transform = LockedProj::new_known_crs(source, &target).map_err(|e| {
         DataError::Parse(format!(
             "cannot build a transformation from {source:?} to {target}: {e}"
         ))

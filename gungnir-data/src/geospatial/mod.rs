@@ -341,6 +341,7 @@ pub mod classification {
 /// module would otherwise have to invent.
 #[cfg(feature = "crs")]
 pub mod crs {
+    use crate::proj_lock::LockedProj;
     use crate::DataError;
 
     /// WGS84 geographic, EPSG:4326: what [`to_wgs84`] converts into.
@@ -366,7 +367,7 @@ pub mod crs {
     pub fn to_wgs84(points: &[[f64; 2]], source_epsg: u32) -> Result<Vec<[f64; 2]>, DataError> {
         let from = format!("EPSG:{source_epsg}");
         let to = format!("EPSG:{WGS84_EPSG}");
-        let transformer = proj::Proj::new_known_crs(&from, &to, None).map_err(|e| {
+        let transformer = LockedProj::new_known_crs(&from, &to).map_err(|e| {
             DataError::Parse(format!(
                 "{from} is not a coordinate reference system PROJ recognises: {e}"
             ))

@@ -67,6 +67,8 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
+#[cfg(feature = "crs")]
+use crate::proj_lock::LockedProj;
 use crate::DataError;
 
 /// The EGM2008 grid's file name, as PROJ-data distributes it and as a deployment
@@ -793,7 +795,7 @@ pub fn undulations(grid: &GeoidGrid, lon_lat_deg: &[[f64; 2]]) -> Result<Vec<f64
 /// The written-out `vgridshift` pipeline over the verified file ([`undulations`] says
 /// why each step is there).
 #[cfg(feature = "crs")]
-fn geoid_pipeline(path: &Path) -> Result<proj::Proj, DataError> {
+fn geoid_pipeline(path: &Path) -> Result<LockedProj, DataError> {
     let path = path.display();
     let definition = format!(
         "+proj=pipeline \
@@ -802,7 +804,7 @@ fn geoid_pipeline(path: &Path) -> Result<proj::Proj, DataError> {
          +step +proj=unitconvert +xy_in=rad +xy_out=deg \
          +step +proj=axisswap +order=1,3,2"
     );
-    proj::Proj::new(&definition).map_err(|e| {
+    LockedProj::new(&definition).map_err(|e| {
         DataError::Parse(format!(
             "PROJ cannot read the geoid grid {path} for vgridshift: {e}"
         ))
@@ -811,7 +813,7 @@ fn geoid_pipeline(path: &Path) -> Result<proj::Proj, DataError> {
 
 /// N at one position through `pipeline`, refused rather than zero when there is none.
 #[cfg(feature = "crs")]
-fn undulation_at(pipeline: &proj::Proj, path: &Path, lon: f64, lat: f64) -> Result<f64, DataError> {
+fn undulation_at(pipeline: &LockedProj, path: &Path, lon: f64, lat: f64) -> Result<f64, DataError> {
     let path = path.display();
     if !(lon.is_finite() && lat.is_finite()) {
         return Err(DataError::Parse(format!(
@@ -859,7 +861,9 @@ struct Lookup {
 /// destroy those same statics, and glibc aborted the `crs` test binary after every test
 /// had passed (`double free or corruption`, `corrupted size vs. prev_size`). Joining here
 /// means the last clone's drop returns only once PROJ is torn down, so whatever drops it
-/// before `main` returns leaves no PROJ work running into the exit.
+/// before `main` returns leaves no PROJ work running into the exit. The thread's own drop
+/// of the pipeline, like every PROJ call in this crate, holds `crate::proj_lock`'s lock
+/// (GAP-261), so it never runs under another thread's conversion either.
 #[cfg(feature = "crs")]
 #[derive(Debug)]
 struct Worker {
