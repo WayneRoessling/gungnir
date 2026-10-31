@@ -9,9 +9,10 @@
 //! height a host lends it through a [`gungnir_ingest::terrain::TerrainHandle`], the way it
 //! corrects a height above mean sea level with the geoid this desktop lends
 //! ([`crate::geoid::lend_to_feeds`]). [`lend_to_feeds`] lends the placed DEM once it has
-//! loaded and the baseline states its vertical error (`terrain.vertical_sigma_m`), and
-//! otherwise says why there is none: no DEM configured, still loading, refused, or its
-//! error not stated. The node loads no terrain and lends none, so every such height on it
+//! loaded, or a staged store's ground once line of sight has read it (below), when the
+//! baseline states its vertical error (`terrain.vertical_sigma_m`), and otherwise says why
+//! there is none: no terrain configured, still loading or being read, refused, or its error
+//! not stated. The node loads no terrain and lends none, so every such height on it
 //! is unknown (D-130).
 //!
 //! **How the ground is read.** The placed DEM is a mesh of vertices at their local ENU
@@ -31,16 +32,35 @@
 //! neighbourhood, and only the cells within a stride of it are searched. The model holds
 //! its own copy of the surface, because the feed's adapter holds it on the gateway's side
 //! and the desktop's copy belongs to the viewport.
+//!
+//! **A staged store** (GAP-227, `docs/design/DN-36-staged-terrain-and-map-tiles.md`) is
+//! read through line of sight's field, not a tile lookup of its own: the
+//! [`gungnir_analytics::HeightField`] [`crate::terrain_tiles`] paints from the pinned store
+//! alone, over the coverage extent, at the finest level that keeps it within its budget
+//! (DN-36 §5.2). That extent is every declared sensor's range and approach with one
+//! maximum range to spare, so a UAS the picture's sensors can see lies inside it, and one
+//! reported past it is said to be, not placed. The field is read from the
+//! manifest-verified tiles and never the fill cache (D-164); it is built once per extent on
+//! a worker thread, so the feed reads a raster and never a tile file on the gateway's
+//! thread; and the UAS sits on the ground line of sight masks against. It is immutable
+//! once painted, so the model shares the desktop's `Arc` rather than copying it, and a
+//! field painted anew is lent anew. Its ups are interpolated bilinearly between cell
+//! centres, at the level the field was painted at, and the name the report carries says
+//! which level that was. Where the field does not reach, the reason says which edge: past
+//! the coverage extent, past the store's edge (read through the store's placed footprint),
+//! or a cell inside the store with no height (a refused tile, or a hole in the source).
+//! `terrain.vertical_sigma_m` is applied as for one DEM, unchanged.
 
 use std::sync::Arc;
 
-use gungnir_analytics::{MeshSurface, SurfaceMiss};
+use gungnir_analytics::{HeightField, MeshSurface, SurfaceMiss};
 use gungnir_data::geospatial::TerrainMesh;
 use gungnir_ingest::terrain::{GroundElevation, GroundHeight};
 use gungnir_model::{Geodetic, LocalFrame};
+use gungnir_viewport3d::streaming::terrain::StoreFootprint;
 
 use crate::state::AppState;
-use crate::terrain::TerrainStatus;
+use crate::terrain::{SightState, TerrainStatus};
 
 /// The most vertices the coarse search scans for each report.
 pub const COARSE_SAMPLES: usize = gungnir_analytics::terrain::COARSE_SAMPLES;
@@ -48,15 +68,50 @@ pub const COARSE_SAMPLES: usize = gungnir_analytics::terrain::COARSE_SAMPLES;
 /// What every bound feed's handle says before the terrain has been read at all.
 pub const NOT_YET_LENT: &str = "the terrain has not been read yet";
 
-/// A placed DEM as a ground elevation model (module documentation).
+/// A placed DEM, or a staged store's ground over the coverage extent, as a ground
+/// elevation model (module documentation).
 pub struct PlacedGround {
     name: String,
     frame: LocalFrame,
     sigma_m: f64,
-    surface: MeshSurface,
+    surface: Surface,
+}
+
+/// The surface a [`PlacedGround`] reads.
+enum Surface {
+    /// One placed DEM's mesh.
+    Mesh(MeshSurface),
+    /// Line of sight's field painted from a staged store, and the store's placed footprint,
+    /// which says where its edge lies.
+    Store {
+        field: Arc<HeightField>,
+        footprint: Box<StoreFootprint>,
+    },
 }
 
 impl PlacedGround {
+    /// The model for a staged store's ground: line of sight's `field`, painted from the
+    /// pinned store whose placed footprint is `footprint`, in `frame`, its heights good to
+    /// `sigma_m` (module documentation).
+    #[must_use]
+    pub fn on_store(
+        name: impl Into<String>,
+        field: Arc<HeightField>,
+        footprint: StoreFootprint,
+        frame: LocalFrame,
+        sigma_m: f64,
+    ) -> Self {
+        PlacedGround {
+            name: name.into(),
+            frame,
+            sigma_m,
+            surface: Surface::Store {
+                field,
+                footprint: Box::new(footprint),
+            },
+        }
+    }
+
     /// The model for `mesh`, placed in `frame`, whose heights are good to `sigma_m`.
     ///
     /// # Errors
@@ -79,24 +134,45 @@ impl PlacedGround {
             name,
             frame,
             sigma_m,
-            surface,
+            surface: Surface::Mesh(surface),
         })
     }
 
-    /// The mesh's up at a frame east and north, interpolated across the triangle under it.
+    /// The surface's up at a frame east and north: a mesh's interpolated across the
+    /// triangle under it, a store's field's bilinearly between its cell centres.
     ///
     /// # Errors
     ///
-    /// When no triangle lies under the point, or the one that does touches a cell with no
-    /// data.
+    /// When the surface does not reach the point, or touches a cell with no data there; the
+    /// reason says which edge, for a store (module documentation).
     pub fn up_at(&self, east: f64, north: f64) -> Result<f64, String> {
-        self.surface.up_at(east, north).map_err(|miss| match miss {
-            SurfaceMiss::NoHeight => format!(
-                "the position falls in a cell of {} with no height",
-                self.name
-            ),
-            SurfaceMiss::Off => format!("the position lies off {}", self.name),
-        })
+        let name = &self.name;
+        match &self.surface {
+            Surface::Mesh(surface) => surface.up_at(east, north).map_err(|miss| match miss {
+                SurfaceMiss::NoHeight => {
+                    format!("the position falls in a cell of {name} with no height")
+                }
+                SurfaceMiss::Off => format!("the position lies off {name}"),
+            }),
+            Surface::Store { field, footprint } => field.up_at(east, north).ok_or_else(|| {
+                let ([e0, n0], [e1, n1]) = (field.origin_enu, field.far_corner());
+                let [x, y] = footprint.frame_of(east, north);
+                let [[x0, y0], [x1, y1]] = footprint.index().extent();
+                if !(east >= e0 && east <= e1 && north >= n0 && north <= n1) {
+                    format!(
+                        "the position lies past the coverage extent line of sight reads \
+                         {name} over"
+                    )
+                } else if !(x >= x0 && x <= x1 && y >= y0 && y <= y1) {
+                    format!("the position lies past the edge of {name}")
+                } else {
+                    format!(
+                        "the position falls in a cell of {name} with no height (a refused tile \
+                         or a hole in the source)"
+                    )
+                }
+            }),
+        }
     }
 }
 
@@ -128,14 +204,24 @@ impl GroundElevation for PlacedGround {
     }
 }
 
-/// Lend the placed DEM to every bound radar feed, or say why there is none (module
-/// documentation). Runs every tick and acts only when the terrain's standing has changed,
-/// so the lookup is built once per load.
+/// Lend the placed DEM, or a staged store's ground, to every bound radar feed, or say why
+/// there is none (module documentation). Runs every tick and acts only when the terrain's
+/// standing or line of sight's field has changed, so the lookup is built once per load or
+/// field.
 pub fn lend_to_feeds(state: &mut AppState) {
-    if state.terrain_lent.as_ref() == Some(&state.terrain) {
-        return;
+    // The field is compared by pointer: a field painted anew is a new `Arc`, and comparing
+    // millions of cells every tick would cost what the check is there to save.
+    if let Some((terrain, field)) = &state.terrain_lent {
+        let same_field = match (field, &state.height_field) {
+            (Some(lent), Some(now)) => Arc::ptr_eq(lent, now),
+            (None, None) => true,
+            _ => false,
+        };
+        if same_field && *terrain == state.terrain {
+            return;
+        }
     }
-    state.terrain_lent = Some(state.terrain.clone());
+    state.terrain_lent = Some((state.terrain.clone(), state.height_field.clone()));
     match lendable(state) {
         Ok(ground) => state.terrain_feeds.set_available(Arc::new(ground)),
         Err(reason) => state.terrain_feeds.set_unavailable(reason),
@@ -143,7 +229,7 @@ pub fn lend_to_feeds(state: &mut AppState) {
 }
 
 fn lendable(state: &AppState) -> Result<PlacedGround, String> {
-    let path = match &state.terrain {
+    let (path, level) = match &state.terrain {
         TerrainStatus::NotConfigured => {
             return Err("no DEM is configured in this baseline (terrain)".to_owned())
         }
@@ -151,13 +237,20 @@ fn lendable(state: &AppState) -> Result<PlacedGround, String> {
         TerrainStatus::Failed { path, reason } => {
             return Err(format!("{path} did not load: {reason}"))
         }
-        TerrainStatus::Loaded { path, .. } => path,
-        TerrainStatus::StoreVerified { store, .. } => {
-            return Err(format!(
-                "{store} is a staged store, and the ground a UAS height is placed on reads one \
-                 placed DEM (GAP-199); placing it on a store is not built (GAP-227)"
-            ))
-        }
+        TerrainStatus::Loaded { path, .. } => (path, None),
+        TerrainStatus::StoreVerified { store, sight, .. } => match sight {
+            SightState::Building => {
+                return Err(format!(
+                    "{store}'s ground over the coverage extent is still being read"
+                ))
+            }
+            SightState::NotBuilt(reason) => {
+                return Err(format!(
+                    "{store}'s ground over the coverage extent is not read: {reason}"
+                ))
+            }
+            SightState::Built { level, .. } => (store, Some(*level)),
+        },
     };
     let Some(sigma_m) = state
         .config
@@ -178,6 +271,21 @@ fn lendable(state: &AppState) -> Result<PlacedGround, String> {
     }) else {
         return Err("the deployment declares no local frame origin (config.origin)".to_owned());
     };
+    if let Some(level) = level {
+        let (Some(field), Some(footprint)) = (&state.height_field, state.terrain_tiles.footprint())
+        else {
+            return Err(format!(
+                "{path}'s ground over the coverage extent is read but not held"
+            ));
+        };
+        return Ok(PlacedGround::on_store(
+            format!("{path} at level {level}"),
+            Arc::clone(field),
+            footprint.clone(),
+            frame,
+            sigma_m,
+        ));
+    }
     let Some(mesh) = state.data.terrains.first() else {
         return Err(format!("{path} is loaded but no surface is held"));
     };
