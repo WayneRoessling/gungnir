@@ -10,8 +10,9 @@ signature ledger, and the tests.
 rows and said what each would promise; it also said that the tests have no external oracle,
 that the criteria needed rewording in places, and that they would stay in CI whether or not
 they became criteria. The criteria below are my wording, written against what each test
-asserts, and the owner has not reviewed the text of each. The "agreed" in the table is that
-yes, on those terms. The ledger entry says the same and names the restated rows.
+asserts. The "agreed" in the table is that yes, on those terms. Asked afterwards whether the
+four restated criteria (c, e, f and g) read right, the owner said they do. The other seven were
+not read line by line, and the ledger entry says which is which.
 
 **Four rows differ from the draft in substance** (DN-36 amendment 7):
 - **c**: the draft's "finest level whose cells are at least `MIN_CELL_POINTS`" is not

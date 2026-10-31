@@ -3752,7 +3752,8 @@
     no fill without a source or a connection, the pinned store is never written, a fill tile
     is marked, and a fill tile stays out of line of sight. Rows h to k run with
     terrain-fetch, in their own ci.yml step. The rows have no external oracle, which the
-    table says.
+    table says. The owner read the four restated rows (c, e, f and g) and said they read
+    right; the other seven were agreed without a line-by-line reading.
   kind: criterion
   paths:
   - docs/design/DN-36-staged-terrain-and-map-tiles.md
