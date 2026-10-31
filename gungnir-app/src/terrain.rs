@@ -55,12 +55,13 @@ pub enum TerrainStatus {
     },
     /// A staged store (GAP-227, `docs/design/DN-36-staged-terrain-and-map-tiles.md`)
     /// whose manifest matched the baseline's digest and agrees with its frame. Its tiles
-    /// are drawn by view ([`crate::terrain_tiles`]); line of sight over it is DN-36 §5.2's
-    /// increment, so line of sight stays flat until then, and the line says so.
+    /// are drawn by view ([`crate::terrain_tiles`]), and line of sight reads it over the
+    /// coverage extent, never the view (DN-36 §5.2), once `sight` is built.
     StoreVerified {
         store: String,
         tiles: usize,
         levels: u8,
+        sight: SightState,
     },
     /// The file could not be read or placed; the reason is on screen, and line of
     /// sight stays flat rather than masked against something that is not there.
@@ -91,10 +92,11 @@ impl TerrainStatus {
                 store,
                 tiles,
                 levels,
+                sight,
             } => format!(
                 "staged store {store}: manifest verified, {tiles} tiles over {levels} levels, \
-                 drawn by view; line of sight over it is not built yet (GAP-227, DN-36 \
-                 §5.2), so line of sight is flat (optimistic)"
+                 drawn by view; {}",
+                sight.line()
             ),
             TerrainStatus::Failed { path, reason } => {
                 format!("{path} not loaded: {reason}; line of sight is flat (optimistic)")
@@ -104,7 +106,74 @@ impl TerrainStatus {
 
     #[must_use]
     pub fn is_masking(&self) -> bool {
-        matches!(self, TerrainStatus::Loaded { .. })
+        matches!(
+            self,
+            TerrainStatus::Loaded { .. }
+                | TerrainStatus::StoreVerified {
+                    sight: SightState::Built { .. },
+                    ..
+                }
+        )
+    }
+}
+
+/// Line of sight over a staged store (GAP-227, DN-36 §5.2 and amendment 2): built from the
+/// pinned store alone, over the coverage extent, at the finest level that keeps the field
+/// within its budget ([`crate::terrain_tiles`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SightState {
+    /// The store's footprint is still being placed, or the field is being painted.
+    Building,
+    /// The field is built: the level it was read at, the tiles painted into it, those
+    /// refused (flat where they lie), and whether the extent reaches past the store
+    /// (flat there too).
+    Built {
+        level: u8,
+        tiles: usize,
+        refused: usize,
+        past_edge: bool,
+    },
+    /// Why there is none: no local frame, nothing declared to cover, or a field that could
+    /// not be made.
+    NotBuilt(String),
+}
+
+impl SightState {
+    /// What line of sight reads, for the terrain line.
+    #[must_use]
+    pub fn line(&self) -> String {
+        match self {
+            SightState::Building => "building line of sight from the store over the coverage \
+                                     extent; line of sight is flat (optimistic) until it is built"
+                .to_string(),
+            SightState::Built {
+                level,
+                tiles,
+                refused,
+                past_edge,
+            } => {
+                let mut line = format!(
+                    "line of sight reads the pinned store at level {level} over the coverage \
+                     extent, never the view ({tiles} tiles"
+                );
+                if *refused > 0 {
+                    use std::fmt::Write as _;
+                    let _ = write!(line, ", {refused} refused and flat");
+                }
+                line.push(')');
+                if *past_edge {
+                    line.push_str(
+                        "; the extent reaches past the store's edge, and line of sight is flat \
+                         there (optimistic)",
+                    );
+                }
+                line
+            }
+            SightState::NotBuilt(reason) => format!(
+                "line of sight over the store is not built: {reason}; line of sight is flat \
+                 (optimistic)"
+            ),
+        }
     }
 }
 
@@ -299,6 +368,7 @@ fn store_opened(
                 store: path,
                 tiles: store.index().len(),
                 levels: store.index().levels(),
+                sight: SightState::Building,
             };
             let store: std::sync::Arc<_> = std::sync::Arc::from(store);
             crate::terrain_tiles::start(state, std::sync::Arc::clone(&store), declaration);
